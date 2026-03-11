@@ -40,7 +40,9 @@ def run_compiled_workflow(
     )
     world = WorldSession.attach_router(router)
     initial_snapshot = world.snapshot("workflow.start")
-    available_tools = [spec.name for spec in router.registry.list()]
+    available_tools = _workflow_available_tools(
+        workflow, [spec.name for spec in router.registry.list()]
+    )
     static_report = static_validate_workflow(workflow, available_tools=available_tools)
 
     if not static_report.ok:
@@ -84,15 +86,24 @@ def run_compiled_workflow(
 
         step = workflow.steps[index]
         try:
-            result = router.call_and_step(step.tool, dict(step.args))
+            resolved_tool = step.tool
+            graph_action_ref = None
+            result_payload: object
+            if step.graph_domain and step.graph_action:
+                graph_action_ref = f"{step.graph_domain}.{step.graph_action}"
+                graph_result = world.graph_action(dict(step.args))
+                result_payload = graph_result.result
+                resolved_tool = graph_result.tool
+            else:
+                result_payload = router.call_and_step(step.tool, dict(step.args))
             observation = router.snapshot_observation(
-                _focus_for_tool(step.tool)
+                _focus_for_step(step)
             ).model_dump()
             pending = router.pending()
             current_state = world.current_state().model_dump(mode="json")
             assertion_failures = evaluate_assertions(
                 step=step,
-                result=result,
+                result=result_payload,
                 observation=observation,
                 pending=pending,
                 state=current_state,
@@ -103,8 +114,10 @@ def run_compiled_workflow(
                 StepExecution(
                     step_id=step.step_id,
                     tool=step.tool,
+                    resolved_tool=resolved_tool,
+                    graph_action_ref=graph_action_ref,
                     ok=ok,
-                    result=result,
+                    result=result_payload,
                     observation=observation,
                     assertion_failures=assertion_failures,
                     time_ms=router.bus.clock_ms,
@@ -128,6 +141,8 @@ def run_compiled_workflow(
                 StepExecution(
                     step_id=step.step_id,
                     tool=step.tool,
+                    resolved_tool=resolved_tool,
+                    graph_action_ref=graph_action_ref,
                     ok=False,
                     result={"error": str(exc)},
                     observation={},
@@ -226,7 +241,7 @@ def validate_compiled_workflow_outcome(
         result=result or {},
         pending=pending or _pending_summary_from_state(oracle_state),
         time_ms=time_ms,
-        available_tools=available_tools,
+        available_tools=_workflow_available_tools(workflow, available_tools),
         validation_mode="state",
     )
     return WorkflowOutcomeValidation(
@@ -320,6 +335,36 @@ def _resolve_failure_target(
         if target:
             return max(0, target.index - 1)
     return None
+
+
+def _workflow_available_tools(
+    workflow: CompiledWorkflow, available_tools: List[str] | None
+) -> List[str] | None:
+    if available_tools is None:
+        return None
+    resolved = set(available_tools)
+    if any(step.graph_domain and step.graph_action for step in workflow.steps):
+        resolved.update({"vei.graph_action", "vei.graph_plan"})
+    return sorted(resolved)
+
+
+def _focus_for_step(step) -> str:
+    if getattr(step, "graph_domain", None):
+        return _focus_for_graph_domain(str(step.graph_domain))
+    return _focus_for_tool(step.tool)
+
+
+def _focus_for_graph_domain(domain: str) -> str:
+    return {
+        "comm_graph": "slack",
+        "doc_graph": "docs",
+        "work_graph": "tickets",
+        "identity_graph": "identity",
+        "revenue_graph": "crm",
+        "data_graph": "spreadsheet",
+        "obs_graph": "pagerduty",
+        "ops_graph": "feature_flags",
+    }.get(domain, "browser")
 
 
 def _focus_for_tool(tool: str) -> str:

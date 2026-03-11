@@ -227,6 +227,8 @@ def test_sdk_blueprint_helpers_compile_assets() -> None:
     assert asset.workflow_variant == "revenue_ops_flightdeck"
     assert compiled.asset.name == asset.name
     assert "spreadsheet" in {item.name for item in compiled.facades}
+    assert "vei.graph_action" in compiled.workflow_defaults.allowed_tools
+    assert "vei.graph_plan" in compiled.workflow_defaults.allowed_tools
 
 
 def test_sdk_blueprint_builder_helpers_compile_and_open_world() -> None:

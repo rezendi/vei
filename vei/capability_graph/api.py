@@ -232,6 +232,32 @@ def resolve_graph_action(
     )
 
 
+def get_graph_action_schema(
+    domain: CapabilityDomain, action: str
+) -> Optional[CapabilityGraphActionSchema]:
+    return _ACTION_SCHEMA_INDEX.get((domain, action))
+
+
+def list_graph_action_schemas() -> list[CapabilityGraphActionSchema]:
+    return list(_ACTION_SCHEMAS)
+
+
+def validate_graph_action_input(
+    request: CapabilityGraphActionInput,
+) -> CapabilityGraphActionSchema:
+    if request.domain is None or request.action is None:
+        raise ValueError("graph action requires both domain and action")
+    schema = _ACTION_SCHEMA_INDEX.get((request.domain, request.action))
+    if schema is None:
+        raise ValueError(f"unsupported graph action: {request.domain}.{request.action}")
+    for field in schema.required_args:
+        if field not in request.args or request.args.get(field) in {None, ""}:
+            raise ValueError(
+                f"{request.domain}.{request.action} requires argument: {field}"
+            )
+    return schema
+
+
 def _build_comm_graph(components: Dict[str, Dict[str, Any]]) -> Optional[CommGraphView]:
     slack = components.get("slack", {})
     mail = components.get("mail", {})
@@ -1482,6 +1508,9 @@ _DOMAIN_FOCUS = {
 __all__ = [
     "build_graph_action_plan",
     "build_runtime_capability_graphs",
+    "get_graph_action_schema",
     "get_runtime_capability_graph",
+    "list_graph_action_schemas",
     "resolve_graph_action",
+    "validate_graph_action_input",
 ]
