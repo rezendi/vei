@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from vei.world.compiler import compile_scene
 from vei.world.scenario import Scenario
@@ -19,6 +19,8 @@ class CompiledStep:
     description: str
     tool: str
     args: Dict[str, Any]
+    graph_domain: Optional[str]
+    graph_action: Optional[str]
     expect: list
     on_failure: str
 
@@ -97,12 +99,24 @@ def _compile_world(world: Dict[str, Any], seed: int) -> Scenario:
 
 
 def _compile_step(idx: int, step: WorkflowStepSpec) -> CompiledStep:
+    graph_domain = step.graph_domain
+    graph_action = step.graph_action
+    compiled_tool = step.tool or "vei.graph_action"
+    compiled_args = dict(step.args)
+    if graph_domain and graph_action:
+        compiled_args = {
+            "domain": graph_domain,
+            "action": graph_action,
+            "args": dict(step.args),
+        }
     return CompiledStep(
         index=idx,
         step_id=step.step_id,
         description=step.description,
-        tool=step.tool,
-        args=dict(step.args),
+        tool=compiled_tool,
+        args=compiled_args,
+        graph_domain=graph_domain,
+        graph_action=graph_action,
         expect=list(step.expect),
         on_failure=step.on_failure,
     )

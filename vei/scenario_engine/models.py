@@ -82,10 +82,45 @@ class AssertionSpec(BaseModel):
 class WorkflowStepSpec(BaseModel):
     step_id: str
     description: str
-    tool: str
+    tool: Optional[str] = None
+    graph_domain: Optional[
+        Literal[
+            "comm_graph",
+            "doc_graph",
+            "work_graph",
+            "identity_graph",
+            "revenue_graph",
+            "obs_graph",
+            "data_graph",
+            "ops_graph",
+        ]
+    ] = None
+    graph_action: Optional[str] = None
     args: Dict[str, Any] = Field(default_factory=dict)
     expect: List[AssertionSpec] = Field(default_factory=list)
     on_failure: str = "fail"
+
+    @model_validator(mode="after")
+    def _validate_execution_shape(self) -> "WorkflowStepSpec":
+        has_tool = bool(self.tool)
+        has_graph = self.graph_domain is not None or self.graph_action is not None
+        if has_tool and has_graph:
+            raise ValueError(
+                "workflow step must declare either tool or graph_domain/graph_action, not both"
+            )
+        if not has_tool and not has_graph:
+            raise ValueError(
+                "workflow step must declare either tool or graph_domain/graph_action"
+            )
+        if has_graph and (self.graph_domain is None or self.graph_action is None):
+            raise ValueError(
+                "graph-native workflow step requires both graph_domain and graph_action"
+            )
+        if self.tool is not None and not self.tool.strip():
+            raise ValueError("workflow step tool cannot be empty")
+        if self.graph_action is not None and not self.graph_action.strip():
+            raise ValueError("workflow step graph_action cannot be empty")
+        return self
 
 
 class FailurePathSpec(BaseModel):

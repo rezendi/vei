@@ -73,6 +73,8 @@ The router is a transport and tool-dispatch adapter. Mutable enterprise state be
   - runtime shared-domain graph views derived from live world state and builder metadata
   - central graph-native planning and mutation surface for agents
   - shared identity/doc/work/comm/revenue/data/obs/ops graph surfaces for inspection and action
+- workflow runner / benchmark baselines
+  - flagship workflows can now compile graph-native steps to `vei.graph_action` and resolve to concrete twins only at execution time
 - `vei.orientation`
   - agent-facing summaries derived from live world state, capability graphs, and builder hints
   - visible surfaces, policy hints, key objects, suggested focuses, and next questions
@@ -133,4 +135,5 @@ VEI keeps the current router twins, but the public ontology now groups them as f
 - Prefer `GroundingBundle -> BlueprintAsset -> CompiledBlueprint -> WorldSession` as the environment-builder path.
 - Prefer `WorldSession -> capability_graphs() -> graph_plan() -> graph_action()` as the main agent-facing planning/mutation ladder inside a live world.
 - Use `orientation()` to help agents discover the world before they begin mutating it.
+- Prefer graph-native workflow steps for long-horizon playbooks when the intent is domain-level mutation rather than a specific vendor surface.
 - Prefer semantic environment building first. VM-backed or OS-level facades are future plugin substrates, not the core runtime model.
