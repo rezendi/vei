@@ -263,6 +263,99 @@ def test_run_workflow_supports_negative_count_and_time_assertions() -> None:
     assert result.steps[0].ok
 
 
+def test_run_workflow_supports_graph_native_steps() -> None:
+    spec = {
+        "name": "workflow-graph-native",
+        "objective": {
+            "statement": "Use graph-native steps to reduce oversharing and grant CRM access.",
+            "success": ["share restricted", "crm access granted"],
+        },
+        "world": {"catalog": "acquired_sales_onboarding"},
+        "steps": [
+            {
+                "step_id": "restrict_share",
+                "description": "Restrict the inherited Drive share through the doc graph.",
+                "graph_domain": "doc_graph",
+                "graph_action": "restrict_drive_share",
+                "args": {
+                    "doc_id": "GDRIVE-2201",
+                    "visibility": "internal",
+                    "note": "Graph-native migration guard.",
+                },
+                "expect": [
+                    {
+                        "kind": "result_equals",
+                        "field": "visibility",
+                        "equals": "internal",
+                    }
+                ],
+            },
+            {
+                "step_id": "assign_crm",
+                "description": "Grant CRM access through the identity graph.",
+                "graph_domain": "identity_graph",
+                "graph_action": "assign_application",
+                "args": {
+                    "user_id": "USR-ACQ-1",
+                    "app_id": "APP-crm",
+                },
+                "expect": [
+                    {
+                        "kind": "result_equals",
+                        "field": "app_id",
+                        "equals": "APP-crm",
+                    }
+                ],
+            },
+        ],
+        "success_assertions": [
+            {
+                "kind": "state_equals",
+                "field": "components.google_admin.drive_shares.GDRIVE-2201.visibility",
+                "equals": "internal",
+            },
+            {
+                "kind": "state_contains",
+                "field": "components.okta.users.USR-ACQ-1.applications",
+                "contains": "APP-crm",
+            },
+        ],
+    }
+    compiled = compile_workflow(spec, seed=81)
+    result = run_workflow(compiled, seed=81, connector_mode="sim")
+
+    assert result.ok
+    assert result.steps[0].tool == "vei.graph_action"
+    assert result.steps[0].resolved_tool == "google_admin.restrict_drive_share"
+    assert result.steps[0].graph_action_ref == "doc_graph.restrict_drive_share"
+    assert result.steps[1].resolved_tool == "okta.assign_application"
+
+
+def test_validate_workflow_flags_invalid_graph_action() -> None:
+    spec = {
+        "name": "workflow-invalid-graph-action",
+        "objective": {
+            "statement": "Use an unsupported graph action.",
+            "success": [],
+        },
+        "world": {"catalog": "multi_channel"},
+        "steps": [
+            {
+                "step_id": "bad",
+                "description": "Invalid graph action",
+                "graph_domain": "identity_graph",
+                "graph_action": "explode_access",
+                "args": {"user_id": "USR-1"},
+            }
+        ],
+    }
+    compiled = compile_workflow(spec, seed=82)
+    report = validate_workflow(compiled, available_tools=["browser.read"])
+
+    assert not report.ok
+    assert any(issue.code == "graph_action.invalid" for issue in report.issues)
+
+
 def test_compile_workflow_rejects_malformed_temporal_assertion() -> None:
     spec = _workflow_spec()
     spec["success_assertions"] = [{"kind": "time_max_ms"}]

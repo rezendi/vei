@@ -37,8 +37,11 @@ __all__ = [
     "WorkItemView",
     "build_graph_action_plan",
     "build_runtime_capability_graphs",
+    "get_graph_action_schema",
     "get_runtime_capability_graph",
+    "list_graph_action_schemas",
     "resolve_graph_action",
+    "validate_graph_action_input",
 ]
 
 
@@ -46,8 +49,11 @@ def __getattr__(name: str):  # pragma: no cover - thin import facade
     if name in {
         "build_graph_action_plan",
         "build_runtime_capability_graphs",
+        "get_graph_action_schema",
         "get_runtime_capability_graph",
+        "list_graph_action_schemas",
         "resolve_graph_action",
+        "validate_graph_action_input",
     }:
         module = import_module("vei.capability_graph.api")
         return getattr(module, name)

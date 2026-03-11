@@ -194,7 +194,14 @@ def compile_blueprint(asset: BlueprintAsset) -> CompiledBlueprint:
             if item and item != "summary"
         ]
         workflow_tool_families = sorted(
-            {step.tool.split(".", 1)[0].strip().lower() for step in compiled.steps}
+            {
+                (
+                    _graph_domain_tool_family(str(step.graph_domain))
+                    if step.graph_domain and step.graph_action
+                    else step.tool.split(".", 1)[0].strip().lower()
+                )
+                for step in compiled.steps
+            }
         )
         contract_defaults = BlueprintContractDefaults(
             contract_name=contract.name,
@@ -499,6 +506,19 @@ def _resolve_facade_names(
     if not resolved:
         raise ValueError("compiled blueprint resolved no facades")
     return sorted(resolved)
+
+
+def _graph_domain_tool_family(domain: str) -> str:
+    return {
+        "comm_graph": "slack",
+        "doc_graph": "docs",
+        "work_graph": "tickets",
+        "identity_graph": "identity",
+        "revenue_graph": "crm",
+        "data_graph": "spreadsheet",
+        "obs_graph": "pagerduty",
+        "ops_graph": "feature_flags",
+    }.get(domain, domain.replace("_graph", ""))
 
 
 def _runtime_scenario_name(asset: BlueprintAsset) -> str:
