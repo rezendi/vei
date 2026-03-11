@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable, List, Optional
 
+from vei.capability_graph.models import CapabilityGraphActionInput
+from vei.capability_graph.api import validate_graph_action_input
 from vei.contract.assertions import (
     evaluate_assertion_specs as evaluate_contract_assertions,
 )
@@ -20,6 +22,26 @@ def static_validate_workflow(
     tool_set = set(available_tools or [])
 
     for step in workflow.steps:
+        if step.graph_domain and step.graph_action:
+            try:
+                validate_graph_action_input(
+                    CapabilityGraphActionInput(
+                        domain=step.graph_domain,
+                        action=step.graph_action,
+                        args=step.args.get("args", {}),
+                    )
+                )
+            except ValueError as exc:
+                issues.append(
+                    ValidationIssue(
+                        code="graph_action.invalid",
+                        message=(
+                            f"Step {step.step_id} uses invalid graph action: {exc}"
+                        ),
+                        step_id=step.step_id,
+                    )
+                )
+            continue
         if tool_set and step.tool not in tool_set:
             issues.append(
                 ValidationIssue(
@@ -56,7 +78,9 @@ def static_validate_workflow(
                 )
 
     if workflow.spec.approvals and not any(
-        "approve" in step.description.lower() or "approve" in step.tool
+        "approve" in step.description.lower()
+        or "approve" in step.tool
+        or "approve" in (step.graph_action or "")
         for step in workflow.steps
     ):
         issues.append(

@@ -27,6 +27,9 @@ python -m pytest -q tests/test_world_session.py tests/test_benchmark_api.py test
 # Focus on the graph-native planning/mutation surface
 python -m pytest -q tests/test_capability_graph_api.py tests/test_capability_graph_actions.py tests/test_mcp_discoverability_tools.py
 
+# Focus on graph-native workflow execution
+python -m pytest -q tests/test_workflow_runner.py tests/test_sdk_contract.py
+
 # Keep `make check` green before opening a PR
 make check
 ```

@@ -57,7 +57,24 @@ def build_contract_from_workflow(
             if assertion.kind.startswith("observation_")
         }
     )
-    allowed_tools = sorted({step.tool for step in spec.steps})
+    has_graph_steps = any(
+        getattr(step, "graph_domain", None) and getattr(step, "graph_action", None)
+        for step in spec.steps
+    )
+    graph_focus_hints = sorted(
+        {
+            str(getattr(step, "graph_domain"))
+            for step in spec.steps
+            if getattr(step, "graph_domain", None)
+            and getattr(step, "graph_action", None)
+        }
+    )
+    if graph_focus_hints:
+        focus_hints = sorted(set(focus_hints) | set(graph_focus_hints))
+    allowed_tools = sorted(
+        {step.tool for step in spec.steps if step.tool}
+        | ({"vei.graph_action", "vei.graph_plan"} if has_graph_steps else set())
+    )
     hidden_state_fields = sorted(
         {
             assertion.field or ""

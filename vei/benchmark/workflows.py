@@ -608,7 +608,8 @@ def _build_enterprise_onboarding_spec(
                 {
                     "step_id": "assign_crm",
                     "description": "Grant CRM access after activation.",
-                    "tool": "okta.assign_application",
+                    "graph_domain": "identity_graph",
+                    "graph_action": "assign_application",
                     "args": {"user_id": params.user_id, "app_id": params.crm_app_id},
                     "expect": [
                         {
@@ -621,7 +622,8 @@ def _build_enterprise_onboarding_spec(
                 {
                     "step_id": "restrict_share",
                     "description": "Restrict inherited Drive sharing before migration.",
-                    "tool": "google_admin.restrict_drive_share",
+                    "graph_domain": "doc_graph",
+                    "graph_action": "restrict_drive_share",
                     "args": {
                         "doc_id": params.doc_id,
                         "visibility": "internal",
@@ -660,7 +662,8 @@ def _build_enterprise_onboarding_spec(
                 {
                     "step_id": "transfer_playbook_owner",
                     "description": "Transfer the sales playbook to the current manager.",
-                    "tool": "google_admin.transfer_drive_ownership",
+                    "graph_domain": "doc_graph",
+                    "graph_action": "transfer_drive_ownership",
                     "args": {
                         "doc_id": params.doc_id,
                         "owner": params.manager_email,
@@ -677,7 +680,8 @@ def _build_enterprise_onboarding_spec(
                 {
                     "step_id": "transfer_open_opportunity",
                     "description": "Move the inherited opportunity to the manager.",
-                    "tool": "salesforce.opportunity.transfer_owner",
+                    "graph_domain": "revenue_graph",
+                    "graph_action": "reassign_deal_owner",
                     "args": {
                         "id": params.opportunity_id,
                         "owner": params.manager_email,
@@ -893,7 +897,8 @@ def _build_revenue_incident_spec(
                 {
                     "step_id": "ack_incident",
                     "description": "Acknowledge the paging incident.",
-                    "tool": "pagerduty.ack_incident",
+                    "graph_domain": "obs_graph",
+                    "graph_action": "ack_incident",
                     "args": {
                         "incident_id": params.incident_id,
                         "assignee": params.assignee,
@@ -922,7 +927,8 @@ def _build_revenue_incident_spec(
                 {
                     "step_id": "reduce_rollout",
                     "description": "Reduce rollout on checkout_v2 to shrink blast radius.",
-                    "tool": "feature_flags.update_rollout",
+                    "graph_domain": "ops_graph",
+                    "graph_action": "update_rollout",
                     "args": {
                         "flag_key": params.rollout_flag_key,
                         "rollout_pct": params.rollout_pct,
@@ -940,7 +946,8 @@ def _build_revenue_incident_spec(
                 {
                     "step_id": "enable_kill_switch",
                     "description": "Enable the checkout kill switch as a safe fallback.",
-                    "tool": "feature_flags.set_flag",
+                    "graph_domain": "ops_graph",
+                    "graph_action": "set_flag",
                     "args": {
                         "flag_key": params.kill_switch_flag_key,
                         "enabled": True,

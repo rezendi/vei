@@ -40,6 +40,8 @@ class WorkflowOutcomeValidation(BaseModel):
 class StepExecution(BaseModel):
     step_id: str
     tool: str
+    resolved_tool: Optional[str] = None
+    graph_action_ref: Optional[str] = None
     ok: bool
     result: Any = None
     observation: Dict[str, Any] = Field(default_factory=dict)
