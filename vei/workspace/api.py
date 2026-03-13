@@ -39,6 +39,7 @@ from vei.imports.models import (
     ProvenanceRecord,
     RedactionReport,
 )
+from vei.verticals import build_vertical_blueprint_asset
 from vei.world.manifest import build_scenario_manifest
 
 from .models import (
@@ -60,7 +61,7 @@ _MODEL_T = TypeVar("_MODEL_T", bound=BaseModel)
 def create_workspace_from_template(
     *,
     root: str | Path,
-    source_kind: Literal["example", "family", "scenario"],
+    source_kind: Literal["example", "family", "scenario", "vertical"],
     source_ref: str,
     name: Optional[str] = None,
     title: Optional[str] = None,
@@ -76,6 +77,8 @@ def create_workspace_from_template(
         asset = build_blueprint_asset_for_family(
             source_ref, variant_name=workflow_variant
         )
+    elif source_kind == "vertical":
+        asset = build_vertical_blueprint_asset(source_ref)
     else:
         asset = build_blueprint_asset_for_scenario(
             source_ref,
@@ -911,6 +914,9 @@ def _bootstrap_workspace(
 ) -> WorkspaceManifest:
     created_at = _iso_now()
     workspace_name = name or asset.name.replace(".blueprint", "").replace(".", "_")
+    builder_environment_metadata: dict[str, Any] = {}
+    if asset.capability_graphs is not None:
+        builder_environment_metadata = dict(asset.capability_graphs.metadata or {})
     manifest = WorkspaceManifest(
         name=workspace_name,
         title=title or asset.title,
@@ -958,6 +964,11 @@ def _bootstrap_workspace(
                 metadata={
                     "source_kind": source_kind,
                     "source_ref": source_ref,
+                    **(
+                        {"builder_environment": builder_environment_metadata}
+                        if builder_environment_metadata
+                        else {}
+                    ),
                     **(
                         {
                             "precompiled_blueprint_path": "sources/compiled_blueprint.json"

@@ -88,6 +88,20 @@ That command executes three stronger enterprise examples on the same kernel-back
 
 The showcase writes one `showcase_overview.md` plus per-example demo bundles, which makes it the best single command for proving that VEI can coordinate long-horizon, partially observable enterprise tasks across multiple surfaces.
 
+Run the workspace-backed vertical world-pack showcase:
+
+```bash
+vei showcase verticals \
+  --root _vei_out/vertical_showcase \
+  --run-id vc_worlds
+```
+
+That showcase creates three separate company workspaces, runs a workflow baseline plus a freer comparison run for each, and writes `vertical_showcase_overview.md` plus per-workspace `vertical_demo_overview.md` files:
+
+- `real_estate_management`
+- `digital_marketing_agency`
+- `storage_solutions`
+
 The flagship mixed-stack demo is the revenue/ops primary variant:
 
 ```bash
