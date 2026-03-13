@@ -16,6 +16,8 @@ Plainly: VEI can simulate an enterprise environment where an agent has to discov
   - Slack, Mail, Browser, Docs, Spreadsheet, Tickets, CRM, ERP, Okta-style identity, ServiceDesk, Google Admin, SIEM, Datadog, PagerDuty, feature flags, HRIS, and Jira-style issues
 - Enterprise artifacts
   - Documents, workbooks, tickets, incidents, alerts, flags, identity records, deals, comments, and audit-like receipts
+- Vertical worlds
+  - Real estate management, digital marketing agency, and storage-solutions company packs with domain objects, deadlines, branch paths, and business-semantic contracts
 - Long-horizon work
   - Multi-step tasks that cross systems, have hidden state, require follow-through, and can fail midway
 - Policies and outcomes
@@ -192,6 +194,7 @@ The import UI now shows:
 - Runtime capability-graph layer that lets world sessions and snapshots expose shared domain graphs such as identity, docs, work, comms, and revenue
 - Graph-native planning and mutation layer that lets agents ask for suggested next actions and apply graph actions without dropping down to raw app tools first
 - Graph-native workflow execution, so benchmark/playbook steps can compile to `vei.graph_action` instead of only raw app-shaped tool calls
+- Vertical world packs for real estate management, digital marketing agencies, and storage-solutions companies with one flagship scenario each for VC-grade demos
 - Agent-orientation layer that lets sessions and snapshots expose agent-facing summaries of visible surfaces, active policies, key objects, and suggested next questions
 - Enterprise twins for Slack, Mail, Browser, Docs, Spreadsheet, Tickets, DB, ERP/CRM, Okta-style identity, ServiceDesk, Google Admin, SIEM, Datadog, PagerDuty, feature flags, HRIS, and Jira-style issue flows
 - Scenario compilation, dataset rollout, BC training, benchmark execution, and release packaging
@@ -290,7 +293,7 @@ VEI_LLM_LIVE_BYPASS=1 make llm-live
 ## Supported CLI Surface
 
 - Start here
-  - `vei project|contract|scenario|run|inspect|ui`
+  - `vei project|contract|scenario|run|inspect|showcase|ui`
   - `vei ui serve` or `vei-ui serve`
 - Expert tools
   - `vei-world`
@@ -303,6 +306,14 @@ VEI_LLM_LIVE_BYPASS=1 make llm-live
   - `vei-smoke`, `vei-demo`, `vei-det sample-workflow|compile-workflow|run-workflow|generate-corpus|filter-corpus`
 
 `vei inspect graphs` is now the broadest product/workspace graph surface. It can inspect `identity_graph`, `doc_graph`, `work_graph`, `comm_graph`, `revenue_graph`, `ops_graph`, `obs_graph`, and `data_graph` from a recorded run. `vei-world graphs` remains the expert snapshot-level surface and currently focuses on `comm_graph`, `doc_graph`, `work_graph`, `identity_graph`, and `revenue_graph`. `vei-world orient` and `vei-blueprint orient` add the agent-facing layer on top: visible surfaces, active policy hints, key objects, and suggested next questions.
+
+The product CLI also now supports built-in vertical demo worlds:
+
+```bash
+vei project init --root _vei_out/workspaces/harbor_point --vertical real_estate_management
+vei project init --root _vei_out/workspaces/northstar_growth --vertical digital_marketing_agency
+vei project init --root _vei_out/workspaces/atlas_storage --vertical storage_solutions
+```
 
 Inside live MCP sessions, agents can now call the same discoverability surfaces directly with `vei.orientation`, `vei.capability_graphs`, `vei.graph_plan`, and `vei.graph_action`.
 
@@ -422,6 +433,20 @@ That command runs three curated complex examples and writes one top-level `showc
 - `checkout_revenue_flightdeck`: Datadog + PagerDuty + feature flags + Spreadsheet + Docs + CRM + Tickets + Slack
 
 It is the cleanest supported way to show that VEI can execute long-horizon, cross-surface enterprise tasks rather than only single-family demos.
+
+Vertical world-pack showcase bundle:
+
+```bash
+vei showcase verticals \
+  --root _vei_out/vertical_showcase \
+  --run-id vc_worlds
+```
+
+That command creates three separate workspace-backed companies, runs the deterministic workflow baseline plus a freer comparison runner for each, and writes one `vertical_showcase_overview.md` bundle alongside ready-to-open workspace roots:
+
+- `real_estate_management`: Harbor Point Management / `tenant_opening_conflict`
+- `digital_marketing_agency`: Northstar Growth / `campaign_launch_guardrail`
+- `storage_solutions`: Atlas Storage Systems / `capacity_quote_commitment`
 
 Flagship blueprint-driven revenue/ops demo:
 

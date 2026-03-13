@@ -138,6 +138,8 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - graph-native workflow execution now records requested graph intent, resolved underlying tool, and affected object refs in the same event spine
 - `vei.ui`
   - local playback/debug server for workspace runs
+- `vei.verticals`
+  - built-in vertical world packs and showcase helpers for believable company-grade demo environments
 
 ## Supported Entry Points
 
@@ -165,6 +167,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
 - Identity and control plane: Okta-style identity, Google Admin, SIEM, Datadog, PagerDuty, feature flags
 - Business systems: ERP, CRM, HRIS, Jira-style issues
 - Office/data surfaces: Spreadsheet
+- Vertical domain adapters: Property operations, campaign operations, inventory operations
 
 ## Capability Domains
 
@@ -186,6 +189,12 @@ VEI keeps the current router twins, but the public ontology now groups them as f
   - Feature flags, ERP
 - `data_graph`
   - Database, Spreadsheet
+- `property_graph`
+  - properties, buildings, units, leases, vendors, work orders
+- `campaign_graph`
+  - clients, campaigns, creatives, budgets, approvals, reports
+- `inventory_graph`
+  - sites, capacity pools, storage units, quotes, orders, allocations
 
 ## Design Rules
 
@@ -205,3 +214,4 @@ VEI keeps the current router twins, but the public ontology now groups them as f
 - Prefer graph-native workflow steps for long-horizon playbooks when the intent is domain-level mutation rather than a specific vendor surface.
 - Prefer semantic environment building first. VM-backed or OS-level facades are future plugin substrates, not the core runtime model.
 - Preserve imported-vs-derived-vs-simulated provenance through normalization, workspace storage, run timelines, and UI inspection.
+- Prefer vertical world packs to be first-class workspaces that exercise the same kernel, run spine, contracts, and UI as the rest of the product, not a separate demo framework.

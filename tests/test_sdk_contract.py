@@ -24,6 +24,7 @@ from vei.sdk import (
     get_import_package_example_path_entry,
     get_showcase_example_entry,
     get_scenario_manifest,
+    get_vertical_pack_manifest_entry,
     import_workspace_entry,
     list_scenario_manifest,
     list_benchmark_family_workflow_variants,
@@ -31,12 +32,15 @@ from vei.sdk import (
     list_grounding_bundle_example_entries,
     list_import_package_example_entries,
     list_showcase_example_entries,
+    list_vertical_pack_manifest_entries,
     load_workspace_generated_scenarios_entry,
     load_workspace_import_report_entry,
     load_workspace_provenance_entry,
     normalize_import_package_entry,
     prepare_identity_workspace_flow_entry,
     run_benchmark_family_workflow,
+    prepare_vertical_demo_entry,
+    run_vertical_showcase_entry,
     run_workflow_spec,
     validate_import_package_entry,
     validate_benchmark_family_workflow,
@@ -304,6 +308,27 @@ def test_sdk_showcase_helpers_list_complex_examples() -> None:
         "acquired_seller_cutover",
         "checkout_revenue_flightdeck",
     } <= names
+
+
+def test_sdk_vertical_pack_helpers_prepare_demo_workspaces(tmp_path: Path) -> None:
+    pack = get_vertical_pack_manifest_entry("real_estate_management")
+    manifests = list_vertical_pack_manifest_entries()
+    demo = prepare_vertical_demo_entry(
+        vertical_name="real_estate_management",
+        workspace_root=str(tmp_path / "real-estate"),
+    )
+    showcase = run_vertical_showcase_entry(
+        root=str(tmp_path / "showcase"),
+        vertical_names=["storage_solutions"],
+        run_id="sdk_verticals",
+    )
+
+    assert pack.company_name == "Harbor Point Management"
+    assert any(item.name == "digital_marketing_agency" for item in manifests)
+    assert demo.baseline_contract_ok is True
+    assert demo.workflow_manifest_path.exists()
+    assert showcase.run_id == "sdk_verticals"
+    assert showcase.demos[0].manifest.name == "storage_solutions"
 
 
 def test_sdk_import_helpers_bootstrap_workspace_from_fixture(tmp_path: Path) -> None:

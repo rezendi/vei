@@ -11,6 +11,20 @@ const CHANNEL_COLORS = {
   Misc: "#94a3b8",
 };
 
+const GRAPH_TITLES = {
+  comm_graph: "Communications",
+  doc_graph: "Documents",
+  work_graph: "Workflows",
+  identity_graph: "Identity",
+  revenue_graph: "Revenue",
+  data_graph: "Data",
+  obs_graph: "Observability",
+  ops_graph: "Operations",
+  property_graph: "Property",
+  campaign_graph: "Campaign",
+  inventory_graph: "Inventory",
+};
+
 const state = {
   workspace: null,
   scenarios: [],
@@ -155,6 +169,10 @@ function summarizeGraph(graph) {
     }
   }
   return stats.slice(0, 6);
+}
+
+function formatDomainTitle(domain) {
+  return GRAPH_TITLES[domain] || domain.replaceAll("_", " ");
 }
 
 function renderWorkspaceMetrics() {
@@ -416,6 +434,12 @@ function renderScenarioBriefing() {
 
   const scenario = preview.scenario || {};
   const compiled = preview.compiled_blueprint || {};
+  const metadata = scenario.metadata || {};
+  const builderEnvironment = metadata.builder_environment || {};
+  const whatIfBranches = Array.isArray(builderEnvironment.what_if_branches)
+    ? builderEnvironment.what_if_branches
+    : [];
+  const verticalName = builderEnvironment.vertical || metadata.vertical || "";
   const facadeLabels = (compiled.facades || [])
     .map((item) => {
       if (typeof item === "string") {
@@ -457,6 +481,14 @@ function renderScenarioBriefing() {
       ${scorePill("Imported rules", String(importedRuleCount))}
       ${scorePill("Allowed tools", String(contract.observation_boundary?.allowed_tools?.length || contract.metadata?.observation_boundary?.allowed_tools?.length || 0))}
     </div>
+    ${
+      whatIfBranches.length
+        ? `<div class="stack-card">
+            <h3>${escapeHtml(verticalName ? `${verticalName.replaceAll("_", " ")} what-if paths` : "What-if paths")}</h3>
+            <div class="chip-row">${whatIfBranches.map((item) => chip(item)).join("")}</div>
+          </div>`
+        : ""
+    }
   `;
 
   renderJson("scenario-panel", preview);
@@ -718,12 +750,15 @@ function renderGraphs() {
   panel.innerHTML = domains
     .map((domain) => {
       const stats = summarizeGraph(graphs[domain]);
+      const headline = graphs[domain]?.scenario_brief || graphs[domain]?.organization_name || "";
       return `
         <div class="graph-card">
-          <h3>${escapeHtml(domain)}</h3>
+          <h3>${escapeHtml(formatDomainTitle(domain))}</h3>
+          ${headline ? `<p class="metric-detail">${escapeHtml(headline)}</p>` : ""}
           <div class="graph-stats">
             ${stats.map(([label, value]) => `<span><strong>${escapeHtml(label)}</strong><em>${escapeHtml(String(value))}</em></span>`).join("")}
           </div>
+          <div class="chip-row">${chip(domain)}</div>
         </div>
       `;
     })

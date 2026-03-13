@@ -452,3 +452,59 @@ def test_product_cli_identity_demo_prepares_workspace_and_demo_runs(
     assert payload["active_scenario"] == "oversharing_remediation"
     assert payload["generated_scenario_count"] >= 6
     assert set(payload["run_ids"]) == {"identity_workflow", "identity_scripted"}
+
+
+def test_product_cli_vertical_init_supports_world_packs(tmp_path: Path) -> None:
+    runner = typer.testing.CliRunner()
+    root = tmp_path / "harbor-point"
+
+    result = runner.invoke(
+        app,
+        [
+            "project",
+            "init",
+            "--root",
+            str(root),
+            "--vertical",
+            "real_estate_management",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["manifest"]["source_kind"] == "vertical"
+    assert payload["manifest"]["source_ref"] == "real_estate_management"
+    assert payload["manifest"]["title"] == "Harbor Point Management"
+
+
+def test_product_cli_vertical_showcase_builds_demo_bundle(tmp_path: Path) -> None:
+    runner = typer.testing.CliRunner()
+    root = tmp_path / "vertical-showcase"
+
+    result = runner.invoke(
+        app,
+        [
+            "showcase",
+            "verticals",
+            "--root",
+            str(root),
+            "--run-id",
+            "vc_worlds",
+            "--vertical",
+            "real_estate_management",
+            "--vertical",
+            "digital_marketing_agency",
+            "--vertical",
+            "storage_solutions",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["run_id"] == "vc_worlds"
+    assert len(payload["demos"]) == 3
+    overview_path = root / "vc_worlds" / "vertical_showcase_overview.md"
+    assert overview_path.exists()
+    assert "VEI Vertical World Pack Showcase" in overview_path.read_text(
+        encoding="utf-8"
+    )

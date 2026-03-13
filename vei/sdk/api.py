@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Protocol
 
 from vei.capability_graph.models import (
@@ -148,6 +149,19 @@ from vei.workspace.models import (
     WorkspaceSourceConfig,
     WorkspaceSourceSyncRecord,
     WorkspaceSummary,
+)
+from vei.verticals import (
+    VerticalPackManifest,
+    get_vertical_pack_manifest as _get_vertical_pack_manifest,
+    list_vertical_pack_manifests as _list_vertical_pack_manifests,
+)
+from vei.verticals.demo import (
+    VerticalDemoResult,
+    VerticalDemoSpec,
+    VerticalShowcaseResult,
+    VerticalShowcaseSpec,
+    prepare_vertical_demo as _prepare_vertical_demo,
+    run_vertical_showcase as _run_vertical_showcase,
 )
 from vei.world.api import (
     WorldSessionAPI,
@@ -566,6 +580,80 @@ def create_workspace_from_template_entry(
         workflow_name=workflow_name,
         workflow_variant=workflow_variant,
         overwrite=overwrite,
+    )
+
+
+def get_vertical_pack_manifest_entry(name: str) -> VerticalPackManifest:
+    return _get_vertical_pack_manifest(name)
+
+
+def list_vertical_pack_manifest_entries() -> list[VerticalPackManifest]:
+    return _list_vertical_pack_manifests()
+
+
+def prepare_vertical_demo_entry(
+    *,
+    vertical_name: str,
+    workspace_root: str,
+    compare_runner: str = "scripted",
+    overwrite: bool = True,
+    seed: int = 42042,
+    max_steps: int = 18,
+    compare_model: str | None = None,
+    compare_provider: str | None = None,
+    compare_bc_model_path: str | None = None,
+    compare_task: str | None = None,
+) -> VerticalDemoResult:
+    return _prepare_vertical_demo(
+        VerticalDemoSpec(
+            vertical_name=vertical_name,
+            workspace_root=workspace_root,
+            compare_runner=compare_runner,  # type: ignore[arg-type]
+            overwrite=overwrite,
+            seed=seed,
+            max_steps=max_steps,
+            compare_model=compare_model,
+            compare_provider=compare_provider,
+            compare_bc_model_path=(
+                Path(compare_bc_model_path)
+                if compare_bc_model_path is not None
+                else None
+            ),
+            compare_task=compare_task,
+        )
+    )
+
+
+def run_vertical_showcase_entry(
+    *,
+    root: str,
+    vertical_names: list[str] | None = None,
+    compare_runner: str = "scripted",
+    overwrite: bool = True,
+    seed: int = 42042,
+    max_steps: int = 18,
+    compare_model: str | None = None,
+    compare_provider: str | None = None,
+    compare_bc_model_path: str | None = None,
+    run_id: str = "vertical_showcase",
+) -> VerticalShowcaseResult:
+    return _run_vertical_showcase(
+        VerticalShowcaseSpec(
+            vertical_names=list(vertical_names or []),
+            root=Path(root),
+            compare_runner=compare_runner,  # type: ignore[arg-type]
+            overwrite=overwrite,
+            seed=seed,
+            max_steps=max_steps,
+            compare_model=compare_model,
+            compare_provider=compare_provider,
+            compare_bc_model_path=(
+                Path(compare_bc_model_path)
+                if compare_bc_model_path is not None
+                else None
+            ),
+            run_id=run_id,
+        )
     )
 
 
