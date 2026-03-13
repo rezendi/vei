@@ -102,6 +102,15 @@ That showcase creates three separate company workspaces, runs a workflow baselin
 - `digital_marketing_agency`
 - `storage_solutions`
 
+That bundle is also the cleanest proof that VEI is a kernel product, not a collection of disconnected demos:
+
+- the same workspace/compiler flow creates each company world
+- the same run/event spine records the baseline and comparison runs
+- the same snapshot/branch model supports the “what if” stories
+- the same contract engine turns business outcomes into pass/fail signals
+
+That is the architectural reason the product can later serve as an RL environment, a continuous evaluation stack, and an agent-management surface without changing the underlying world model.
+
 The flagship mixed-stack demo is the revenue/ops primary variant:
 
 ```bash

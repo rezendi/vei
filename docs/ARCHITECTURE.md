@@ -215,3 +215,4 @@ VEI keeps the current router twins, but the public ontology now groups them as f
 - Prefer semantic environment building first. VM-backed or OS-level facades are future plugin substrates, not the core runtime model.
 - Preserve imported-vs-derived-vs-simulated provenance through normalization, workspace storage, run timelines, and UI inspection.
 - Prefer vertical world packs to be first-class workspaces that exercise the same kernel, run spine, contracts, and UI as the rest of the product, not a separate demo framework.
+- The vertical demos should always reinforce the platform thesis: domain packs change capability graphs and contracts, while the kernel, event spine, replay model, and playback UI stay the same. That is what lets VEI become an RL environment, a continuous-eval stack, and an agent-management platform later without replacing the core runtime.

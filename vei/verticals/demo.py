@@ -48,6 +48,18 @@ class VerticalDemoResult(BaseModel):
     comparison_success: bool = False
     baseline_contract_ok: bool | None = None
     comparison_contract_ok: bool | None = None
+    baseline_event_count: int = 0
+    comparison_event_count: int = 0
+    baseline_graph_action_count: int = 0
+    comparison_graph_action_count: int = 0
+    baseline_snapshot_count: int = 0
+    comparison_snapshot_count: int = 0
+    baseline_graph_domains: list[str] = Field(default_factory=list)
+    comparison_graph_domains: list[str] = Field(default_factory=list)
+    baseline_resolved_tools: list[str] = Field(default_factory=list)
+    comparison_resolved_tools: list[str] = Field(default_factory=list)
+    kernel_thesis: str = ""
+    platform_uses: list[str] = Field(default_factory=list)
 
 
 class VerticalShowcaseSpec(BaseModel):
@@ -71,6 +83,8 @@ class VerticalShowcaseResult(BaseModel):
     overview_path: Path
     result_path: Path
     demos: list[VerticalDemoResult] = Field(default_factory=list)
+    kernel_thesis: str = ""
+    platform_uses: list[str] = Field(default_factory=list)
 
 
 def prepare_vertical_demo(spec: VerticalDemoSpec) -> VerticalDemoResult:
@@ -110,6 +124,8 @@ def prepare_vertical_demo(spec: VerticalDemoSpec) -> VerticalDemoResult:
     what_if_branches = _extract_what_if_branches(preview) or list(
         manifest.what_if_branches
     )
+    baseline_summary = _summarize_run_spine(run_root / workflow_manifest.run_id)
+    comparison_summary = _summarize_run_spine(run_root / comparison_manifest.run_id)
     result = VerticalDemoResult(
         manifest=manifest,
         workspace_root=workspace_root,
@@ -140,6 +156,18 @@ def prepare_vertical_demo(spec: VerticalDemoSpec) -> VerticalDemoResult:
         comparison_contract_ok=(
             comparison_manifest.contract.ok if comparison_manifest.contract else None
         ),
+        baseline_event_count=int(baseline_summary["event_count"]),
+        comparison_event_count=int(comparison_summary["event_count"]),
+        baseline_graph_action_count=int(baseline_summary["graph_action_count"]),
+        comparison_graph_action_count=int(comparison_summary["graph_action_count"]),
+        baseline_snapshot_count=len(workflow_manifest.snapshots),
+        comparison_snapshot_count=len(comparison_manifest.snapshots),
+        baseline_graph_domains=list(baseline_summary["graph_domains"]),
+        comparison_graph_domains=list(comparison_summary["graph_domains"]),
+        baseline_resolved_tools=list(baseline_summary["resolved_tools"]),
+        comparison_resolved_tools=list(comparison_summary["resolved_tools"]),
+        kernel_thesis=_kernel_thesis_statement(),
+        platform_uses=_platform_uses(),
     )
     overview_path.write_text(render_vertical_demo_overview(result), encoding="utf-8")
     (workspace_root / "vertical_demo_result.json").write_text(
@@ -182,6 +210,8 @@ def run_vertical_showcase(spec: VerticalShowcaseSpec) -> VerticalShowcaseResult:
         overview_path=showcase_root / "vertical_showcase_overview.md",
         result_path=showcase_root / "vertical_showcase_result.json",
         demos=demos,
+        kernel_thesis=_kernel_thesis_statement(),
+        platform_uses=_platform_uses(),
     )
     result.overview_path.write_text(
         render_vertical_showcase_overview(result), encoding="utf-8"
@@ -208,6 +238,30 @@ def render_vertical_demo_overview(result: VerticalDemoResult) -> str:
         "What this proves:",
     ]
     lines.extend(f"- {bullet}" for bullet in result.manifest.proves)
+    lines.extend(
+        [
+            "",
+            "Why the kernel matters:",
+            f"- {result.kernel_thesis}",
+            (
+                f"- Baseline emitted `{result.baseline_event_count}` run events, "
+                f"`{result.baseline_graph_action_count}` graph-native actions, and "
+                f"`{result.baseline_snapshot_count}` snapshots."
+            ),
+        ]
+    )
+    if result.baseline_graph_domains:
+        lines.append(
+            "- Graph domains touched: "
+            + ", ".join(f"`{item}`" for item in result.baseline_graph_domains)
+        )
+    if result.baseline_resolved_tools:
+        lines.append(
+            "- Resolved tools used: "
+            + ", ".join(f"`{item}`" for item in result.baseline_resolved_tools[:5])
+        )
+    lines.extend(["", "What this becomes later:"])
+    lines.extend(f"- {bullet}" for bullet in result.platform_uses)
     if result.what_if_branches:
         lines.extend(["", "What-if branches:"])
         lines.extend(f"- {branch}" for branch in result.what_if_branches)
@@ -222,7 +276,21 @@ def render_vertical_showcase_overview(result: VerticalShowcaseResult) -> str:
         f"Comparison runner: `{result.compare_runner}`",
         f"Workspaces: `{len(result.demos)}`",
         "",
+        "## One kernel, three companies",
+        "",
+        result.kernel_thesis,
+        "",
+        "This is why the same product can later become multiple layers above the kernel:",
+        "",
     ]
+    lines.extend(f"- {bullet}" for bullet in result.platform_uses)
+    lines.extend(
+        [
+            "",
+            "Each world pack below uses the same workspace model, event spine, snapshot/branch system, contract engine, and UI playback surface.",
+            "",
+        ]
+    )
     for demo in result.demos:
         lines.extend(
             [
@@ -233,6 +301,17 @@ def render_vertical_showcase_overview(result: VerticalShowcaseResult) -> str:
                 f"- Workspace: `{demo.workspace_root}`",
                 f"- Baseline contract: `{demo.baseline_contract_ok}`",
                 f"- Comparison contract: `{demo.comparison_contract_ok}`",
+                (
+                    f"- Baseline kernel proof: `{demo.baseline_event_count}` events, "
+                    f"`{demo.baseline_graph_action_count}` graph actions, "
+                    f"`{demo.baseline_snapshot_count}` snapshots"
+                ),
+                (
+                    "- Domains touched: "
+                    + ", ".join(f"`{item}`" for item in demo.baseline_graph_domains)
+                    if demo.baseline_graph_domains
+                    else "- Domains touched: `n/a`"
+                ),
                 f"- Overview: `{demo.overview_path}`",
                 f"- UI: `{demo.ui_command}`",
                 "",
@@ -262,6 +341,62 @@ def _extract_what_if_branches(preview: dict[str, object]) -> list[str]:
     if not isinstance(branches, list):
         return []
     return [str(item) for item in branches if str(item).strip()]
+
+
+def _kernel_thesis_statement() -> str:
+    return (
+        "VEI is the shared world kernel underneath every demo: the company-specific "
+        "part is just the capability graph and contract, while the runtime, event "
+        "spine, branching, replay, and inspection surfaces stay the same."
+    )
+
+
+def _platform_uses() -> list[str]:
+    return [
+        "RL environment: deterministic world state, snapshots, and contract-shaped outcomes become trainable episodes later.",
+        "Continuous eval system: the workflow baseline and freer comparison runs already share the same scenario, contract, and event spine.",
+        "AI agent management platform: live playback, resolved tools, provenance, and branch diffs make agent behavior inspectable and governable.",
+    ]
+
+
+def _summarize_run_spine(run_root: Path) -> dict[str, object]:
+    events_path = run_root / "events.jsonl"
+    if not events_path.exists():
+        return {
+            "event_count": 0,
+            "graph_action_count": 0,
+            "graph_domains": [],
+            "resolved_tools": [],
+        }
+    graph_domains: list[str] = []
+    resolved_tools: list[str] = []
+    event_count = 0
+    graph_action_count = 0
+    with events_path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            event_count += 1
+            payload = json.loads(line)
+            graph_domain = payload.get("graph_domain")
+            if isinstance(graph_domain, str) and graph_domain:
+                graph_action_count += 1
+                if graph_domain not in graph_domains:
+                    graph_domains.append(graph_domain)
+            resolved_tool = payload.get("resolved_tool")
+            if (
+                isinstance(resolved_tool, str)
+                and resolved_tool
+                and resolved_tool not in resolved_tools
+            ):
+                resolved_tools.append(resolved_tool)
+    return {
+        "event_count": event_count,
+        "graph_action_count": graph_action_count,
+        "graph_domains": graph_domains,
+        "resolved_tools": resolved_tools,
+    }
 
 
 __all__ = [

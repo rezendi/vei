@@ -448,6 +448,15 @@ That command creates three separate workspace-backed companies, runs the determi
 - `digital_marketing_agency`: Northstar Growth / `campaign_launch_guardrail`
 - `storage_solutions`: Atlas Storage Systems / `capacity_quote_commitment`
 
+The point of that showcase is not just three flashy demos. It is one proof repeated three times:
+
+- the same world kernel compiles three different businesses into runnable environments
+- the same event spine records every run, graph action, tool resolution, and snapshot
+- the same contract engine judges deterministic baselines and freer agent runs
+- the same playback UI makes the result inspectable
+
+That is why VEI can later become an RL environment, a continuous eval system, and an AI-agent operations platform on top of the same kernel.
+
 Flagship blueprint-driven revenue/ops demo:
 
 ```bash
