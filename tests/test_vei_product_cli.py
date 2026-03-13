@@ -503,8 +503,11 @@ def test_product_cli_vertical_showcase_builds_demo_bundle(tmp_path: Path) -> Non
     payload = json.loads(result.output)
     assert payload["run_id"] == "vc_worlds"
     assert len(payload["demos"]) == 3
+    assert "shared world kernel" in payload["kernel_thesis"]
+    assert all(item["baseline_graph_action_count"] > 0 for item in payload["demos"])
     overview_path = root / "vc_worlds" / "vertical_showcase_overview.md"
     assert overview_path.exists()
-    assert "VEI Vertical World Pack Showcase" in overview_path.read_text(
-        encoding="utf-8"
-    )
+    overview = overview_path.read_text(encoding="utf-8")
+    assert "VEI Vertical World Pack Showcase" in overview
+    assert "One kernel, three companies" in overview
+    assert "RL environment" in overview

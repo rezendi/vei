@@ -59,6 +59,11 @@ def test_vertical_workspace_runs_and_exposes_domain_graphs(
     )
     assert workflow_manifest.success is True
     assert workflow_manifest.contract.ok is True
+    assert (
+        workflow_manifest.contract.success_assertions_passed
+        == workflow_manifest.contract.success_assertion_count
+    )
+    assert scripted_manifest.success is False
     assert scripted_manifest.contract.issue_count > 0
     assert expected_domain in graphs["available_domains"]
     assert graphs[expected_domain]

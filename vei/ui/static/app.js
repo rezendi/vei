@@ -175,6 +175,10 @@ function formatDomainTitle(domain) {
   return GRAPH_TITLES[domain] || domain.replaceAll("_", " ");
 }
 
+function uniqueStrings(values) {
+  return [...new Set((values || []).filter((item) => typeof item === "string" && item))];
+}
+
 function renderWorkspaceMetrics() {
   const workspace = state.workspace;
   const panel = document.getElementById("workspace-metrics");
@@ -473,6 +477,10 @@ function renderScenarioBriefing() {
     ? contract.metadata.rule_provenance
     : [];
   const importedRuleCount = ruleProvenance.filter((item) => item.origin === "imported").length;
+  const graphDomains = uniqueStrings([
+    ...(compiled.capability_graphs?.available_domains || []),
+    ...Object.keys(compiled.capability_graphs || {}).filter((key) => key.endsWith("_graph") && compiled.capability_graphs[key]),
+  ]);
   document.getElementById("contract-scorecard").innerHTML = `
     <div class="score-strip">
       ${scorePill("Success predicates", String(successCount))}
@@ -480,6 +488,22 @@ function renderScenarioBriefing() {
       ${scorePill("Policy invariants", String(invariants))}
       ${scorePill("Imported rules", String(importedRuleCount))}
       ${scorePill("Allowed tools", String(contract.observation_boundary?.allowed_tools?.length || contract.metadata?.observation_boundary?.allowed_tools?.length || 0))}
+    </div>
+    <div class="briefing-grid">
+      <div class="stack-card">
+        <h3>Why the kernel matters</h3>
+        <p class="metric-detail">This workspace runs on the same VEI kernel as every other world pack: one world state, one event spine, one contract system, and one snapshot/branch model.</p>
+        <div class="chip-row">${graphDomains.slice(0, 6).map((item) => chip(formatDomainTitle(item))).join("")}</div>
+      </div>
+      <div class="stack-card">
+        <h3>What this becomes later</h3>
+        <div class="chip-row">
+          ${chip("RL env")}
+          ${chip("continuous eval")}
+          ${chip("agent management")}
+        </div>
+        <p class="metric-detail">Deterministic state + contracts make this trainable; shared baselines make it continuously evaluable; live playback and provenance make it operable.</p>
+      </div>
     </div>
     ${
       whatIfBranches.length
@@ -552,6 +576,10 @@ function renderRunSummary() {
   const successTotal = run.contract?.success_assertion_count || 0;
   const issueCount = run.contract?.issue_count || contract?.dynamic_validation?.issues?.length || 0;
   const policyFails = contract?.policy_invariants_failed || 0;
+  const graphEvents = state.timeline.filter((item) => item.graph_intent || item.graph_action_ref);
+  const graphDomains = uniqueStrings(graphEvents.map((item) => item.graph_domain).filter(Boolean));
+  const resolvedTools = uniqueStrings(graphEvents.map((item) => item.resolved_tool).filter(Boolean));
+  const whatIfBranches = state.scenarioPreview?.scenario?.metadata?.builder_environment?.what_if_branches || [];
   panel.innerHTML = `
     <div class="score-strip">
       ${scorePill("Contract", run.contract?.ok === null ? "pending" : run.contract?.ok ? "pass" : "fail", run.contract?.contract_name || "workspace contract")}
@@ -560,6 +588,38 @@ function renderRunSummary() {
       ${scorePill("Policy failures", String(policyFails))}
       ${scorePill("Latency p95", formatMs(run.metrics?.latency_p95_ms || 0))}
       ${scorePill("Virtual time", formatMs(run.metrics?.time_ms || 0))}
+    </div>
+    <div class="briefing-grid">
+      <div class="stack-card">
+        <h3>Why the kernel matters</h3>
+        <p class="metric-detail">This run proves the reusable VEI kernel: one event spine, one contract engine, one snapshot rail, and one graph-first mutation layer underneath a company-specific world.</p>
+        <div class="detail-grid">
+          ${detailTile("Run events", compactNumber(state.timeline.length))}
+          ${detailTile("Graph actions", compactNumber(graphEvents.length))}
+          ${detailTile("Snapshots", compactNumber(state.snapshots.length))}
+          ${detailTile("Domains", compactNumber(graphDomains.length))}
+        </div>
+        <div class="chip-row">${graphDomains.map((item) => chip(formatDomainTitle(item))).join("")}</div>
+      </div>
+      <div class="stack-card">
+        <h3>Platform leverage</h3>
+        <div class="chip-row">
+          ${chip("RL env")}
+          ${chip("continuous eval")}
+          ${chip("agent management")}
+        </div>
+        <p class="metric-detail">The same run artifacts can later drive RL episodes, continuous eval deltas, and live agent operations because the kernel records state, contracts, provenance, and tool resolution in one place.</p>
+        <div class="chip-row">${resolvedTools.slice(0, 5).map((item) => chip(item)).join("")}</div>
+      </div>
+      ${
+        whatIfBranches.length
+          ? `<div class="stack-card">
+              <h3>What-if paths</h3>
+              <div class="chip-row">${whatIfBranches.map((item) => chip(item)).join("")}</div>
+              <p class="metric-detail">These branch ideas are just alternate futures on top of the same kernel state and snapshot model.</p>
+            </div>`
+          : ""
+      }
     </div>
   `;
   renderJson("run-panel", run);
