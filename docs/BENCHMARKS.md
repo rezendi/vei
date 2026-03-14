@@ -133,6 +133,33 @@ The result is the clearest “same world, many futures” demo path in the repo:
 - different business objectives
 - same world kernel, event spine, snapshot model, and playback UI
 
+Run the narrative-first Studio story bundle:
+
+```bash
+vei showcase story \
+  --root _vei_out/vertical_showcase \
+  --run-id vc_story \
+  --vertical real_estate_management \
+  --scenario-variant vendor_no_show \
+  --contract-variant safety_over_speed
+```
+
+This is the cleanest business-facing demo path. It writes one top-level `story_showcase_overview.md` bundle and, inside the selected workspace, the narrative artifacts:
+
+- `story_manifest.json`
+- `story_overview.md`
+- `exports_preview.json`
+
+The Studio UI then presents the run through the product primitives:
+
+- Company
+- Situation
+- Objective
+- Run
+- Branch
+- Outcome
+- Exports
+
 The flagship mixed-stack demo is the revenue/ops primary variant:
 
 ```bash

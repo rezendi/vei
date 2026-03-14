@@ -131,6 +131,26 @@ vei ui serve --root _vei_out/workspaces/harbor_point
 
 That is the cleanest proof of the kernel thesis: the base company world stays fixed while VEI swaps the problem setup and success criteria on top of the same runtime, event spine, contract engine, and playback UI.
 
+For the VC/demo path, VEI now ships a narrative-first Studio showcase:
+
+```bash
+vei showcase story \
+  --root _vei_out/vertical_showcase \
+  --run-id vc_story \
+  --vertical real_estate_management \
+  --scenario-variant vendor_no_show \
+  --contract-variant safety_over_speed
+
+vei ui serve --root _vei_out/vertical_showcase/vc_story/real_estate_management
+```
+
+That path writes:
+- `story_manifest.json`
+- `story_overview.md`
+- `exports_preview.json`
+
+The point is product legibility: VEI now presents the demo as **Company → Situation → Objective → Run → Branch → Outcome → Exports**, while the underlying kernel stays the same.
+
 ### Grounded import flow
 
 VEI can now ingest realistic offline enterprise export packs and turn them into a runnable workspace. The import path is:
@@ -218,6 +238,7 @@ The import UI now shows:
 - Local playback UI for completed and in-flight workspace runs, including timeline, orientation, capability graphs, snapshots, diffs, and contract outcome panels
 - Canonical append-only run event stream that drives playback, `vei inspect events`, receipts, contract status, and snapshot markers across workflow, scripted, BC, and LLM runs
 - Variant-aware workspace activation so previews, run manifests, showcase bundles, and the UI all explain which scenario overlay and contract overlay are active on top of the base world
+- VEI Studio narrative mode, so the same kernel can be shown as a world studio for enterprises with company briefings, situation/objective selection, branch/outcome explanation, and export previews for future RL/eval/agent-ops layers
 
 ## Architecture
 
