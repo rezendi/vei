@@ -594,3 +594,49 @@ def test_product_cli_vertical_variant_commands_and_matrix(tmp_path: Path) -> Non
     assert "same runtime kernel" in (
         matrix_root / "vc_matrix" / "vertical_variant_matrix_overview.md"
     ).read_text(encoding="utf-8")
+
+
+def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> None:
+    runner = typer.testing.CliRunner()
+    root = tmp_path / "story-showcase"
+
+    result = runner.invoke(
+        app,
+        [
+            "showcase",
+            "story",
+            "--root",
+            str(root),
+            "--run-id",
+            "vc_story",
+            "--vertical",
+            "real_estate_management",
+            "--scenario-variant",
+            "vendor_no_show",
+            "--contract-variant",
+            "safety_over_speed",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["run_id"] == "vc_story"
+    assert len(payload["stories"]) == 1
+    story = payload["stories"][0]
+    assert story["scenario_variant"] == "vendor_no_show"
+    assert story["contract_variant"] == "safety_over_speed"
+    story_root = root / "vc_story" / "real_estate_management"
+    assert (story_root / "story_manifest.json").exists()
+    assert (story_root / "story_overview.md").exists()
+    assert (story_root / "exports_preview.json").exists()
+    overview = (story_root / "story_overview.md").read_text(encoding="utf-8")
+    assert "VEI Story" in overview
+    assert "Branch Story" in overview
+    exports_preview = json.loads(
+        (story_root / "exports_preview.json").read_text(encoding="utf-8")
+    )
+    assert [item["name"] for item in exports_preview] == [
+        "rl_episode_export",
+        "continuous_eval_export",
+        "agent_ops_export",
+    ]

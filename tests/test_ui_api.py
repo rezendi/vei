@@ -308,3 +308,38 @@ def test_ui_api_exposes_vertical_variant_browser(tmp_path: Path) -> None:
         ]
         == "vendor_no_show"
     )
+
+
+def test_ui_api_exposes_story_bundle_and_export_preview(tmp_path: Path) -> None:
+    root = tmp_path / "story-ui"
+    create_workspace_from_template(
+        root=root,
+        source_kind="vertical",
+        source_ref="digital_marketing_agency",
+    )
+    client = TestClient(ui_api.create_ui_app(root))
+
+    story_response = client.get("/api/story")
+    assert story_response.status_code == 200
+    story_payload = story_response.json()
+    assert story_payload["manifest"]["company_name"] == "Northstar Growth"
+    assert story_payload["scenario_variant"] == "campaign_launch_guardrail"
+    assert story_payload["contract_variant"] == "launch_safely"
+
+    launch_workspace_run(root, runner="workflow")
+    launch_workspace_run(root, runner="scripted")
+
+    story_response = client.get("/api/story")
+    assert story_response.status_code == 200
+    story_payload = story_response.json()
+    assert story_payload["outcome"]["baseline_branch"]
+    assert story_payload["kernel_proof"]["baseline"]["events"] > 0
+
+    exports_response = client.get("/api/exports-preview")
+    assert exports_response.status_code == 200
+    exports_payload = exports_response.json()
+    assert [item["name"] for item in exports_payload] == [
+        "rl_episode_export",
+        "continuous_eval_export",
+        "agent_ops_export",
+    ]

@@ -138,9 +138,10 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - graph-native workflow execution now records requested graph intent, resolved underlying tool, and affected object refs in the same event spine
 - `vei.ui`
   - local playback/debug server for workspace runs
+  - now also exposes VEI Studio mode, which presents the same kernel through Company, Situation, Objective, Run, Branch, Outcome, and Exports
 - `vei.verticals`
   - built-in vertical world packs and showcase helpers for believable company-grade demo environments
-  - scenario variants, contract variants, and curated matrix runners that keep the base company world stable while changing the situation and objective
+  - scenario variants, contract variants, curated matrix runners, and narrative story bundles that keep the base company world stable while changing the situation and objective
 
 ## Supported Entry Points
 
@@ -153,7 +154,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - snapshot/receipt inspection plus runtime capability-graph and orientation rendering
 - `vei`
   - top-level product workflow entrypoint
-  - `project`, `contract`, `scenario`, `run`, `inspect`, and `ui` groups
+  - `project`, `contract`, `scenario`, `run`, `inspect`, `showcase`, and `ui` groups
 - `vei-ui`
   - standalone alias for the local playback/debug server
   - equivalent to `vei ui serve`

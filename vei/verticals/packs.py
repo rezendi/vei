@@ -48,6 +48,9 @@ class VerticalPackManifest(BaseModel):
     title: str
     description: str
     company_name: str
+    company_briefing: str
+    failure_impact: str
+    objective_focus: str
     scenario_name: str
     workflow_name: str
     workflow_variant: str
@@ -565,6 +568,18 @@ _VERTICAL_PACKS: Dict[str, VerticalPackManifest] = {
         title="Real Estate Management",
         description="Lease, vendor, and property-readiness conflict for a high-stakes tenant opening.",
         company_name="Harbor Point Management",
+        company_briefing=(
+            "Harbor Point Management operates retail and mixed-use properties, coordinating "
+            "leasing, property operations, vendors, tenant readiness, and customer-facing artifacts."
+        ),
+        failure_impact=(
+            "If this scenario goes badly, Harbor Point misses a flagship tenant opening, loses tenant trust, "
+            "and creates an expensive operational scramble across leasing, facilities, and vendors."
+        ),
+        objective_focus=(
+            "Keep the opening valid and business-real: lease state, unit readiness, vendor work, and tenant-facing "
+            "artifacts all need to line up before Monday morning."
+        ),
         scenario_name="tenant_opening_conflict",
         workflow_name="real_estate_management",
         workflow_variant="tenant_opening_conflict",
@@ -584,6 +599,18 @@ _VERTICAL_PACKS: Dict[str, VerticalPackManifest] = {
         title="Digital Marketing Agency",
         description="Launch guardrail workflow for a campaign with approval, pacing, and reporting risk.",
         company_name="Northstar Growth",
+        company_briefing=(
+            "Northstar Growth runs client campaigns across channels, creative approvals, reporting, budgets, "
+            "and account communication, with launch integrity depending on multiple teams staying aligned."
+        ),
+        failure_impact=(
+            "If this scenario breaks, the agency can launch unapproved creative, overspend budget, and erode client trust "
+            "with stale reporting and confused communication."
+        ),
+        objective_focus=(
+            "Protect launch integrity: approvals, pacing, reporting, and client-facing artifacts should all be trustworthy "
+            "before spend is allowed to keep flowing."
+        ),
         scenario_name="campaign_launch_guardrail",
         workflow_name="digital_marketing_agency",
         workflow_variant="campaign_launch_guardrail",
@@ -599,6 +626,18 @@ _VERTICAL_PACKS: Dict[str, VerticalPackManifest] = {
         title="Storage Solutions",
         description="Strategic customer quote with fragmented capacity and fulfillment coordination pressure.",
         company_name="Atlas Storage Systems",
+        company_briefing=(
+            "Atlas Storage Systems designs and fulfills large-scale storage rollouts, coordinating quotes, capacity, "
+            "site allocation, vendors, fulfillment planning, and customer commitments."
+        ),
+        failure_impact=(
+            "If this scenario fails, Atlas can overcommit capacity, send an impossible quote, and create downstream "
+            "fulfillment failures for a strategic customer rollout."
+        ),
+        objective_focus=(
+            "Keep the commercial promise feasible: capacity allocation, ops planning, vendor follow-through, and "
+            "customer-facing artifacts must remain internally consistent."
+        ),
         scenario_name="capacity_quote_commitment",
         workflow_name="storage_solutions",
         workflow_variant="capacity_quote_commitment",

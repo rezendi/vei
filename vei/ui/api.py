@@ -25,6 +25,10 @@ from vei.run.api import (
     normalize_runner,
 )
 from vei import __version__ as vei_version
+from vei.verticals.demo import (
+    load_workspace_exports_preview,
+    load_workspace_story_manifest,
+)
 from vei.workspace.api import (
     activate_workspace_contract_variant,
     activate_workspace_scenario,
@@ -88,6 +92,20 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
     @app.get("/api/workspace")
     def api_workspace() -> JSONResponse:
         return JSONResponse(show_workspace(root).model_dump(mode="json"))
+
+    @app.get("/api/story")
+    def api_story() -> JSONResponse:
+        payload = load_workspace_story_manifest(root)
+        return JSONResponse(payload.model_dump(mode="json") if payload else {})
+
+    @app.get("/api/exports-preview")
+    def api_exports_preview() -> JSONResponse:
+        return JSONResponse(
+            [
+                item.model_dump(mode="json")
+                for item in load_workspace_exports_preview(root)
+            ]
+        )
 
     @app.get("/api/imports/summary")
     def api_import_summary() -> JSONResponse:

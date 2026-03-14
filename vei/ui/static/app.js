@@ -27,6 +27,8 @@ const GRAPH_TITLES = {
 
 const state = {
   workspace: null,
+  story: null,
+  exportsPreview: [],
   scenarios: [],
   scenarioPreview: null,
   scenarioContract: null,
@@ -49,6 +51,8 @@ const state = {
   selectedEventIndex: 0,
   selectedSnapshotFrom: null,
   selectedSnapshotTo: null,
+  studioView: "worlds",
+  developerMode: false,
   playbackTimer: null,
   eventSource: null,
 };
@@ -179,6 +183,62 @@ function uniqueStrings(values) {
   return [...new Set((values || []).filter((item) => typeof item === "string" && item))];
 }
 
+function setStudioView(view) {
+  state.studioView = view;
+  document.querySelectorAll("[data-studio-view]").forEach((node) => {
+    node.classList.toggle("hidden-panel", node.dataset.studioView !== view);
+  });
+  document.querySelectorAll(".studio-nav-button").forEach((node) => {
+    node.classList.toggle("active", node.dataset.studioView === view);
+  });
+}
+
+function toggleDeveloperMode() {
+  state.developerMode = !state.developerMode;
+  document.body.classList.toggle("developer-mode", state.developerMode);
+  document.getElementById("developer-toggle").textContent = state.developerMode
+    ? "Hide Developer Detail"
+    : "Show Developer Detail";
+}
+
+function renderStudioShell() {
+  const panel = document.getElementById("kernel-thesis-panel");
+  const story = state.story || {};
+  const kernelThesis =
+    story.kernel_thesis ||
+    "Same world kernel, same event spine, same contract engine, same playback system. Only the company, situation, and objective overlays change.";
+  const selectedWorld = story.manifest?.company_name || state.workspace?.manifest?.title || "Workspace";
+  panel.innerHTML = `
+    <div class="story-card accent-card">
+      <p class="eyebrow">Kernel Thesis</p>
+      <h3>One runtime, many enterprise futures</h3>
+      <p class="metric-detail">${escapeHtml(kernelThesis)}</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Selected Company</p>
+      <h3>${escapeHtml(selectedWorld)}</h3>
+      <p class="metric-detail">Use the Studio flow to move from company world to situation, objective, run, branch, outcome, and exports.</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Platform Story</p>
+      <div class="chip-row">${(story.platform_uses || ["RL env", "continuous eval", "agent management"]).map((item) => chip(item)).join("")}</div>
+    </div>
+  `;
+  setStudioView(state.studioView);
+}
+
+async function refreshStoryArtifacts() {
+  const [story, exportsPreview] = await Promise.all([
+    getJson("/api/story").catch(() => null),
+    getJson("/api/exports-preview").catch(() => []),
+  ]);
+  state.story = story;
+  state.exportsPreview = exportsPreview;
+  renderStudioShell();
+  renderWorldsPanel();
+  renderExportsPanel();
+}
+
 function renderWorkspaceMetrics() {
   const workspace = state.workspace;
   const panel = document.getElementById("workspace-metrics");
@@ -202,10 +262,59 @@ function renderWorkspaceHero() {
     return;
   }
   const manifest = workspace.manifest || {};
+  const story = state.story || {};
   document.getElementById("workspace-subtitle").textContent =
-    `${manifest.description || "Workspace ready."} ${workspace.run_count ? `This workspace has ${workspace.run_count} recorded run${workspace.run_count === 1 ? "" : "s"}.` : "Launch a run to start building a playback history."}`;
+    `${manifest.description || "Workspace ready."} ${story.company_briefing ? `${story.company_briefing} ` : ""}${workspace.run_count ? `This workspace has ${workspace.run_count} recorded run${workspace.run_count === 1 ? "" : "s"}.` : "Launch a run to start building a playback history."}`;
   renderWorkspaceMetrics();
+  renderStudioShell();
+  renderWorldsPanel();
   renderJson("workspace-panel", workspace);
+}
+
+function renderWorldsPanel() {
+  const panel = document.getElementById("worlds-panel");
+  const story = state.story;
+  const workspace = state.workspace;
+  if (!panel || !workspace) {
+    return;
+  }
+  const manifest = workspace.manifest || {};
+  const availableWorlds = Array.isArray(story?.available_worlds) ? story.available_worlds : [];
+  const currentWorldName = story?.manifest?.name || manifest.source_ref || "";
+  const keySurfaces = Array.isArray(story?.manifest?.key_surfaces)
+    ? story.manifest.key_surfaces
+    : [];
+  panel.innerHTML = `
+    <div class="story-card accent-card story-span-2">
+      <p class="eyebrow">Company</p>
+      <h3>${escapeHtml(story?.manifest?.company_name || manifest.title || manifest.name || "Workspace")}</h3>
+      <p class="metric-detail">${escapeHtml(story?.company_briefing || manifest.description || "This workspace is one stable company environment on top of the VEI kernel.")}</p>
+      <div class="chip-row">${keySurfaces.map((item) => chip(formatDomainTitle(item))).join("")}</div>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Why failure matters</p>
+      <p class="metric-detail">${escapeHtml(story?.failure_impact || "This scenario matters because operational drift has business consequences, not just engine consequences.")}</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Objective focus</p>
+      <p class="metric-detail">${escapeHtml(story?.manifest?.objective_focus || story?.objective_briefing || "The current objective tells VEI what good looks like in this world.")}</p>
+    </div>
+    ${availableWorlds
+      .map(
+        (item) => `
+          <div class="story-card ${item.name === currentWorldName ? "story-current" : ""}">
+            <p class="eyebrow">${item.title}</p>
+            <h3>${escapeHtml(item.company_name)}</h3>
+            <p class="metric-detail">${escapeHtml(item.company_briefing || item.description || "")}</p>
+            <div class="chip-row">
+              ${item.name === currentWorldName ? chip("active world", "ok") : chip("same kernel")}
+              ${(item.key_surfaces || []).slice(0, 3).map((surface) => chip(formatDomainTitle(surface))).join("")}
+            </div>
+          </div>
+        `
+      )
+      .join("")}
+  `;
 }
 
 function renderImportSummary() {
@@ -431,8 +540,10 @@ function renderScenarioBriefing() {
   const preview = state.scenarioPreview;
   const contract = state.scenarioContract;
   const panel = document.getElementById("scenario-briefing");
+  const storyPanel = document.getElementById("situation-story-panel");
   if (!preview || !contract) {
     panel.innerHTML = `<div class="metric-tile"><span class="metric-label">Scenario</span><span class="metric-value">Loading</span></div>`;
+    storyPanel.innerHTML = "";
     return;
   }
 
@@ -478,119 +589,54 @@ function renderScenarioBriefing() {
   ].join("");
   panel.innerHTML = contractSummary;
 
-  const successCount = Array.isArray(contract.success_predicates)
-    ? contract.success_predicates.length
-    : Number(contract.success_predicate_count || 0);
-  const forbiddenCount = Array.isArray(contract.forbidden_predicates)
-    ? contract.forbidden_predicates.length
-    : Number(contract.forbidden_predicate_count || 0);
-  const invariants = Array.isArray(contract.policy_invariants)
-    ? contract.policy_invariants.length
-    : Number(contract.policy_invariant_count || 0);
-  const ruleProvenance = Array.isArray(contract.metadata?.rule_provenance)
-    ? contract.metadata.rule_provenance
-    : [];
-  const importedRuleCount = ruleProvenance.filter((item) => item.origin === "imported").length;
-  const graphDomains = uniqueStrings([
-    ...(compiled.capability_graphs?.available_domains || []),
-    ...Object.keys(compiled.capability_graphs || {}).filter((key) => key.endsWith("_graph") && compiled.capability_graphs[key]),
-  ]);
-  document.getElementById("contract-scorecard").innerHTML = `
-    <div class="score-strip">
-      ${scorePill("Success predicates", String(successCount))}
-      ${scorePill("Forbidden predicates", String(forbiddenCount))}
-      ${scorePill("Policy invariants", String(invariants))}
-      ${scorePill("Imported rules", String(importedRuleCount))}
-      ${scorePill("Allowed tools", String(contract.observation_boundary?.allowed_tools?.length || contract.metadata?.observation_boundary?.allowed_tools?.length || 0))}
+  storyPanel.innerHTML = `
+    <div class="story-card accent-card story-span-2">
+      <p class="eyebrow">Situation briefing</p>
+      <h3>${escapeHtml(activeScenarioVariant?.title || scenario.title || "Current situation")}</h3>
+      <p class="metric-detail">${escapeHtml(state.story?.situation_briefing || activeScenarioVariant?.description || scenario.description || "")}</p>
+      <div class="chip-row">
+        ${chip(activeScenarioVariant?.name || preview.active_scenario_variant || "default")}
+        ${(activeScenarioVariant?.branch_labels || whatIfBranches).map((item) => chip(item)).join("")}
+      </div>
     </div>
-    <div class="briefing-grid">
-      <div class="stack-card">
-        <h3>Why the kernel matters</h3>
-        <p class="metric-detail">This workspace runs on the same VEI kernel as every other world pack: one world state, one event spine, one contract system, and one snapshot/branch model.</p>
-        <div class="chip-row">${graphDomains.slice(0, 6).map((item) => chip(formatDomainTitle(item))).join("")}</div>
-      </div>
-      <div class="stack-card">
-        <h3>What this becomes later</h3>
-        <div class="chip-row">
-          ${chip("RL env")}
-          ${chip("continuous eval")}
-          ${chip("agent management")}
-        </div>
-        <p class="metric-detail">Deterministic state + contracts make this trainable; shared baselines make it continuously evaluable; live playback and provenance make it operable.</p>
-      </div>
-      ${
-        activeScenarioVariant
-          ? `<div class="stack-card">
-              <h3>Active scenario variant</h3>
-              <p class="metric-detail">${escapeHtml(activeScenarioVariant.rationale || activeScenarioVariant.description || "")}</p>
-              <div class="chip-row">
-                ${chip(activeScenarioVariant.name)}
-                ${(activeScenarioVariant.branch_labels || []).map((item) => chip(item)).join("")}
-              </div>
-            </div>`
-          : ""
-      }
-      ${
-        activeContractVariant
-          ? `<div class="stack-card">
-              <h3>Active contract variant</h3>
-              <p class="metric-detail">${escapeHtml(activeContractVariant.objective_summary || activeContractVariant.description || "")}</p>
-              <div class="chip-row">${chip(activeContractVariant.name)}</div>
-            </div>`
-          : ""
-      }
+    <div class="story-card">
+      <p class="eyebrow">Why this variant exists</p>
+      <p class="metric-detail">${escapeHtml(activeScenarioVariant?.rationale || "This situation is one alternate future on top of the same company world.")}</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">What changed from base world</p>
+      <p class="metric-detail">${escapeHtml((activeScenarioVariant?.change_summary || ["The base company stays fixed while the situation overlay changes deadlines, faults, or object state."]).join(" · "))}</p>
     </div>
     ${
       whatIfBranches.length
-        ? `<div class="stack-card">
-            <h3>${escapeHtml(verticalName ? `${verticalName.replaceAll("_", " ")} what-if paths` : "What-if paths")}</h3>
+        ? `<div class="story-card story-span-2">
+            <p class="eyebrow">What-if paths</p>
             <div class="chip-row">${whatIfBranches.map((item) => chip(item)).join("")}</div>
+            <p class="metric-detail">These are branchable futures for the same company world, not separate handcrafted demos.</p>
           </div>`
         : ""
     }
     ${
-      scenarioVariants.length || contractVariants.length
-        ? `<div class="briefing-grid">
-            <div class="stack-card">
-              <h3>Scenario variants</h3>
-              <div class="stack">
-                ${scenarioVariants
-                  .map(
-                    (item) => `
-                      <div class="run-item">
-                        <div class="chip-row">
-                          ${chip(item.name)}
-                          ${item.active ? chip("active", "ok") : ""}
-                        </div>
-                        <strong>${escapeHtml(item.title)}</strong>
-                        <p class="metric-detail">${escapeHtml(item.rationale || item.description || "")}</p>
-                        <p class="metric-detail">${escapeHtml((item.change_summary || []).join(" · "))}</p>
-                        <button type="button" class="ghost-button activate-scenario-variant" data-variant-name="${escapeHtml(item.name)}">Activate scenario</button>
+      scenarioVariants.length
+        ? `<div class="story-card story-span-2">
+            <p class="eyebrow">Available situations</p>
+            <div class="stack">
+              ${scenarioVariants
+                .map(
+                  (item) => `
+                    <div class="run-item">
+                      <div class="chip-row">
+                        ${chip(item.name)}
+                        ${item.active ? chip("active", "ok") : ""}
                       </div>
-                    `
-                  )
-                  .join("")}
-              </div>
-            </div>
-            <div class="stack-card">
-              <h3>Contract variants</h3>
-              <div class="stack">
-                ${contractVariants
-                  .map(
-                    (item) => `
-                      <div class="run-item">
-                        <div class="chip-row">
-                          ${chip(item.name)}
-                          ${item.active ? chip("active", "ok") : ""}
-                        </div>
-                        <strong>${escapeHtml(item.title)}</strong>
-                        <p class="metric-detail">${escapeHtml(item.objective_summary || item.description || "")}</p>
-                        <button type="button" class="ghost-button activate-contract-variant" data-variant-name="${escapeHtml(item.name)}">Activate contract</button>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </div>
+                      <strong>${escapeHtml(item.title)}</strong>
+                      <p class="metric-detail">${escapeHtml(item.rationale || item.description || "")}</p>
+                      <p class="metric-detail">${escapeHtml((item.change_summary || []).join(" · "))}</p>
+                      <button type="button" class="ghost-button activate-scenario-variant" data-variant-name="${escapeHtml(item.name)}">Activate situation</button>
+                    </div>
+                  `
+                )
+                .join("")}
             </div>
           </div>`
         : ""
@@ -602,13 +648,9 @@ function renderScenarioBriefing() {
       void activateScenarioVariant(node.dataset.variantName);
     });
   });
-  document.querySelectorAll(".activate-contract-variant").forEach((node) => {
-    node.addEventListener("click", () => {
-      void activateContractVariant(node.dataset.variantName);
-    });
-  });
 
   renderJson("scenario-panel", preview);
+  renderObjectiveBriefing(contractVariants, activeContractVariant, contract);
 }
 
 function renderRuns() {
@@ -640,6 +682,88 @@ function renderRuns() {
   }
 }
 
+function renderObjectiveBriefing(contractVariants = [], activeContractVariant = null, contract = null) {
+  const targetContract = contract || state.scenarioContract;
+  const panel = document.getElementById("objective-scorecard");
+  if (!panel || !targetContract) {
+    return;
+  }
+  const successCount = Array.isArray(targetContract.success_predicates)
+    ? targetContract.success_predicates.length
+    : Number(targetContract.success_predicate_count || 0);
+  const forbiddenCount = Array.isArray(targetContract.forbidden_predicates)
+    ? targetContract.forbidden_predicates.length
+    : Number(targetContract.forbidden_predicate_count || 0);
+  const invariants = Array.isArray(targetContract.policy_invariants)
+    ? targetContract.policy_invariants.length
+    : Number(targetContract.policy_invariant_count || 0);
+  const ruleProvenance = Array.isArray(targetContract.metadata?.rule_provenance)
+    ? targetContract.metadata.rule_provenance
+    : [];
+  const importedRuleCount = ruleProvenance.filter((item) => item.origin === "imported").length;
+  const availableVariants = Array.isArray(contractVariants) && contractVariants.length
+    ? contractVariants
+    : Array.isArray(state.scenarioPreview?.available_contract_variants)
+      ? state.scenarioPreview.available_contract_variants
+      : [];
+  const selectedVariant = activeContractVariant || availableVariants.find(
+    (item) => item.name === state.scenarioPreview?.active_contract_variant
+  );
+  panel.innerHTML = `
+    <div class="score-strip">
+      ${scorePill("Success predicates", String(successCount))}
+      ${scorePill("Forbidden predicates", String(forbiddenCount))}
+      ${scorePill("Policy invariants", String(invariants))}
+      ${scorePill("Imported rules", String(importedRuleCount))}
+      ${scorePill("Allowed tools", String(targetContract.observation_boundary?.allowed_tools?.length || targetContract.metadata?.observation_boundary?.allowed_tools?.length || 0))}
+    </div>
+    <div class="briefing-grid">
+      <div class="story-card accent-card story-span-2">
+        <p class="eyebrow">Objective briefing</p>
+        <h3>${escapeHtml(selectedVariant?.title || state.scenarioPreview?.active_contract_variant || "Default objective")}</h3>
+        <p class="metric-detail">${escapeHtml(state.story?.objective_briefing || selectedVariant?.objective_summary || selectedVariant?.description || "The active contract defines what counts as success, what must be avoided, and how tradeoffs are judged.")}</p>
+      </div>
+      <div class="story-card">
+        <p class="eyebrow">Why this objective exists</p>
+        <p class="metric-detail">${escapeHtml(selectedVariant?.rationale || "The same company world can be evaluated under different executive or operational preferences.")}</p>
+      </div>
+      <div class="story-card">
+        <p class="eyebrow">World invariant</p>
+        <p class="metric-detail">${escapeHtml(state.story?.manifest?.objective_focus || "The contract keeps the company world honest by making business consequences explicit.")}</p>
+      </div>
+      ${
+        availableVariants.length
+          ? `<div class="story-card story-span-2">
+              <p class="eyebrow">Available objectives</p>
+              <div class="stack">
+                ${availableVariants
+                  .map(
+                    (item) => `
+                      <div class="run-item">
+                        <div class="chip-row">
+                          ${chip(item.name)}
+                          ${item.active ? chip("active", "ok") : ""}
+                        </div>
+                        <strong>${escapeHtml(item.title)}</strong>
+                        <p class="metric-detail">${escapeHtml(item.objective_summary || item.description || "")}</p>
+                        <button type="button" class="ghost-button activate-contract-variant" data-variant-name="${escapeHtml(item.name)}">Activate objective</button>
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>`
+          : ""
+      }
+    </div>
+  `;
+  document.querySelectorAll(".activate-contract-variant").forEach((node) => {
+    node.addEventListener("click", () => {
+      void activateContractVariant(node.dataset.variantName);
+    });
+  });
+}
+
 function renderRunHeader() {
   const run = state.activeRun;
   const title = document.getElementById("active-run-title");
@@ -664,7 +788,8 @@ function renderRunSummary() {
   if (!run) {
     return;
   }
-  const panel = document.getElementById("contract-scorecard");
+  const panel = document.getElementById("run-outcome-summary");
+  const branchPanel = document.getElementById("branch-outcome-panel");
   const successPassed = run.contract?.success_assertions_passed || 0;
   const successTotal = run.contract?.success_assertion_count || 0;
   const issueCount = run.contract?.issue_count || contract?.dynamic_validation?.issues?.length || 0;
@@ -672,7 +797,10 @@ function renderRunSummary() {
   const graphEvents = state.timeline.filter((item) => item.graph_intent || item.graph_action_ref);
   const graphDomains = uniqueStrings(graphEvents.map((item) => item.graph_domain).filter(Boolean));
   const resolvedTools = uniqueStrings(graphEvents.map((item) => item.resolved_tool).filter(Boolean));
-  const whatIfBranches = state.scenarioPreview?.scenario?.metadata?.builder_environment?.what_if_branches || [];
+  const story = state.story || {};
+  const whatIfBranches = Array.isArray(story.branch_labels) && story.branch_labels.length
+    ? story.branch_labels
+    : state.scenarioPreview?.scenario?.metadata?.builder_environment?.what_if_branches || [];
   panel.innerHTML = `
     <div class="score-strip">
       ${scorePill("Contract", run.contract?.ok === null ? "pending" : run.contract?.ok ? "pass" : "fail", run.contract?.contract_name || "workspace contract")}
@@ -683,9 +811,10 @@ function renderRunSummary() {
       ${scorePill("Virtual time", formatMs(run.metrics?.time_ms || 0))}
     </div>
     <div class="briefing-grid">
-      <div class="stack-card">
-        <h3>Why the kernel matters</h3>
-        <p class="metric-detail">This run proves the reusable VEI kernel: one event spine, one contract engine, one snapshot rail, and one graph-first mutation layer underneath a company-specific world.</p>
+      <div class="story-card accent-card">
+        <p class="eyebrow">Outcome</p>
+        <h3>${run.contract?.ok ? "Good branch" : run.contract?.ok === false ? "Broken branch" : "Outcome pending"}</h3>
+        <p class="metric-detail">This run uses the same kernel as every other world, but this particular path produced a different business outcome.</p>
         <div class="detail-grid">
           ${detailTile("Run events", compactNumber(state.timeline.length))}
           ${detailTile("Graph actions", compactNumber(graphEvents.length))}
@@ -694,8 +823,9 @@ function renderRunSummary() {
         </div>
         <div class="chip-row">${graphDomains.map((item) => chip(formatDomainTitle(item))).join("")}</div>
       </div>
-      <div class="stack-card">
-        <h3>Platform leverage</h3>
+      <div class="story-card">
+        <p class="eyebrow">Kernel leverage</p>
+        <h3>One runtime, reusable outputs</h3>
         <div class="chip-row">
           ${chip("RL env")}
           ${chip("continuous eval")}
@@ -706,8 +836,9 @@ function renderRunSummary() {
       </div>
       ${
         whatIfBranches.length
-          ? `<div class="stack-card">
-              <h3>What-if paths</h3>
+          ? `<div class="story-card">
+              <p class="eyebrow">What-if paths</p>
+              <h3>Branch labels</h3>
               <div class="chip-row">${whatIfBranches.map((item) => chip(item)).join("")}</div>
               <p class="metric-detail">These branch ideas are just alternate futures on top of the same kernel state and snapshot model.</p>
             </div>`
@@ -715,8 +846,82 @@ function renderRunSummary() {
       }
     </div>
   `;
+  if (branchPanel) {
+    const outcome = story.outcome || null;
+    branchPanel.innerHTML = outcome
+      ? `
+        <div class="story-card accent-card story-span-2">
+          <p class="eyebrow">Base world</p>
+          <h3>${escapeHtml(story.manifest?.company_name || state.workspace?.manifest?.title || "Company world")}</h3>
+          <p class="metric-detail">${escapeHtml(outcome.base_world || "")}</p>
+        </div>
+        <div class="story-card">
+          <p class="eyebrow">Chosen situation</p>
+          <p class="metric-detail">${escapeHtml(outcome.chosen_situation || "")}</p>
+        </div>
+        <div class="story-card">
+          <p class="eyebrow">Chosen objective</p>
+          <p class="metric-detail">${escapeHtml(outcome.chosen_objective || "")}</p>
+        </div>
+        <div class="story-card">
+          <p class="eyebrow">Baseline branch</p>
+          <p class="metric-detail">${escapeHtml(outcome.baseline_branch || "Baseline path")}</p>
+        </div>
+        <div class="story-card">
+          <p class="eyebrow">Agent branch</p>
+          <p class="metric-detail">${escapeHtml(outcome.comparison_branch || "Agent path")}</p>
+        </div>
+        <div class="story-card story-span-2">
+          <p class="eyebrow">What changed</p>
+          <div class="stack">${(outcome.what_changed || []).map((item) => `<p class="metric-detail">${escapeHtml(item)}</p>`).join("")}</div>
+        </div>
+        <div class="story-card story-span-2">
+          <p class="eyebrow">Why the result was good or bad</p>
+          <div class="stack">${(outcome.why_it_matters || []).map((item) => `<p class="metric-detail">${escapeHtml(item)}</p>`).join("")}</div>
+        </div>
+      `
+      : `
+        <div class="story-card story-span-2">
+          <p class="eyebrow">Branch story</p>
+          <p class="metric-detail">Launch a workflow baseline plus a comparison run to turn this company world into a branch/outcome narrative.</p>
+        </div>
+      `;
+  }
+  renderExportsPanel();
   renderJson("run-panel", run);
   renderJson("contract-panel", contract || { note: "No run contract evaluation yet." });
+}
+
+function renderExportsPanel() {
+  const panel = document.getElementById("exports-panel");
+  if (!panel) {
+    return;
+  }
+  const exportsPreview = Array.isArray(state.exportsPreview) ? state.exportsPreview : [];
+  panel.innerHTML = exportsPreview.length
+    ? exportsPreview
+        .map(
+          (item) => `
+            <div class="story-card">
+              <p class="eyebrow">${escapeHtml(item.title || item.name)}</p>
+              <h3>${escapeHtml(item.name)}</h3>
+              <p class="metric-detail">${escapeHtml(item.summary || "")}</p>
+              <div class="chip-row">
+                ${Object.entries(item.payload || {})
+                  .slice(0, 4)
+                  .map(([key, value]) => chip(`${key}=${Array.isArray(value) ? value.length : value}`))
+                  .join("")}
+              </div>
+            </div>
+          `
+        )
+        .join("")
+    : `
+      <div class="story-card story-span-2">
+        <p class="eyebrow">Exports</p>
+        <p class="metric-detail">Story exports appear here once the workspace has a narrative bundle or a baseline/comparison pair to summarize.</p>
+      </div>
+    `;
 }
 
 function positionForEvent(event, timeline) {
@@ -1051,8 +1256,10 @@ function togglePlayback() {
 }
 
 async function loadWorkspace() {
-  const [workspace, scenarios, importSummary, identityFlow, importSources, importNormalization, importReview, generatedImportScenarios, provenanceIndex] = await Promise.all([
+  const [workspace, story, exportsPreview, scenarios, importSummary, identityFlow, importSources, importNormalization, importReview, generatedImportScenarios, provenanceIndex] = await Promise.all([
     getJson("/api/workspace"),
+    getJson("/api/story").catch(() => null),
+    getJson("/api/exports-preview").catch(() => []),
     getJson("/api/scenarios"),
     getJson("/api/imports/summary").catch(() => ({})),
     getJson("/api/identity/flow").catch(() => ({})),
@@ -1063,6 +1270,8 @@ async function loadWorkspace() {
     getJson("/api/imports/provenance").catch(() => []),
   ]);
   state.workspace = workspace;
+  state.story = story;
+  state.exportsPreview = exportsPreview;
   state.scenarios = scenarios;
   state.importSummary = importSummary;
   state.identityFlow = identityFlow;
@@ -1073,6 +1282,7 @@ async function loadWorkspace() {
   state.provenanceIndex = provenanceIndex;
   renderWorkspaceHero();
   renderImportSummary();
+  renderExportsPanel();
   renderScenarioSelector();
   if (scenarios.length > 0) {
     const activeName = workspace?.manifest?.active_scenario || scenarios[0].name;
@@ -1113,14 +1323,13 @@ async function activateContractVariant(name) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ variant: name }),
   });
-  const activeName = state.workspace?.manifest?.active_scenario || state.scenarios?.[0]?.name;
-  if (activeName) {
-    await loadScenario(activeName);
-  }
+  await loadWorkspace();
+  await loadRuns();
 }
 
 async function loadRuns() {
   state.runs = await getJson("/api/runs");
+  await refreshStoryArtifacts();
   renderWorkspaceMetrics();
   renderRuns();
   if (!state.activeRunId && state.runs.length > 0) {
@@ -1144,6 +1353,7 @@ async function refreshActiveRun(runId, { connectStream = false } = {}) {
   state.graphs = graphs;
   state.snapshots = snapshots;
   state.activeRunContract = contract;
+  await refreshStoryArtifacts();
   if (state.selectedEventIndex >= timeline.length) {
     state.selectedEventIndex = Math.max(0, timeline.length - 1);
   }
@@ -1233,6 +1443,12 @@ async function activateScenario(name) {
 
 function bindControls() {
   document.getElementById("run-form").addEventListener("submit", startRun);
+  document.querySelectorAll(".studio-nav-button").forEach((node) => {
+    node.addEventListener("click", () => {
+      setStudioView(node.dataset.studioView || "worlds");
+    });
+  });
+  document.getElementById("developer-toggle").addEventListener("click", toggleDeveloperMode);
   document.getElementById("scenario-select").addEventListener("change", (event) => {
     void loadScenario(event.target.value);
   });
