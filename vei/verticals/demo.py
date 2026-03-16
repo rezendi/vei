@@ -225,7 +225,7 @@ class VerticalStoryBundle(BaseModel):
     exports_preview_path: Path
     presentation: StoryPresentation = Field(default_factory=StoryPresentation)
     presentation_manifest_path: Path | None = None
-    presentation_script_path: Path | None = None
+    presentation_guide_path: Path | None = None
     ui_command: str
     workflow_contract_ok: bool | None = None
     comparison_contract_ok: bool | None = None
@@ -611,7 +611,7 @@ def prepare_vertical_story(spec: VerticalDemoSpec) -> VerticalStoryBundle:
         exports_preview_path=workspace_root / "exports_preview.json",
         presentation=presentation,
         presentation_manifest_path=workspace_root / "presentation_manifest.json",
-        presentation_script_path=workspace_root / "presentation_script.md",
+        presentation_guide_path=workspace_root / "presentation_guide.md",
         ui_command=demo.ui_command,
         workflow_contract_ok=demo.baseline_contract_ok,
         comparison_contract_ok=demo.comparison_contract_ok,
@@ -632,9 +632,9 @@ def prepare_vertical_story(spec: VerticalDemoSpec) -> VerticalStoryBundle:
             json.dumps(story.presentation.model_dump(mode="json"), indent=2),
             encoding="utf-8",
         )
-    if story.presentation_script_path is not None:
-        story.presentation_script_path.write_text(
-            render_vertical_story_presentation_script(story),
+    if story.presentation_guide_path is not None:
+        story.presentation_guide_path.write_text(
+            render_vertical_story_presentation_guide(story),
             encoding="utf-8",
         )
     story.overview_path.write_text(
@@ -871,7 +871,7 @@ def load_workspace_story_manifest(root: str | Path) -> VerticalStoryBundle | Non
         exports_preview_path=workspace_root / "exports_preview.json",
         presentation=presentation,
         presentation_manifest_path=workspace_root / "presentation_manifest.json",
-        presentation_script_path=workspace_root / "presentation_script.md",
+        presentation_guide_path=workspace_root / "presentation_guide.md",
         ui_command=demo_like.ui_command,
         workflow_contract_ok=demo_like.baseline_contract_ok,
         comparison_contract_ok=demo_like.comparison_contract_ok,
@@ -915,9 +915,9 @@ def _ensure_story_presentation(story: VerticalStoryBundle) -> VerticalStoryBundl
             story.presentation_manifest_path = (
                 story.workspace_root / "presentation_manifest.json"
             )
-        if story.presentation_script_path is None:
-            story.presentation_script_path = (
-                story.workspace_root / "presentation_script.md"
+        if story.presentation_guide_path is None:
+            story.presentation_guide_path = (
+                story.workspace_root / "presentation_guide.md"
             )
         return story
     scenario_variant = get_vertical_scenario_variant(
@@ -994,7 +994,7 @@ def _ensure_story_presentation(story: VerticalStoryBundle) -> VerticalStoryBundl
     story.presentation_manifest_path = (
         story.workspace_root / "presentation_manifest.json"
     )
-    story.presentation_script_path = story.workspace_root / "presentation_script.md"
+    story.presentation_guide_path = story.workspace_root / "presentation_guide.md"
     return story
 
 
@@ -1152,7 +1152,7 @@ def render_vertical_story_overview(story: VerticalStoryBundle) -> str:
         f"- Contract variant: `{story.contract_variant}`",
         f"- Objective briefing: {story.objective_briefing}",
         f"- Presentation manifest: `{story.presentation_manifest_path}`",
-        f"- Presentation script: `{story.presentation_script_path}`",
+        f"- Presentation guide: `{story.presentation_guide_path}`",
         "",
         "## Runs",
         "",
@@ -1188,9 +1188,9 @@ def render_vertical_story_overview(story: VerticalStoryBundle) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_vertical_story_presentation_script(story: VerticalStoryBundle) -> str:
+def render_vertical_story_presentation_guide(story: VerticalStoryBundle) -> str:
     lines = [
-        f"# VEI VC Demo Script · {story.manifest.company_name}",
+        f"# VEI Presentation Guide · {story.manifest.company_name}",
         "",
         story.presentation.opening_hook,
         "",
@@ -1263,7 +1263,7 @@ def render_vertical_story_showcase_overview(
                 f"- Workflow contract ok: `{story.workflow_contract_ok}`",
                 f"- Comparison contract ok: `{story.comparison_contract_ok}`",
                 f"- Story overview: `{story.overview_path}`",
-                f"- Presentation script: `{story.presentation_script_path}`",
+                f"- Presentation guide: `{story.presentation_guide_path}`",
                 f"- UI: `{story.ui_command}`",
                 "",
             ]
@@ -1781,7 +1781,7 @@ __all__ = [
     "load_workspace_story_manifest",
     "prepare_vertical_story",
     "prepare_vertical_demo",
-    "render_vertical_story_presentation_script",
+    "render_vertical_story_presentation_guide",
     "render_vertical_story_overview",
     "render_vertical_story_showcase_overview",
     "render_vertical_demo_overview",

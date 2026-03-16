@@ -142,7 +142,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
 - `vei.verticals`
   - built-in vertical world packs and showcase helpers for believable company-grade demo environments
   - scenario variants, contract variants, curated matrix runners, and narrative story bundles that keep the base company world stable while changing the situation and objective
-  - story showcases now emit presenter-facing `presentation_manifest.json` and `presentation_script.md` artifacts on top of the same run/event spine
+  - story showcases now emit presenter-facing `presentation_manifest.json` and `presentation_guide.md` artifacts on top of the same run/event spine
 
 ## Supported Entry Points
 

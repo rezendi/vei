@@ -237,7 +237,7 @@ function renderPresentationPanel() {
     panel.innerHTML = `
       <div class="story-card story-span-2">
         <p class="eyebrow">Presentation flow</p>
-        <p class="metric-detail">Generate or load a story bundle to get the guided demo script.</p>
+        <p class="metric-detail">Generate or load a story bundle to get the guided presentation flow.</p>
       </div>
     `;
     beatsPanel.innerHTML = "";
