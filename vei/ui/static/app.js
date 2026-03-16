@@ -28,6 +28,7 @@ const GRAPH_TITLES = {
 const state = {
   workspace: null,
   story: null,
+  presentation: null,
   exportsPreview: [],
   scenarios: [],
   scenarioPreview: null,
@@ -51,7 +52,7 @@ const state = {
   selectedEventIndex: 0,
   selectedSnapshotFrom: null,
   selectedSnapshotTo: null,
-  studioView: "worlds",
+  studioView: "presentation",
   developerMode: false,
   playbackTimer: null,
   eventSource: null,
@@ -66,15 +67,22 @@ async function getJson(path, options = {}) {
 }
 
 async function fetchStoryArtifacts() {
-  const [story, exportsPreview] = await Promise.all([
+  const [story, exportsPreview, presentation] = await Promise.all([
     getJson("/api/story").catch(() => null),
     getJson("/api/exports-preview").catch(() => []),
+    getJson("/api/presentation").catch(() => null),
   ]);
-  return { story, exportsPreview };
+  return { story, exportsPreview, presentation };
 }
 
 function renderJson(id, payload) {
   document.getElementById(id).textContent = JSON.stringify(payload, null, 2);
+}
+
+function nonEmptyPayload(payload) {
+  return payload && typeof payload === "object" && Object.keys(payload).length
+    ? payload
+    : null;
 }
 
 function escapeHtml(value) {
@@ -209,9 +217,113 @@ function toggleDeveloperMode() {
     : "Show Developer Detail";
 }
 
+function jumpToStudioView(view) {
+  setStudioView(view);
+  const target = document.querySelector(`[data-studio-view="${view}"]`);
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function renderPresentationPanel() {
+  const panel = document.getElementById("presentation-panel");
+  const beatsPanel = document.getElementById("presentation-beats");
+  const presentation = state.presentation || state.story?.presentation || null;
+  const story = state.story || {};
+  if (!panel || !beatsPanel) {
+    return;
+  }
+  if (!presentation) {
+    panel.innerHTML = `
+      <div class="story-card story-span-2">
+        <p class="eyebrow">Presentation flow</p>
+        <p class="metric-detail">Generate or load a story bundle to get the guided presentation flow.</p>
+      </div>
+    `;
+    beatsPanel.innerHTML = "";
+    return;
+  }
+
+  const primitives = Array.isArray(presentation.primitives) ? presentation.primitives : [];
+  const setup = Array.isArray(presentation.presenter_setup) ? presentation.presenter_setup : [];
+  const commands = Array.isArray(presentation.operator_commands) ? presentation.operator_commands : [];
+
+  panel.innerHTML = `
+    <div class="story-card accent-card story-span-2">
+      <p class="eyebrow">Opening hook</p>
+      <h3>Lead with the kernel</h3>
+      <p class="metric-detail">${escapeHtml(presentation.opening_hook || story.kernel_thesis || "VEI is one reusable world kernel for enterprises.")}</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Demo goal</p>
+      <p class="metric-detail">${escapeHtml(presentation.demo_goal || "Show one stable company world, then vary the situation and the objective on top of the same runtime.")}</p>
+    </div>
+    <div class="story-card">
+      <p class="eyebrow">Presenter setup</p>
+      <div class="stack">
+        ${setup.map((item) => `<p class="metric-detail">${escapeHtml(item)}</p>`).join("")}
+      </div>
+    </div>
+    <div class="story-card story-span-2">
+      <p class="eyebrow">User-facing primitives</p>
+      <div class="briefing-grid">
+        ${primitives
+          .map(
+            (item) => `
+              <div class="stack-card">
+                <h3>${escapeHtml(item.title)}</h3>
+                <div class="chip-row">
+                  ${chip(item.current_value || item.name)}
+                  ${chip(item.kernel_mapping || "kernel")}
+                </div>
+                <p class="metric-detail">${escapeHtml(item.summary || "")}</p>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+    <div class="story-card story-span-2">
+      <p class="eyebrow">Operator commands</p>
+      <div class="stack">
+        ${commands.map((item) => `<pre class="code-panel">${escapeHtml(item)}</pre>`).join("")}
+      </div>
+    </div>
+  `;
+
+  beatsPanel.innerHTML = (presentation.beats || [])
+    .map(
+      (beat) => `
+        <div class="presentation-step">
+          <div class="presentation-step-number">${escapeHtml(String(beat.step))}</div>
+          <div class="presentation-step-body">
+            <div class="chip-row">
+              ${chip(`view:${beat.studio_view}`)}
+              ${chip(beat.title)}
+            </div>
+            <h3>${escapeHtml(beat.title)}</h3>
+            <p class="metric-detail"><strong>Show:</strong> ${escapeHtml(beat.operator_action || "")}</p>
+            <p class="metric-detail"><strong>Say:</strong> ${escapeHtml(beat.presenter_note || "")}</p>
+            <p class="metric-detail"><strong>Proves:</strong> ${escapeHtml(beat.proof_point || "")}</p>
+            <p class="metric-detail"><strong>Takeaway:</strong> ${escapeHtml(beat.audience_takeaway || "")}</p>
+            <button type="button" class="ghost-button presentation-jump" data-jump-view="${escapeHtml(beat.studio_view || "presentation")}">Jump to this beat</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+
+  beatsPanel.querySelectorAll(".presentation-jump").forEach((node) => {
+    node.addEventListener("click", () => {
+      jumpToStudioView(node.dataset.jumpView || "presentation");
+    });
+  });
+}
+
 function renderStudioShell() {
   const panel = document.getElementById("kernel-thesis-panel");
   const story = state.story || {};
+  const presentation = state.presentation || story.presentation || {};
   const kernelThesis =
     story.kernel_thesis ||
     "Same world kernel, same event spine, same contract engine, same playback system. Only the company, situation, and objective overlays change.";
@@ -220,12 +332,12 @@ function renderStudioShell() {
     <div class="story-card accent-card">
       <p class="eyebrow">Kernel Thesis</p>
       <h3>One runtime, many enterprise futures</h3>
-      <p class="metric-detail">${escapeHtml(kernelThesis)}</p>
+      <p class="metric-detail">${escapeHtml(presentation.opening_hook || kernelThesis)}</p>
     </div>
     <div class="story-card">
       <p class="eyebrow">Selected Company</p>
       <h3>${escapeHtml(selectedWorld)}</h3>
-      <p class="metric-detail">Use the Studio flow to move from company world to situation, objective, run, branch, outcome, and exports.</p>
+      <p class="metric-detail">${escapeHtml(presentation.demo_goal || "Use the Studio flow to move from company world to situation, objective, run, branch, outcome, and exports.")}</p>
     </div>
     <div class="story-card">
       <p class="eyebrow">Platform Story</p>
@@ -233,12 +345,17 @@ function renderStudioShell() {
     </div>
   `;
   setStudioView(state.studioView);
+  renderPresentationPanel();
 }
 
 async function refreshStoryArtifacts() {
   const payload = await fetchStoryArtifacts();
-  state.story = payload.story;
+  state.story = nonEmptyPayload(payload.story);
   state.exportsPreview = payload.exportsPreview;
+  state.presentation =
+    nonEmptyPayload(payload.presentation) ||
+    nonEmptyPayload(payload.story?.presentation) ||
+    null;
   renderStudioShell();
   renderWorldsPanel();
   renderExportsPanel();
@@ -1274,8 +1391,12 @@ async function loadWorkspace() {
     getJson("/api/imports/provenance").catch(() => []),
   ]);
   state.workspace = workspace;
-  state.story = storyArtifacts.story;
+  state.story = nonEmptyPayload(storyArtifacts.story);
   state.exportsPreview = storyArtifacts.exportsPreview;
+  state.presentation =
+    nonEmptyPayload(storyArtifacts.presentation) ||
+    nonEmptyPayload(storyArtifacts.story?.presentation) ||
+    null;
   state.scenarios = scenarios;
   state.importSummary = importSummary;
   state.identityFlow = identityFlow;

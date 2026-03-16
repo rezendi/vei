@@ -489,7 +489,7 @@ def test_product_cli_vertical_showcase_builds_demo_bundle(tmp_path: Path) -> Non
             "--root",
             str(root),
             "--run-id",
-            "vc_worlds",
+            "world_showcase",
             "--vertical",
             "real_estate_management",
             "--vertical",
@@ -501,11 +501,11 @@ def test_product_cli_vertical_showcase_builds_demo_bundle(tmp_path: Path) -> Non
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["run_id"] == "vc_worlds"
+    assert payload["run_id"] == "world_showcase"
     assert len(payload["demos"]) == 3
     assert "shared world kernel" in payload["kernel_thesis"]
     assert all(item["baseline_graph_action_count"] > 0 for item in payload["demos"])
-    overview_path = root / "vc_worlds" / "vertical_showcase_overview.md"
+    overview_path = root / "world_showcase" / "vertical_showcase_overview.md"
     assert overview_path.exists()
     overview = overview_path.read_text(encoding="utf-8")
     assert "VEI Vertical World Pack Showcase" in overview
@@ -585,14 +585,14 @@ def test_product_cli_vertical_variant_commands_and_matrix(tmp_path: Path) -> Non
             "--root",
             str(matrix_root),
             "--run-id",
-            "vc_matrix",
+            "variant_showcase",
         ],
     )
     assert matrix_result.exit_code == 0, matrix_result.output
     payload = json.loads(matrix_result.output)
     assert len(payload["runs"]) == 9
     assert "same runtime kernel" in (
-        matrix_root / "vc_matrix" / "vertical_variant_matrix_overview.md"
+        matrix_root / "variant_showcase" / "vertical_variant_matrix_overview.md"
     ).read_text(encoding="utf-8")
 
 
@@ -608,7 +608,7 @@ def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> N
             "--root",
             str(root),
             "--run-id",
-            "vc_story",
+            "story_presentation",
             "--vertical",
             "real_estate_management",
             "--scenario-variant",
@@ -620,18 +620,25 @@ def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> N
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["run_id"] == "vc_story"
+    assert payload["run_id"] == "story_presentation"
     assert len(payload["stories"]) == 1
     story = payload["stories"][0]
     assert story["scenario_variant"] == "vendor_no_show"
     assert story["contract_variant"] == "safety_over_speed"
-    story_root = root / "vc_story" / "real_estate_management"
+    story_root = root / "story_presentation" / "real_estate_management"
     assert (story_root / "story_manifest.json").exists()
     assert (story_root / "story_overview.md").exists()
     assert (story_root / "exports_preview.json").exists()
+    assert (story_root / "presentation_manifest.json").exists()
+    assert (story_root / "presentation_guide.md").exists()
     overview = (story_root / "story_overview.md").read_text(encoding="utf-8")
     assert "VEI Story" in overview
     assert "Branch Story" in overview
+    presentation_guide = (story_root / "presentation_guide.md").read_text(
+        encoding="utf-8"
+    )
+    assert "VEI Presentation Guide" in presentation_guide
+    assert "Presentation Flow" in presentation_guide
     exports_preview = json.loads(
         (story_root / "exports_preview.json").read_text(encoding="utf-8")
     )
@@ -640,3 +647,7 @@ def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> N
         "continuous_eval_export",
         "agent_ops_export",
     ]
+    presentation_manifest = json.loads(
+        (story_root / "presentation_manifest.json").read_text(encoding="utf-8")
+    )
+    assert len(presentation_manifest["beats"]) == 7
