@@ -325,6 +325,13 @@ def test_ui_api_exposes_story_bundle_and_export_preview(tmp_path: Path) -> None:
     assert story_payload["manifest"]["company_name"] == "Northstar Growth"
     assert story_payload["scenario_variant"] == "campaign_launch_guardrail"
     assert story_payload["contract_variant"] == "launch_safely"
+    assert story_payload["presentation"]["beats"][0]["studio_view"] == "presentation"
+
+    presentation_response = client.get("/api/presentation")
+    assert presentation_response.status_code == 200
+    presentation_payload = presentation_response.json()
+    assert presentation_payload["opening_hook"]
+    assert len(presentation_payload["primitives"]) == 6
 
     launch_workspace_run(root, runner="workflow")
     launch_workspace_run(root, runner="scripted")

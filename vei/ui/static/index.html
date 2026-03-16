@@ -88,7 +88,8 @@
         </div>
         <div id="kernel-thesis-panel" class="studio-banner"></div>
         <div id="studio-nav" class="studio-nav">
-          <button type="button" class="studio-nav-button active" data-studio-view="worlds">1. Company</button>
+          <button type="button" class="studio-nav-button active" data-studio-view="presentation">0. Presentation</button>
+          <button type="button" class="studio-nav-button" data-studio-view="worlds">1. Company</button>
           <button type="button" class="studio-nav-button" data-studio-view="situations">2. Situation</button>
           <button type="button" class="studio-nav-button" data-studio-view="objectives">3. Objective</button>
           <button type="button" class="studio-nav-button" data-studio-view="runs">4. Run</button>
@@ -96,6 +97,17 @@
       </section>
 
       <main class="layout">
+        <section class="card briefing-card" data-studio-view="presentation">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Presentation</p>
+              <h2>The guided presentation flow</h2>
+            </div>
+          </div>
+          <div id="presentation-panel" class="briefing-grid"></div>
+          <div id="presentation-beats" class="presentation-flow"></div>
+        </section>
+
         <section class="card worlds-card" data-studio-view="worlds">
           <div class="section-header">
             <div>

@@ -173,6 +173,34 @@ class StoryOutcomeSummary(BaseModel):
     why_it_matters: list[str] = Field(default_factory=list)
 
 
+class StoryPresentationPrimitive(BaseModel):
+    name: str
+    title: str
+    current_value: str
+    summary: str
+    kernel_mapping: str
+
+
+class StoryPresentationBeat(BaseModel):
+    step: int
+    title: str
+    studio_view: str
+    operator_action: str
+    presenter_note: str
+    proof_point: str
+    audience_takeaway: str
+
+
+class StoryPresentation(BaseModel):
+    opening_hook: str = ""
+    demo_goal: str = ""
+    presenter_setup: list[str] = Field(default_factory=list)
+    primitives: list[StoryPresentationPrimitive] = Field(default_factory=list)
+    beats: list[StoryPresentationBeat] = Field(default_factory=list)
+    closing_argument: str = ""
+    operator_commands: list[str] = Field(default_factory=list)
+
+
 class VerticalStoryBundle(BaseModel):
     manifest: VerticalPackManifest
     available_worlds: list[VerticalPackManifest] = Field(default_factory=list)
@@ -195,6 +223,9 @@ class VerticalStoryBundle(BaseModel):
     overview_path: Path
     story_manifest_path: Path
     exports_preview_path: Path
+    presentation: StoryPresentation = Field(default_factory=StoryPresentation)
+    presentation_manifest_path: Path | None = None
+    presentation_guide_path: Path | None = None
     ui_command: str
     workflow_contract_ok: bool | None = None
     comparison_contract_ok: bool | None = None
@@ -545,6 +576,13 @@ def prepare_vertical_story(spec: VerticalDemoSpec) -> VerticalStoryBundle:
             "resolved_tools": demo.comparison_resolved_tools,
         },
     }
+    presentation = _build_story_presentation(
+        manifest,
+        scenario_variant,
+        contract_variant,
+        demo,
+        branch_labels,
+    )
     story = VerticalStoryBundle(
         manifest=manifest,
         available_worlds=list_vertical_pack_manifests(),
@@ -571,6 +609,9 @@ def prepare_vertical_story(spec: VerticalDemoSpec) -> VerticalStoryBundle:
         overview_path=workspace_root / "story_overview.md",
         story_manifest_path=workspace_root / "story_manifest.json",
         exports_preview_path=workspace_root / "exports_preview.json",
+        presentation=presentation,
+        presentation_manifest_path=workspace_root / "presentation_manifest.json",
+        presentation_guide_path=workspace_root / "presentation_guide.md",
         ui_command=demo.ui_command,
         workflow_contract_ok=demo.baseline_contract_ok,
         comparison_contract_ok=demo.comparison_contract_ok,
@@ -586,6 +627,16 @@ def prepare_vertical_story(spec: VerticalDemoSpec) -> VerticalStoryBundle:
         ),
         encoding="utf-8",
     )
+    if story.presentation_manifest_path is not None:
+        story.presentation_manifest_path.write_text(
+            json.dumps(story.presentation.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+    if story.presentation_guide_path is not None:
+        story.presentation_guide_path.write_text(
+            render_vertical_story_presentation_guide(story),
+            encoding="utf-8",
+        )
     story.overview_path.write_text(
         render_vertical_story_overview(story), encoding="utf-8"
     )
@@ -651,7 +702,10 @@ def load_workspace_story_manifest(root: str | Path) -> VerticalStoryBundle | Non
     workspace_root = Path(root).expanduser().resolve()
     path = workspace_root / "story_manifest.json"
     if path.exists():
-        return VerticalStoryBundle.model_validate_json(path.read_text(encoding="utf-8"))
+        story = VerticalStoryBundle.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+        return _ensure_story_presentation(story)
     workspace = show_workspace(workspace_root)
     manifest = workspace.manifest
     if manifest.source_kind != "vertical":
@@ -767,7 +821,14 @@ def load_workspace_story_manifest(root: str | Path) -> VerticalStoryBundle | Non
         if comparison_manifest
         else {}
     )
-    return VerticalStoryBundle(
+    presentation = _build_story_presentation(
+        pack_manifest,
+        scenario_variant,
+        contract_variant,
+        demo_like,
+        branch_labels,
+    )
+    story = VerticalStoryBundle(
         manifest=pack_manifest,
         available_worlds=list_vertical_pack_manifests(),
         workspace_root=workspace_root,
@@ -808,6 +869,9 @@ def load_workspace_story_manifest(root: str | Path) -> VerticalStoryBundle | Non
         overview_path=workspace_root / "story_overview.md",
         story_manifest_path=workspace_root / "story_manifest.json",
         exports_preview_path=workspace_root / "exports_preview.json",
+        presentation=presentation,
+        presentation_manifest_path=workspace_root / "presentation_manifest.json",
+        presentation_guide_path=workspace_root / "presentation_guide.md",
         ui_command=demo_like.ui_command,
         workflow_contract_ok=demo_like.baseline_contract_ok,
         comparison_contract_ok=demo_like.comparison_contract_ok,
@@ -828,6 +892,7 @@ def load_workspace_story_manifest(root: str | Path) -> VerticalStoryBundle | Non
             },
         },
     )
+    return _ensure_story_presentation(story)
 
 
 def load_workspace_exports_preview(root: str | Path) -> list[StoryExportPreview]:
@@ -835,6 +900,102 @@ def load_workspace_exports_preview(root: str | Path) -> list[StoryExportPreview]
     if story is None:
         return []
     return story.exports_preview
+
+
+def load_workspace_presentation(root: str | Path) -> StoryPresentation | None:
+    story = load_workspace_story_manifest(root)
+    if story is None:
+        return None
+    return story.presentation
+
+
+def _ensure_story_presentation(story: VerticalStoryBundle) -> VerticalStoryBundle:
+    if story.presentation.beats:
+        if story.presentation_manifest_path is None:
+            story.presentation_manifest_path = (
+                story.workspace_root / "presentation_manifest.json"
+            )
+        if story.presentation_guide_path is None:
+            story.presentation_guide_path = (
+                story.workspace_root / "presentation_guide.md"
+            )
+        return story
+    scenario_variant = get_vertical_scenario_variant(
+        story.manifest.name, story.scenario_variant
+    )
+    contract_variant = get_vertical_contract_variant(
+        story.manifest.name, story.contract_variant
+    )
+    demo_like = VerticalDemoResult(
+        manifest=story.manifest,
+        workspace_root=story.workspace_root,
+        scenario_name=story.scenario_name,
+        scenario_variant=story.scenario_variant,
+        contract_variant=story.contract_variant,
+        workflow_run_id=story.workflow_run_id,
+        comparison_run_id=story.comparison_run_id,
+        compare_runner=story.compare_runner,
+        workflow_manifest_path=story.workspace_root
+        / "runs"
+        / story.workflow_run_id
+        / "run_manifest.json",
+        comparison_manifest_path=story.workspace_root
+        / "runs"
+        / story.comparison_run_id
+        / "run_manifest.json",
+        contract_path=story.workspace_root
+        / "contracts"
+        / f"{story.scenario_name}.contract.json",
+        overview_path=story.overview_path,
+        ui_command=story.ui_command,
+        what_if_branches=story.branch_labels,
+        baseline_contract_ok=story.workflow_contract_ok,
+        comparison_contract_ok=story.comparison_contract_ok,
+        baseline_event_count=int(
+            story.kernel_proof.get("baseline", {}).get("events", 0)
+        ),
+        comparison_event_count=int(
+            story.kernel_proof.get("comparison", {}).get("events", 0)
+        ),
+        baseline_graph_action_count=int(
+            story.kernel_proof.get("baseline", {}).get("graph_actions", 0)
+        ),
+        comparison_graph_action_count=int(
+            story.kernel_proof.get("comparison", {}).get("graph_actions", 0)
+        ),
+        baseline_snapshot_count=int(
+            story.kernel_proof.get("baseline", {}).get("snapshots", 0)
+        ),
+        comparison_snapshot_count=int(
+            story.kernel_proof.get("comparison", {}).get("snapshots", 0)
+        ),
+        baseline_graph_domains=list(
+            story.kernel_proof.get("baseline", {}).get("domains", [])
+        ),
+        comparison_graph_domains=list(
+            story.kernel_proof.get("comparison", {}).get("domains", [])
+        ),
+        baseline_resolved_tools=list(
+            story.kernel_proof.get("baseline", {}).get("resolved_tools", [])
+        ),
+        comparison_resolved_tools=list(
+            story.kernel_proof.get("comparison", {}).get("resolved_tools", [])
+        ),
+        kernel_thesis=story.kernel_thesis,
+        platform_uses=story.platform_uses,
+    )
+    story.presentation = _build_story_presentation(
+        story.manifest,
+        scenario_variant,
+        contract_variant,
+        demo_like,
+        story.branch_labels,
+    )
+    story.presentation_manifest_path = (
+        story.workspace_root / "presentation_manifest.json"
+    )
+    story.presentation_guide_path = story.workspace_root / "presentation_guide.md"
+    return story
 
 
 def render_vertical_demo_overview(result: VerticalDemoResult) -> str:
@@ -990,6 +1151,8 @@ def render_vertical_story_overview(story: VerticalStoryBundle) -> str:
         "",
         f"- Contract variant: `{story.contract_variant}`",
         f"- Objective briefing: {story.objective_briefing}",
+        f"- Presentation manifest: `{story.presentation_manifest_path}`",
+        f"- Presentation guide: `{story.presentation_guide_path}`",
         "",
         "## Runs",
         "",
@@ -1025,6 +1188,52 @@ def render_vertical_story_overview(story: VerticalStoryBundle) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_vertical_story_presentation_guide(story: VerticalStoryBundle) -> str:
+    lines = [
+        f"# VEI Presentation Guide · {story.manifest.company_name}",
+        "",
+        story.presentation.opening_hook,
+        "",
+        "## Demo Goal",
+        "",
+        story.presentation.demo_goal,
+        "",
+        "## Presenter Setup",
+        "",
+    ]
+    lines.extend(f"- {item}" for item in story.presentation.presenter_setup)
+    lines.extend(["", "## Demo Primitives", ""])
+    for primitive in story.presentation.primitives:
+        lines.extend(
+            [
+                f"### {primitive.title}",
+                "",
+                f"- Current value: `{primitive.current_value}`",
+                f"- What to say: {primitive.summary}",
+                f"- Under the hood: {primitive.kernel_mapping}",
+                "",
+            ]
+        )
+    lines.extend(["## Presentation Flow", ""])
+    for beat in story.presentation.beats:
+        lines.extend(
+            [
+                f"### Step {beat.step} · {beat.title}",
+                "",
+                f"- Studio view: `{beat.studio_view}`",
+                f"- Operator action: {beat.operator_action}",
+                f"- Talk track: {beat.presenter_note}",
+                f"- Proof point: {beat.proof_point}",
+                f"- Audience takeaway: {beat.audience_takeaway}",
+                "",
+            ]
+        )
+    lines.extend(["## Closing Argument", "", story.presentation.closing_argument, ""])
+    lines.extend(["## Operator Commands", ""])
+    lines.extend(f"- `{item}`" for item in story.presentation.operator_commands)
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_vertical_story_showcase_overview(
     result: VerticalStoryShowcaseResult,
 ) -> str:
@@ -1054,6 +1263,7 @@ def render_vertical_story_showcase_overview(
                 f"- Workflow contract ok: `{story.workflow_contract_ok}`",
                 f"- Comparison contract ok: `{story.comparison_contract_ok}`",
                 f"- Story overview: `{story.overview_path}`",
+                f"- Presentation guide: `{story.presentation_guide_path}`",
                 f"- UI: `{story.ui_command}`",
                 "",
             ]
@@ -1296,6 +1506,185 @@ def _build_story_outcome_summary(
     )
 
 
+def _build_story_presentation(
+    manifest: VerticalPackManifest,
+    scenario_variant,
+    contract_variant,
+    demo: VerticalDemoResult,
+    branch_labels: list[str],
+) -> StoryPresentation:
+    opening_hook = (
+        "VEI is one enterprise world kernel. This demo shows that the same runtime can "
+        "instantiate different companies, vary the situation, vary the objective, and "
+        "still produce inspectable runs, branches, and exportable artifacts."
+    )
+    demo_goal = (
+        f"Start from {manifest.company_name} as a stable company world, then show how "
+        f"`{scenario_variant.title}` changes the situation, how `{contract_variant.title}` "
+        "changes the definition of success, and how the same kernel turns both runs into "
+        "playback, branching, and future RL/eval/agent-ops outputs."
+    )
+    presenter_setup = [
+        "Open Studio on the Presentation view and read the opening hook before clicking anywhere else.",
+        "Frame the product as a world studio for enterprises, not a one-off workflow demo.",
+        "Tell the audience that Company, Situation, and Objective are the user-facing primitives built on the kernel.",
+        f"Use `{branch_labels[0] if branch_labels else 'baseline path'}` versus "
+        f"`{branch_labels[1] if len(branch_labels) > 1 else 'agent path'}` to explain branching.",
+    ]
+    primitives = [
+        StoryPresentationPrimitive(
+            name="company",
+            title="Company",
+            current_value=manifest.company_name,
+            summary=(
+                "Start with one stable business world. The company stays fixed while the demo changes only the situation and the objective."
+            ),
+            kernel_mapping="Workspace + blueprint + capability graphs",
+        ),
+        StoryPresentationPrimitive(
+            name="situation",
+            title="Situation",
+            current_value=scenario_variant.title,
+            summary=(
+                "Situations are overlays on the base world. They add deadline pressure, faults, and branch-worthy tradeoffs without rebuilding the company."
+            ),
+            kernel_mapping="Scenario variant overlay on the world state",
+        ),
+        StoryPresentationPrimitive(
+            name="objective",
+            title="Objective",
+            current_value=contract_variant.title,
+            summary=(
+                "Objectives change what counts as good behavior. The same company and same situation can be judged under different business preferences."
+            ),
+            kernel_mapping="Contract variant overlay on the shared contract engine",
+        ),
+        StoryPresentationPrimitive(
+            name="run",
+            title="Run",
+            current_value=f"{demo.workflow_run_id} vs {demo.comparison_run_id}",
+            summary=(
+                "Runs are attempts to solve the same world under the same event spine. Workflow, scripted, and LLM agents all land in one runtime model."
+            ),
+            kernel_mapping="Canonical run/event spine + snapshots + playback",
+        ),
+        StoryPresentationPrimitive(
+            name="branch",
+            title="Branch",
+            current_value="Baseline branch and agent branch",
+            summary=(
+                "Branching shows alternate futures from one company world. That is the most intuitive proof that this is an engine, not a static benchmark."
+            ),
+            kernel_mapping="Snapshots + branch labels + diff and replay surfaces",
+        ),
+        StoryPresentationPrimitive(
+            name="exports",
+            title="Exports",
+            current_value="RL / eval / agent ops preview",
+            summary=(
+                "The same run artifacts later become RL episodes, continuous eval cases, and agent observability bundles."
+            ),
+            kernel_mapping="Derived artifacts from the same run and contract outputs",
+        ),
+    ]
+    beats = [
+        StoryPresentationBeat(
+            step=1,
+            title="Open with the kernel thesis",
+            studio_view="presentation",
+            operator_action="Stay on the Presentation view and point at the opening hook plus the primitives strip.",
+            presenter_note=(
+                "Say that VEI is one enterprise world kernel. We are about to show different companies, different situations, and different objectives on top of the same runtime."
+            ),
+            proof_point="The demo begins with the engine, not with a single handcrafted scenario.",
+            audience_takeaway="This is a reusable platform layer, not a one-off demo.",
+        ),
+        StoryPresentationBeat(
+            step=2,
+            title="Choose the company world",
+            studio_view="worlds",
+            operator_action="Click Company and show that this world is one stable business with its own graphs and operating surfaces.",
+            presenter_note=(
+                f"Introduce {manifest.company_name} in plain language, explain what the company does, and why failure in this world has real business consequences."
+            ),
+            proof_point="Different companies can live on the same kernel without changing the runtime model.",
+            audience_takeaway="The kernel is flexible enough to instantiate very different enterprise environments.",
+        ),
+        StoryPresentationBeat(
+            step=3,
+            title="Show the situation overlay",
+            studio_view="situations",
+            operator_action="Click Situation, highlight the active scenario variant, and call out what changed from the base world.",
+            presenter_note=(
+                f"Explain that `{scenario_variant.title}` is not a different company. It is one alternate future layered on top of the same company world."
+            ),
+            proof_point="Problem setup is a first-class overlay, not a rewritten environment.",
+            audience_takeaway="The same company can generate many meaningful simulations.",
+        ),
+        StoryPresentationBeat(
+            step=4,
+            title="Show the objective overlay",
+            studio_view="objectives",
+            operator_action="Click Objective and compare the active contract with the other objective variants.",
+            presenter_note=(
+                f"Explain that `{contract_variant.title}` tells VEI what good looks like in this situation, and that different objectives can produce different preferred behavior on the same world."
+            ),
+            proof_point="Success criteria are separate from both the world and the situation.",
+            audience_takeaway="This same kernel can later support eval, policy testing, and reward shaping.",
+        ),
+        StoryPresentationBeat(
+            step=5,
+            title="Run the baseline and the agent path",
+            studio_view="runs",
+            operator_action="Launch or open the workflow baseline, then the comparison run, and play the timeline for a few events.",
+            presenter_note=(
+                "Point out that every action lands in one event spine with graph intent, resolved tools, and snapshots. That is what makes the demo inspectable instead of magical."
+            ),
+            proof_point="Same runtime model for deterministic baseline and freer agent behavior.",
+            audience_takeaway="This is already a serious observability surface, not just a benchmark harness.",
+        ),
+        StoryPresentationBeat(
+            step=6,
+            title="Explain the branch and outcome",
+            studio_view="runs",
+            operator_action="Scroll to Branch + Outcome and contrast the baseline branch with the agent branch.",
+            presenter_note=(
+                "Use the branch story to explain that the company world stayed the same, but the decisions changed, so the business result changed."
+            ),
+            proof_point="Branching makes alternate futures legible on top of one shared world state.",
+            audience_takeaway="This is why VEI can later serve as a simulation engine, recovery lab, and decision-testing system.",
+        ),
+        StoryPresentationBeat(
+            step=7,
+            title="Close on the platform bridge",
+            studio_view="runs",
+            operator_action="Finish on Exports and tie the run outputs to RL episodes, continuous eval, and agent operations.",
+            presenter_note=(
+                "Close by saying that the demo is impressive because the kernel already emits the ingredients for the next products: RL transitions, eval comparisons, and agent observability."
+            ),
+            proof_point="The future-platform story is a direct extension of the current artifacts, not a speculative rewrite.",
+            audience_takeaway="The upside is a family of products built on one world kernel.",
+        ),
+    ]
+    return StoryPresentation(
+        opening_hook=opening_hook,
+        demo_goal=demo_goal,
+        presenter_setup=presenter_setup,
+        primitives=primitives,
+        beats=beats,
+        closing_argument=(
+            "The core claim is simple: VEI already behaves like a world studio for enterprises. "
+            "These demos are different instantiations of one kernel, and the same kernel is what later becomes an RL environment, a continuous eval harness, and an agent management platform."
+        ),
+        operator_commands=[
+            f"python -m vei.cli.vei project init --vertical {manifest.name} --root {demo.workspace_root}",
+            f"python -m vei.cli.vei scenario activate --root {demo.workspace_root} --variant {scenario_variant.name} --bootstrap-contract",
+            f"python -m vei.cli.vei contract activate --root {demo.workspace_root} --variant {contract_variant.name}",
+            demo.ui_command,
+        ],
+    )
+
+
 def _find_story_runs(root: str | Path):
     manifests = list_run_manifests(root)
     workflow_manifest = next(
@@ -1374,6 +1763,9 @@ __all__ = [
     "VerticalCompareRunner",
     "VerticalDemoResult",
     "VerticalDemoSpec",
+    "StoryPresentation",
+    "StoryPresentationBeat",
+    "StoryPresentationPrimitive",
     "VerticalStoryBundle",
     "VerticalStoryShowcaseResult",
     "VerticalStoryShowcaseSpec",
@@ -1385,9 +1777,11 @@ __all__ = [
     "VerticalVariantMatrixResult",
     "VerticalVariantMatrixSpec",
     "load_workspace_exports_preview",
+    "load_workspace_presentation",
     "load_workspace_story_manifest",
     "prepare_vertical_story",
     "prepare_vertical_demo",
+    "render_vertical_story_presentation_guide",
     "render_vertical_story_overview",
     "render_vertical_story_showcase_overview",
     "render_vertical_demo_overview",
