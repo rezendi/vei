@@ -93,7 +93,7 @@ Run the workspace-backed vertical world-pack showcase:
 ```bash
 vei showcase verticals \
   --root _vei_out/vertical_showcase \
-  --run-id vc_worlds
+  --run-id world_showcase
 ```
 
 That showcase creates three separate company workspaces, runs a workflow baseline plus a freer comparison run for each, and writes `vertical_showcase_overview.md` plus per-workspace `vertical_demo_overview.md` files:
@@ -116,7 +116,7 @@ Run the variant-lab matrix on top of the same vertical worlds:
 ```bash
 vei showcase variant-matrix \
   --root _vei_out/vertical_showcase \
-  --run-id vc_variant_matrix
+  --run-id variant_showcase
 ```
 
 That command does not rebuild the company worlds. Instead, it reuses the same three vertical workspaces and runs curated combinations of:
@@ -138,7 +138,7 @@ Run the narrative-first Studio story bundle:
 ```bash
 vei showcase story \
   --root _vei_out/vertical_showcase \
-  --run-id vc_story \
+  --run-id story_presentation \
   --vertical real_estate_management \
   --scenario-variant vendor_no_show \
   --contract-variant safety_over_speed
@@ -150,7 +150,7 @@ This is the cleanest business-facing demo path. It writes one top-level `story_s
 - `story_overview.md`
 - `exports_preview.json`
 - `presentation_manifest.json`
-- `presentation_script.md`
+- `presentation_guide.md`
 
 The Studio UI then presents the run through the product primitives:
 

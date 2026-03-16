@@ -131,17 +131,17 @@ vei ui serve --root _vei_out/workspaces/harbor_point
 
 That is the cleanest proof of the kernel thesis: the base company world stays fixed while VEI swaps the problem setup and success criteria on top of the same runtime, event spine, contract engine, and playback UI.
 
-For the VC/demo path, VEI now ships a narrative-first Studio showcase:
+For the presentation path, VEI now ships a narrative-first Studio showcase:
 
 ```bash
 vei showcase story \
   --root _vei_out/vertical_showcase \
-  --run-id vc_story \
+  --run-id story_presentation \
   --vertical real_estate_management \
   --scenario-variant vendor_no_show \
   --contract-variant safety_over_speed
 
-vei ui serve --root _vei_out/vertical_showcase/vc_story/real_estate_management
+vei ui serve --root _vei_out/vertical_showcase/story_presentation/real_estate_management
 ```
 
 That path writes:
@@ -149,7 +149,7 @@ That path writes:
 - `story_overview.md`
 - `exports_preview.json`
 - `presentation_manifest.json`
-- `presentation_script.md`
+- `presentation_guide.md`
 
 The point is product legibility: VEI now presents the demo as **Presentation → Company → Situation → Objective → Run → Branch → Outcome → Exports**, while the underlying kernel stays the same. The new presentation artifacts give you a clean live-demo talk track on top of the same Studio workspace.
 
@@ -478,7 +478,7 @@ Vertical world-pack showcase bundle:
 ```bash
 vei showcase verticals \
   --root _vei_out/vertical_showcase \
-  --run-id vc_worlds
+  --run-id world_showcase
 ```
 
 That command creates three separate workspace-backed companies, runs the deterministic workflow baseline plus a freer comparison runner for each, and writes one `vertical_showcase_overview.md` bundle alongside ready-to-open workspace roots:
