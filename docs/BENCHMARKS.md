@@ -149,9 +149,12 @@ This is the cleanest business-facing demo path. It writes one top-level `story_s
 - `story_manifest.json`
 - `story_overview.md`
 - `exports_preview.json`
+- `presentation_manifest.json`
+- `presentation_script.md`
 
 The Studio UI then presents the run through the product primitives:
 
+- Presentation
 - Company
 - Situation
 - Objective

@@ -148,8 +148,10 @@ That path writes:
 - `story_manifest.json`
 - `story_overview.md`
 - `exports_preview.json`
+- `presentation_manifest.json`
+- `presentation_script.md`
 
-The point is product legibility: VEI now presents the demo as **Company → Situation → Objective → Run → Branch → Outcome → Exports**, while the underlying kernel stays the same.
+The point is product legibility: VEI now presents the demo as **Presentation → Company → Situation → Objective → Run → Branch → Outcome → Exports**, while the underlying kernel stays the same. The new presentation artifacts give you a clean live-demo talk track on top of the same Studio workspace.
 
 ### Grounded import flow
 
