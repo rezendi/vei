@@ -153,6 +153,8 @@ That path writes:
 
 The point is product legibility: VEI now presents the demo as **Presentation → Company → Situation → Objective → Run → Branch → Outcome → Exports**, while the underlying kernel stays the same. The new presentation artifacts give you a clean live-demo talk track on top of the same Studio workspace.
 
+If you want the short spoken flow for a live meeting, use [docs/PRESENTATION_TALK_TRACK.md](/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/docs/PRESENTATION_TALK_TRACK.md).
+
 ### Grounded import flow
 
 VEI can now ingest realistic offline enterprise export packs and turn them into a runnable workspace. The import path is:
