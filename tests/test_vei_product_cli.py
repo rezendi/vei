@@ -629,9 +629,16 @@ def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> N
     assert (story_root / "story_manifest.json").exists()
     assert (story_root / "story_overview.md").exists()
     assert (story_root / "exports_preview.json").exists()
+    assert (story_root / "presentation_manifest.json").exists()
+    assert (story_root / "presentation_script.md").exists()
     overview = (story_root / "story_overview.md").read_text(encoding="utf-8")
     assert "VEI Story" in overview
     assert "Branch Story" in overview
+    presentation_script = (story_root / "presentation_script.md").read_text(
+        encoding="utf-8"
+    )
+    assert "VEI VC Demo Script" in presentation_script
+    assert "Presentation Flow" in presentation_script
     exports_preview = json.loads(
         (story_root / "exports_preview.json").read_text(encoding="utf-8")
     )
@@ -640,3 +647,7 @@ def test_product_cli_story_showcase_builds_narrative_bundle(tmp_path: Path) -> N
         "continuous_eval_export",
         "agent_ops_export",
     ]
+    presentation_manifest = json.loads(
+        (story_root / "presentation_manifest.json").read_text(encoding="utf-8")
+    )
+    assert len(presentation_manifest["beats"]) == 7
