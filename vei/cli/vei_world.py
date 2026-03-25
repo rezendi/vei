@@ -246,7 +246,7 @@ def diff_snapshots(
     key_from = f"{snapshot_from:09d}"
     key_to = f"{snapshot_to:09d}"
     if key_from not in paths or key_to not in paths:
-        raise typer.BadParameter("Snapshot not found; run 'vei-world list' for indices")
+        raise typer.BadParameter("Snapshot not found; run 'vei world list' for indices")
     snap_from = _load_snapshot(paths[key_from])
     snap_to = _load_snapshot(paths[key_to])
     diff = _diff_snapshots(snap_from, snap_to)

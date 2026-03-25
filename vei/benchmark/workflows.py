@@ -244,10 +244,10 @@ WorkflowParams = (
 @dataclass(frozen=True)
 class _VariantDefinition:
     name: str
-    title: str
-    description: str
-    scenario_name: str
-    parameters: WorkflowParams
+    title: str = ""
+    description: str = ""
+    scenario_name: str = ""
+    parameters: WorkflowParams = None  # type: ignore[assignment]
 
 
 _PARAMETER_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
@@ -558,17 +558,11 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
     "real_estate_management": {
         "tenant_opening_conflict": _VariantDefinition(
             name="tenant_opening_conflict",
-            title="Tenant Opening Conflict",
-            description=(
-                "Restore tenant opening readiness by aligning lease, vendor, unit, and artifact state before Monday."
-            ),
             scenario_name="tenant_opening_conflict",
             parameters=RealEstateManagementWorkflowParams(),
         ),
         "vendor_no_show": _VariantDefinition(
             name="vendor_no_show",
-            title="Vendor No-Show",
-            description="Recover opening readiness after a blocking prep vendor no-shows late in the cycle.",
             scenario_name="vendor_no_show",
             parameters=RealEstateManagementWorkflowParams(
                 vendor_id="VEND-HPM-ELEC",
@@ -579,8 +573,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "lease_revision_late": _VariantDefinition(
             name="lease_revision_late",
-            title="Lease Revision Late",
-            description="Compress the readiness flow after late legal redlines change the opening timeline.",
             scenario_name="lease_revision_late",
             parameters=RealEstateManagementWorkflowParams(
                 deadline_max_ms=120000,
@@ -590,8 +582,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "double_booked_unit": _VariantDefinition(
             name="double_booked_unit",
-            title="Double-Booked Unit",
-            description="Resolve a reservation conflict on the tenant unit before the opening fails downstream.",
             scenario_name="double_booked_unit",
             parameters=RealEstateManagementWorkflowParams(
                 ticket_note="Reservation conflict cleared, unit reassigned correctly, and opening blockers resolved.",
@@ -602,17 +592,11 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
     "digital_marketing_agency": {
         "campaign_launch_guardrail": _VariantDefinition(
             name="campaign_launch_guardrail",
-            title="Campaign Launch Guardrail",
-            description=(
-                "Clear creative approval, normalize pacing, refresh reporting, and update client artifacts before launch."
-            ),
             scenario_name="campaign_launch_guardrail",
             parameters=DigitalMarketingAgencyWorkflowParams(),
         ),
         "creative_not_approved": _VariantDefinition(
             name="creative_not_approved",
-            title="Creative Not Approved",
-            description="Recover a launch after client creative approval regresses back into rework.",
             scenario_name="creative_not_approved",
             parameters=DigitalMarketingAgencyWorkflowParams(
                 ticket_note="Creative sign-off recovered before launch and client artifacts updated accordingly.",
@@ -621,8 +605,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "budget_runaway": _VariantDefinition(
             name="budget_runaway",
-            title="Budget Runaway",
-            description="Pull pacing back under control after the launch starts burning budget too quickly.",
             scenario_name="budget_runaway",
             parameters=DigitalMarketingAgencyWorkflowParams(
                 pacing_pct=70.0,
@@ -632,8 +614,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "client_reporting_mismatch": _VariantDefinition(
             name="client_reporting_mismatch",
-            title="Client Reporting Mismatch",
-            description="Reconcile client-facing launch artifacts when the report and brief drift apart.",
             scenario_name="client_reporting_mismatch",
             parameters=DigitalMarketingAgencyWorkflowParams(
                 doc_update_note="Launch brief reconciled with the refreshed client report and approval state.",
@@ -644,17 +624,11 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
     "storage_solutions": {
         "capacity_quote_commitment": _VariantDefinition(
             name="capacity_quote_commitment",
-            title="Capacity Quote Commitment",
-            description=(
-                "Make a strategic storage quote feasible by reserving capacity, revising the commitment, and aligning vendor follow-through."
-            ),
             scenario_name="capacity_quote_commitment",
             parameters=StorageSolutionsWorkflowParams(),
         ),
         "vendor_dispatch_gap": _VariantDefinition(
             name="vendor_dispatch_gap",
-            title="Vendor Dispatch Gap",
-            description="Repair a feasible quote after downstream dispatch coverage breaks.",
             scenario_name="vendor_dispatch_gap",
             parameters=StorageSolutionsWorkflowParams(
                 vendor_id="VEND-ATS-TRUCK",
@@ -664,8 +638,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "fragmented_capacity": _VariantDefinition(
             name="fragmented_capacity",
-            title="Fragmented Capacity",
-            description="Find a smaller feasible inventory block after overflow capacity fragments unexpectedly.",
             scenario_name="fragmented_capacity",
             parameters=StorageSolutionsWorkflowParams(
                 pool_id="POOL-CHI-A",
@@ -676,8 +648,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "overcommit_quote_risk": _VariantDefinition(
             name="overcommit_quote_risk",
-            title="Overcommit Quote Risk",
-            description="Unwind an already-overcommitted quote before the customer hears the wrong number.",
             scenario_name="overcommit_quote_risk",
             parameters=StorageSolutionsWorkflowParams(
                 units=60,
@@ -688,15 +658,11 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
     "b2b_saas": {
         "enterprise_renewal_risk": _VariantDefinition(
             name="enterprise_renewal_risk",
-            title="Enterprise Renewal at Risk",
-            description="Save a $480K renewal by fixing the integration, rebuilding trust, and neutralizing competitive pressure.",
             scenario_name="enterprise_renewal_risk",
             parameters=B2bSaasWorkflowParams(),
         ),
         "support_escalation_spiral": _VariantDefinition(
             name="support_escalation_spiral",
-            title="Support Escalation Spiral",
-            description="Resolve a P1 bouncing between teams before the customer loses patience.",
             scenario_name="support_escalation_spiral",
             parameters=B2bSaasWorkflowParams(
                 ticket_note="P1 ownership assigned, fix deployed, and customer confirmation received.",
@@ -705,8 +671,6 @@ _VARIANT_CATALOG: Dict[str, Dict[str, _VariantDefinition]] = {
         ),
         "pricing_negotiation_deadlock": _VariantDefinition(
             name="pricing_negotiation_deadlock",
-            title="Pricing Negotiation Deadlock",
-            description="Break a pricing stalemate without giving away all the margin.",
             scenario_name="pricing_negotiation_deadlock",
             parameters=B2bSaasWorkflowParams(
                 discount_pct=40,
@@ -2722,6 +2686,23 @@ def _parameter_value_type(value: str | int | float | bool) -> str:
     return "str"
 
 
+def _resolve_variant_metadata(
+    family_name: str, definition: _VariantDefinition
+) -> tuple[str, str]:
+    """Return (title, description), falling back to the vertical variant."""
+    if definition.title and definition.description:
+        return definition.title, definition.description
+    try:
+        from vei.verticals.scenario_variants import get_vertical_scenario_variant
+
+        vsv = get_vertical_scenario_variant(family_name, definition.name)
+        title = definition.title or vsv.title
+        desc = definition.description or vsv.description
+        return title, desc
+    except (KeyError, ImportError):
+        return definition.title or definition.name, definition.description or ""
+
+
 def _variant_manifest(
     family_name: str, definition: _VariantDefinition
 ) -> BenchmarkWorkflowVariantManifest:
@@ -2735,12 +2716,13 @@ def _variant_manifest(
         )
         for name, value in definition.parameters.model_dump(mode="python").items()
     ]
+    title, desc = _resolve_variant_metadata(family_name, definition)
     return BenchmarkWorkflowVariantManifest(
         family_name=family_name,
         workflow_name=family_name,
         variant_name=definition.name,
-        title=definition.title,
-        description=definition.description,
+        title=title,
+        description=desc,
         scenario_name=definition.scenario_name,
         parameters=parameters,
     )

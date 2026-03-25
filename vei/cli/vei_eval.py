@@ -152,15 +152,15 @@ def _run_benchmark_demo(spec: BenchmarkDemoSpec) -> BenchmarkDemoResult:
     if baseline_branch:
         inspection_commands.extend(
             [
-                f"vei-world list --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(baseline_branch)}",
-                f"vei-world show --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(baseline_branch)} --receipts-tail 5",
+                f"vei world list --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(baseline_branch)}",
+                f"vei world show --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(baseline_branch)} --receipts-tail 5",
             ]
         )
     if comparison_branch:
         inspection_commands.extend(
             [
-                f"vei-world list --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(comparison_branch)}",
-                f"vei-world receipts --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(comparison_branch)} --tail 10",
+                f"vei world list --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(comparison_branch)}",
+                f"vei world receipts --state-dir {_shell_quote(state_dir)} --branch {_shell_quote(comparison_branch)} --tail 10",
             ]
         )
         if (
@@ -168,7 +168,7 @@ def _run_benchmark_demo(spec: BenchmarkDemoSpec) -> BenchmarkDemoResult:
             and comparison_result.diagnostics.final_snapshot_id is not None
         ):
             inspection_commands.append(
-                "vei-world diff "
+                "vei world diff "
                 f"--state-dir {_shell_quote(state_dir)} "
                 f"--branch {_shell_quote(comparison_branch)} "
                 f"--snapshot-from {comparison_result.diagnostics.initial_snapshot_id} "

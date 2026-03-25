@@ -20,6 +20,7 @@
   --surface-docs: #1aa88d;
   --surface-approvals: #9b7bff;
   --surface-heartbeat: #17324a;
+  --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
 }
 
 * {
@@ -657,12 +658,15 @@ body.developer-mode .studio-nav-button.developer-only {
   letter-spacing: -0.04em;
 }
 
-.living-company-card .eyebrow,
 .living-company-card h2,
 .living-company-card .metric-detail,
-.living-company-card .detail-tile,
-.living-company-card .detail-tile strong {
+.living-company-card .detail-tile {
   color: rgba(244, 248, 251, 0.9);
+}
+
+.living-company-card .eyebrow,
+.living-company-card .detail-tile strong {
+  color: rgba(244, 248, 251, 0.54);
 }
 
 .living-company-card .story-card {
@@ -677,11 +681,6 @@ body.developer-mode .studio-nav-button.developer-only {
 
 .living-company-card .detail-tile {
   background: rgba(255, 255, 255, 0.06);
-}
-
-.living-company-card .eyebrow,
-.living-company-card .detail-tile strong {
-  color: rgba(244, 248, 251, 0.54);
 }
 
 .shell-summary-item {
@@ -1900,10 +1899,6 @@ body.cinema-mode .launch-panel {
   display: none;
 }
 
-body.cinema-mode .metrics-grid {
-  display: none;
-}
-
 body.cinema-mode .worlds-strip { display: none; }
 
 body.cinema-mode .studio-shell-card {
@@ -2189,10 +2184,6 @@ body.cinema-mode .run-item p {
   color: rgba(244, 248, 251, 0.6);
 }
 
-body.cinema-mode .worlds-card {
-  display: none !important;
-}
-
 /* Cinema narrative bar */
 .cinema-narrative {
   display: none;
@@ -2296,7 +2287,6 @@ body.board-mode .studio-shell-card { display: none; }
 body.board-mode .living-company-card { display: none; }
 body.board-mode .play-card { display: none !important; }
 body.board-mode .move-log-card { display: none !important; }
-body.board-mode .worlds-card { display: none !important; }
 
 body.board-mode .board-game-section {
   display: block !important;

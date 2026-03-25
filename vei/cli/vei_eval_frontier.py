@@ -23,7 +23,7 @@ from vei.benchmark.models import BenchmarkCaseSpec
 from vei.score_frontier import compute_frontier_score
 from vei.world.scenarios import list_scenarios
 
-app = typer.Typer(name="vei-eval-frontier", help="Run frontier model evaluations")
+app = typer.Typer(name="eval-frontier", help="Run frontier model evaluations")
 
 
 @app.command(name="run")

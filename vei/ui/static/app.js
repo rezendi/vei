@@ -77,6 +77,8 @@ const state = {
   eventSource: null,
   cascadeActive: false,
   cascadeAbort: null,
+  refreshGeneration: 0,
+  sseDebounceTimer: null,
 };
 
 async function getJson(path, options = {}) {
@@ -106,8 +108,13 @@ async function fetchPlayableArtifacts() {
   return { playableBundle, missions, missionState, fidelityReport };
 }
 
+function el(id) {
+  return document.getElementById(id);
+}
+
 function renderJson(id, payload) {
-  document.getElementById(id).textContent = JSON.stringify(payload, null, 2);
+  const node = el(id);
+  if (node) node.textContent = JSON.stringify(payload, null, 2);
 }
 
 function nonEmptyPayload(payload) {
@@ -1264,19 +1271,19 @@ function fireParticleTrail(cardEl, changedPanels) {
   });
 }
 
+function hexCenterRelative(surface, areaRect) {
+  const hex = document.querySelector(`.board-hex[data-surface="${surface}"]`);
+  if (!hex) return null;
+  const r = hex.getBoundingClientRect();
+  return { x: r.left + r.width / 2 - areaRect.left, y: r.top + r.height / 2 - areaRect.top };
+}
+
 function drawFlowLines(changedPanels) {
   const svg = document.getElementById("board-flow-svg");
   if (!svg || !changedPanels.length) return;
   const area = svg.parentElement;
   if (!area) return;
   const areaRect = area.getBoundingClientRect();
-
-  function hexCenter(surface) {
-    const hex = document.querySelector(`.board-hex[data-surface="${surface}"]`);
-    if (!hex) return null;
-    const r = hex.getBoundingClientRect();
-    return { x: r.left + r.width / 2 - areaRect.left, y: r.top + r.height / 2 - areaRect.top };
-  }
 
   const pairs = [];
   for (let i = 0; i < changedPanels.length; i++) {
@@ -1286,14 +1293,14 @@ function drawFlowLines(changedPanels) {
   }
 
   pairs.forEach(([a, b]) => {
-    const pa = hexCenter(a);
-    const pb = hexCenter(b);
+    const pa = hexCenterRelative(a, areaRect);
+    const pb = hexCenterRelative(b, areaRect);
     if (!pa || !pb) return;
     const existingKey = `flow-${[a, b].sort().join("-")}`;
     if (svg.querySelector(`[data-flow-key="${existingKey}"]`)) {
-      const el = svg.querySelector(`[data-flow-key="${existingKey}"]`);
-      el.classList.add("flow-line-active");
-      window.setTimeout(() => el.classList.remove("flow-line-active"), 2000);
+      const existing = svg.querySelector(`[data-flow-key="${existingKey}"]`);
+      existing.classList.add("flow-line-active");
+      window.setTimeout(() => existing.classList.remove("flow-line-active"), 2000);
       return;
     }
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -1482,13 +1489,6 @@ function drawCompareFlowLines(timeline, color) {
   if (!area) return;
   const areaRect = area.getBoundingClientRect();
 
-  function hexCenter(surface) {
-    const hex = document.querySelector(`.board-hex[data-surface="${surface}"]`);
-    if (!hex) return null;
-    const r = hex.getBoundingClientRect();
-    return { x: r.left + r.width / 2 - areaRect.left, y: r.top + r.height / 2 - areaRect.top };
-  }
-
   const surfaces = [];
   for (const ev of timeline) {
     if (ev.kind !== "trace_call" && ev.kind !== "workflow_step") continue;
@@ -1496,8 +1496,8 @@ function drawCompareFlowLines(timeline, color) {
     if (s && !surfaces.includes(s)) surfaces.push(s);
   }
   for (let i = 0; i < surfaces.length - 1; i++) {
-    const pa = hexCenter(surfaces[i]);
-    const pb = hexCenter(surfaces[i + 1]);
+    const pa = hexCenterRelative(surfaces[i], areaRect);
+    const pb = hexCenterRelative(surfaces[i + 1], areaRect);
     if (!pa || !pb) continue;
     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
     line.setAttribute("x1", pa.x);
@@ -2251,7 +2251,8 @@ function renderImportSummary() {
 }
 
 function renderScenarioSelector() {
-  const select = document.getElementById("scenario-select");
+  const select = el("scenario-select");
+  if (!select) return;
   select.innerHTML = "";
   for (const scenario of state.scenarios) {
     const option = document.createElement("option");
@@ -2491,8 +2492,9 @@ function renderObjectiveBriefing(contractVariants = [], activeContractVariant = 
 
 function renderRunHeader() {
   const run = state.activeRun;
-  const title = document.getElementById("active-run-title");
-  const badges = document.getElementById("active-run-badges");
+  const title = el("active-run-title");
+  const badges = el("active-run-badges");
+  if (!title || !badges) return;
   if (!run) {
     title.textContent = "No run selected";
     badges.innerHTML = "";
@@ -3114,7 +3116,6 @@ async function startMission() {
     });
     state.missionState = payload;
     await loadRuns({ selectActiveRun: false });
-    state.missionState = payload;
     if (payload.run_id) {
       await selectRun(payload.run_id, { previousSurfaceState: null });
     }
@@ -3146,7 +3147,6 @@ async function applyMissionMove(moveId) {
     );
     state.missionState = payload;
     await loadRuns({ selectActiveRun: false });
-    state.missionState = payload;
 
     const oldSurface = previousSurfaceState;
     await refreshActiveRun(payload.run_id, { previousSurfaceState: oldSurface });
@@ -3202,7 +3202,6 @@ async function branchMission() {
     });
     state.missionState = payload;
     await loadRuns({ selectActiveRun: false });
-    state.missionState = payload;
     await selectRun(payload.run_id, { previousSurfaceState: state.surfaceState });
     state.missionState = payload;
     status.textContent = `Branch ${payload.branch_name} is live.`;
@@ -3225,7 +3224,6 @@ async function finishMission() {
     });
     state.missionState = payload;
     await loadRuns({ selectActiveRun: false });
-    state.missionState = payload;
     await selectRun(payload.run_id, { previousSurfaceState: state.surfaceState });
     state.missionState = payload;
     status.textContent = payload.scorecard?.mission_success
@@ -3262,6 +3260,7 @@ async function refreshActiveRun(
   runId,
   { connectStream = false, previousSurfaceState = null, preserveSurfaceHighlights = false } = {}
 ) {
+  const generation = ++state.refreshGeneration;
   const [run, timeline, orientation, graphs, snapshots, contract, surfaces] = await Promise.all([
     getJson(`/api/runs/${runId}`),
     getJson(`/api/runs/${runId}/timeline`),
@@ -3271,6 +3270,8 @@ async function refreshActiveRun(
     getJson(`/api/runs/${runId}/contract`),
     getJson(`/api/runs/${runId}/surfaces`).catch(() => null),
   ]);
+
+  if (generation !== state.refreshGeneration) return;
 
   state.activeRun = run;
   state.timeline = timeline;
@@ -3309,7 +3310,11 @@ function connectRunStream(runId) {
   }
   state.eventSource = new EventSource(`/api/runs/${runId}/stream`);
   state.eventSource.onmessage = () => {
-    void refreshActiveRun(runId, { preserveSurfaceHighlights: true });
+    if (state.sseDebounceTimer) clearTimeout(state.sseDebounceTimer);
+    state.sseDebounceTimer = setTimeout(() => {
+      state.sseDebounceTimer = null;
+      void refreshActiveRun(runId, { preserveSurfaceHighlights: true });
+    }, 150);
   };
   state.eventSource.onerror = () => {
     if (state.eventSource) {

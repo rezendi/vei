@@ -61,18 +61,18 @@ For benchmark-family scenarios, scripted, BC, and LLM runners now also emit `wor
 Run the supported benchmark-family demo flow:
 
 ```bash
-vei-eval demo \
+vei eval demo \
   --family security_containment \
   --artifacts-root _vei_out/demo \
   --run-id security_demo
 ```
 
-That command runs the family's canonical workflow baseline plus one comparison runner, writes `leaderboard.md` / `leaderboard.csv` / `leaderboard.json`, stores inspectable world state under `state/`, and emits `demo_result.json` with ready-to-run `vei-world` inspection commands plus direct paths to the baseline and comparison `contract.json` artifacts.
+That command runs the family's canonical workflow baseline plus one comparison runner, writes `leaderboard.md` / `leaderboard.csv` / `leaderboard.json`, stores inspectable world state under `state/`, and emits `demo_result.json` with ready-to-run `vei world` inspection commands plus direct paths to the baseline and comparison `contract.json` artifacts.
 
 Run the curated complex-example showcase:
 
 ```bash
-vei-eval showcase \
+vei eval showcase \
   --artifacts-root _vei_out/showcase \
   --run-id flagship_examples
 ```
@@ -256,8 +256,8 @@ That expert flow still proves that VEI can compile a typed organization bundle i
 The runtime side now has a matching read surface too:
 
 ```bash
-vei-world graphs --state-dir ./state --domain identity_graph
-vei-world orient --state-dir ./state
+vei world graphs --state-dir ./state --domain identity_graph
+vei world orient --state-dir ./state
 ```
 
 Those commands render the shared capability graph and the agent-facing orientation summary from a stored world snapshot, which is useful when you want to inspect the world in domain terms rather than app-by-app component terms.
