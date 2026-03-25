@@ -87,7 +87,7 @@ make setup
 make check
 make test
 make llm-live
-vei-smoke --transport stdio --timeout-s 30
+vei smoke --transport stdio --timeout-s 30
 ```
 
 `make llm-live` auto-loads `.env` when present and writes `summary.json` next to the other live-run artifacts under `_vei_out/llm_live/latest`.
@@ -95,7 +95,7 @@ vei-smoke --transport stdio --timeout-s 30
 ### Run a live episode
 
 ```bash
-vei-llm-test \
+vei llm-test \
   --provider openai \
   --model gpt-5 \
   --task "Research price, get Slack approval under budget, and email vendor for quote."
@@ -417,16 +417,16 @@ VEI_LLM_LIVE_BYPASS=1 make llm-live
   - `vei context capture|hydrate|diff`
   - `vei synthesize runbook|training-set|agent-config`
 - Expert tools
-  - `vei-world`
-  - `vei-blueprint bundle|bundles|asset|compile|show|observe|orient|examples|facades`
-  - `vei-visualize replay|flow|dashboard|export`
+  - `vei world`
+  - `vei blueprint bundle|bundles|asset|compile|show|observe|orient|examples|facades`
+  - `vei visualize replay|flow|dashboard|export`
 - Evaluation and release
-  - `vei-eval`, `vei-eval-frontier`, `vei-rollout`, `vei-train`, `vei-score`, `vei-release`
+  - `vei eval`, `vei eval-frontier`, `vei rollout`, `vei train`, `vei score`, `vei release`
 - Catalog/debug surfaces
-  - `vei-scenarios list|manifest|dump`
-  - `vei-smoke`, `vei-demo`, `vei-det sample-workflow|compile-workflow|run-workflow|generate-corpus|filter-corpus`
+  - `vei scenarios list|manifest|dump`
+  - `vei smoke`, `vei demo`, `vei det sample-workflow|compile-workflow|run-workflow|generate-corpus|filter-corpus`
 
-`vei inspect graphs` is now the broadest product/workspace graph surface. It can inspect `identity_graph`, `doc_graph`, `work_graph`, `comm_graph`, `revenue_graph`, `ops_graph`, `obs_graph`, and `data_graph` from a recorded run. `vei-world graphs` remains the expert snapshot-level surface and currently focuses on `comm_graph`, `doc_graph`, `work_graph`, `identity_graph`, and `revenue_graph`. `vei-world orient` and `vei-blueprint orient` add the agent-facing layer on top: visible surfaces, active policy hints, key objects, and suggested next questions.
+`vei inspect graphs` is now the broadest product/workspace graph surface. It can inspect `identity_graph`, `doc_graph`, `work_graph`, `comm_graph`, `revenue_graph`, `ops_graph`, `obs_graph`, and `data_graph` from a recorded run. `vei world graphs` remains the expert snapshot-level surface and currently focuses on `comm_graph`, `doc_graph`, `work_graph`, `identity_graph`, and `revenue_graph`. `vei world orient` and `vei blueprint orient` add the agent-facing layer on top: visible surfaces, active policy hints, key objects, and suggested next questions.
 
 The product CLI also now supports built-in vertical demo worlds:
 
@@ -481,12 +481,12 @@ Baseline run:
 
 ```bash
 export VEI_ARTIFACTS_DIR=_vei_out/llmtest
-VEI_SEED=42042 vei-llm-test \
+VEI_SEED=42042 vei llm-test \
   --provider openai \
   --model gpt-5 \
   --max-steps 32 \
   --task "Open product page, cite specs, post approval under $3200, email sales@macrocompute.example for a quote, wait for reply."
-vei-score --artifacts-dir _vei_out/llmtest --success-mode full
+vei score --artifacts-dir _vei_out/llmtest --success-mode full
 ```
 
 Kernel-backed benchmark run:
@@ -534,13 +534,13 @@ vei-eval benchmark \
 Canonical family demo flow:
 
 ```bash
-vei-eval demo \
+vei eval demo \
   --family security_containment \
   --artifacts-root _vei_out/demo \
   --run-id security_demo
 ```
 
-That command runs the deterministic family workflow baseline plus a comparison runner, writes `leaderboard.md` / `leaderboard.csv` / `leaderboard.json`, stores inspectable world state under `_vei_out/demo/security_demo/state` for follow-up `vei-world` inspection, and records explicit `contract.json` artifacts for both the baseline and comparison paths. Contract evaluation now separates oracle state from agent-visible observation so hidden state can be graded without making the demo omniscient.
+That command runs the deterministic family workflow baseline plus a comparison runner, writes `leaderboard.md` / `leaderboard.csv` / `leaderboard.json`, stores inspectable world state under `_vei_out/demo/security_demo/state` for follow-up `vei world` inspection, and records explicit `contract.json` artifacts for both the baseline and comparison paths. Contract evaluation now separates oracle state from agent-visible observation so hidden state can be graded without making the demo omniscient.
 
 Complex-example showcase bundle:
 

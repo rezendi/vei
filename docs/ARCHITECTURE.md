@@ -74,7 +74,7 @@ The intended loop is:
 2. compile or refresh runnable scenario artifacts when the workspace changes
 3. launch a run
 4. inspect orientation, graphs, timeline, snapshots, and diffs
-5. replay, branch, or export from there through the current expert surfaces such as `vei-world`, `vei-visualize`, and release/export tooling
+5. replay, branch, or export from there through the current expert surfaces such as `vei world`, `vei visualize`, and release/export tooling
 
 Imported identity workspaces now add an earlier preparation ladder:
 
@@ -161,16 +161,9 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - agent-facing discoverability tools now include `vei.orientation`, `vei.capability_graphs`, `vei.graph_plan`, and `vei.graph_action`
 - `python -m vei.router.sse`
   - SSE MCP transport
-- `vei-world`
-  - snapshot/receipt inspection plus runtime capability-graph and orientation rendering
 - `vei`
-  - top-level product workflow entrypoint
-  - `project`, `contract`, `scenario`, `run`, `inspect`, `showcase`, `studio`, `export`, and `ui` groups
-- `vei-ui`
-  - standalone alias for the local playback/debug server
-  - equivalent to `vei ui serve`
-- `vei-llm-test`, `vei-eval`, `vei-eval-frontier`, `vei-report`
-  - evaluation and benchmarking
+  - unified CLI — all subcommands are now under `vei <group> <command>`
+  - `project`, `contract`, `scenario`, `run`, `inspect`, `showcase`, `studio`, `export`, `ui`, `world`, `blueprint`, `eval`, `eval-frontier`, `llm-test`, `pack`, `rollout`, `train`, `score`, `smoke`, `demo`, `det`, `context`, `synthesize`, `release`, `report`, `visualize`
 
 ## Software Twins
 
