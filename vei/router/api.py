@@ -44,6 +44,7 @@ def create_router(
     scenario: Optional[Scenario] = None,
     connector_mode: Optional[str] = None,
     branch: str = "main",
+    surface_fidelity: Optional[Dict[str, Any]] = None,
 ) -> RouterAPI:
     """Factory for the router runtime exposed as a typed module API."""
     from .core import Router
@@ -54,4 +55,5 @@ def create_router(
         scenario=scenario,
         connector_mode=connector_mode,
         branch=branch,
+        surface_fidelity=surface_fidelity,
     )

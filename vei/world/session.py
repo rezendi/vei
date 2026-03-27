@@ -632,14 +632,35 @@ def restore_router_state(router: "Router", state: WorldState) -> None:
 class WorldSession:
     def __init__(self, router: "Router") -> None:
         self.router = router
+        self.actor_registry: Optional[Any] = None
         if not hasattr(self.router, "actor_states"):
             self.router.actor_states = {}
         if not hasattr(self.router, "_replay_state"):
             self.router._replay_state = {}
+        self.router._actor_dispatch = self._dispatch_actor_event
 
     @classmethod
     def attach_router(cls, router: "Router") -> "WorldSession":
         return cls(router)
+
+    def attach_actor_registry(self, registry: Any) -> None:
+        """Attach an ActorRegistry so NPC events route through actor personas."""
+        self.actor_registry = registry
+
+    def _dispatch_actor_event(
+        self, actor_id: str, target: str, payload: Dict[str, Any]
+    ) -> Optional[str]:
+        """Called by Router when delivering an event tagged with actor_id.
+
+        Returns the actor's response text, or None if no registry/actor.
+        """
+        if self.actor_registry is None:
+            return None
+        message = payload.get("text") or payload.get("body_text") or ""
+        if not message:
+            return None
+        channel = payload.get("channel") or target
+        return self.actor_registry.route_message(actor_id, message, channel=channel)
 
     def observe(self, focus_hint: Optional[str] = None) -> Dict[str, Any]:
         return self.router.observe(focus_hint=focus_hint).model_dump()

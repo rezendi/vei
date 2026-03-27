@@ -488,6 +488,18 @@ class SlackSim:
         return {"ts": ts}
 
     def react(self, channel: str, ts: str, emoji: str) -> Dict[str, Any]:
+        ch = self.channels.get(channel)
+        if not ch:
+            raise MCPError("unknown_channel", f"Unknown Slack channel: {channel}")
+        for msg in ch["messages"]:
+            if msg.get("ts") == ts:
+                reactions = msg.setdefault("reactions", [])
+                for r in reactions:
+                    if r["name"] == emoji:
+                        r["count"] += 1
+                        return {"ok": True}
+                reactions.append({"name": emoji, "count": 1, "users": ["agent"]})
+                return {"ok": True}
         return {"ok": True}
 
     def fetch_thread(self, channel: str, thread_ts: str) -> Dict[str, Any]:
@@ -589,6 +601,7 @@ class MailSim:
         m = self.messages.get(id)
         if not m:
             raise MCPError("unknown_message", f"Unknown mail id: {id}")
+        m["unread"] = False
         return {
             "headers": m["headers"],
             "body_text": m["body_text"],
@@ -800,9 +813,19 @@ class Router:
         scenario: Optional[Scenario] = None,
         connector_mode: Optional[str] = None,
         branch: str = "main",
+        surface_fidelity: Optional[Dict[str, Any]] = None,
     ):
         self.seed = int(seed)
         self.world_session = None
+        self._surface_fidelity = surface_fidelity or {}
+        self._l2_store: Optional[Any] = None
+        if any(
+            (v.level if hasattr(v, "level") else v.get("level")) == "L2"
+            for v in self._surface_fidelity.values()
+        ):
+            from vei.blueprint.fidelity import L2Store
+
+            self._l2_store = L2Store()
         self.bus = EventBus(seed)
 
         state_dir_env = os.environ.get("VEI_STATE_DIR")
@@ -860,6 +883,7 @@ class Router:
         self._policy_findings: List[Dict[str, Any]] = []
         self.actor_states: Dict[str, Any] = {}
         self._replay_state: Dict[str, Any] = {}
+        self._actor_dispatch: Optional[Any] = None
 
         self.trace = TraceLogger(artifacts_dir)
         self.scenario = scenario or load_from_env(seed)
@@ -1178,6 +1202,19 @@ class Router:
             evt.target, evt.payload, emitted, time_ms=self.bus.clock_ms
         )
         self._record_event_delivery(evt.target, evt.payload)
+        if evt.actor_id and self._actor_dispatch:
+            response = self._actor_dispatch(evt.actor_id, evt.target, evt.payload)
+            if response:
+                self.bus.schedule(
+                    dt_ms=2000,
+                    target=evt.target,
+                    payload={
+                        "text": response,
+                        "user": evt.actor_id,
+                        "channel": evt.payload.get("channel", ""),
+                    },
+                    source=f"actor:{evt.actor_id}",
+                )
         return emitted
 
     def _load_receipts(self) -> None:
@@ -1974,6 +2011,9 @@ class Router:
         if not tool.startswith("vei."):
             self._maybe_fault(tool)
         tool = self.alias_map.get(tool, tool)
+        intercepted = self._maybe_fidelity_intercept(tool, args)
+        if intercepted is not None:
+            return intercepted
         if self.connector_runtime.managed_tool(tool):
             try:
                 return self.connector_runtime.invoke_tool(
@@ -2386,6 +2426,29 @@ class Router:
             counts[event.target] = counts.get(event.target, 0) + 1
         counts["total"] = self.bus.pending_count()
         return counts
+
+    def _maybe_fidelity_intercept(
+        self, tool: str, args: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Return an intercepted response for L1/L2 surfaces, or None for L3."""
+        if not self._surface_fidelity or tool.startswith("vei."):
+            return None
+        from vei.blueprint.fidelity import resolve_surface
+
+        surface = resolve_surface(tool)
+        spec = self._surface_fidelity.get(surface)
+        if spec is None:
+            return None
+        level = spec.level if hasattr(spec, "level") else spec.get("level", "L3")
+        if level == "L3":
+            return None
+        if level == "L1":
+            from vei.blueprint.fidelity import l1_response
+
+            return l1_response(spec, tool)
+        if level == "L2" and self._l2_store is not None:
+            return self._l2_store.handle(surface, tool, args)
+        return None
 
     def _maybe_fault(self, tool: str) -> None:
         prob = self._fault_overrides.get(tool)
