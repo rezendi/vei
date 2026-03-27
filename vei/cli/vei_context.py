@@ -22,6 +22,9 @@ def capture(
         "context_snapshot.json", "--output", "-o", help="Output snapshot path"
     ),
     base_url: str = typer.Option("", "--base-url", help="Base URL (for jira/okta)"),
+    anonymize: bool = typer.Option(
+        False, "--anonymize", help="Apply PII anonymization to captured data"
+    ),
 ) -> None:
     """Capture live context from enterprise systems."""
     from vei.context.api import capture_context
@@ -59,6 +62,13 @@ def capture(
     snapshot = capture_context(
         configs, organization_name=org, organization_domain=domain
     )
+
+    if anonymize:
+        from vei.anonymize import anonymize_snapshot as do_anonymize
+
+        snapshot = do_anonymize(snapshot)
+        typer.echo("Anonymization applied.")
+
     text = snapshot.model_dump_json(indent=2)
     Path(output).write_text(text, encoding="utf-8")
 

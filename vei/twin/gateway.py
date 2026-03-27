@@ -885,6 +885,205 @@ def create_twin_gateway_app(root: str | Path) -> FastAPI:
             {"id": payload.get("id"), "success": True, "errors": []}, status_code=201
         )
 
+    # --- Slack: reactions + users.list ------------------------------------------
+
+    @app.post("/slack/api/reactions.add")
+    async def slack_reactions_add(request: Request) -> JSONResponse:
+        if not _slack_auth_ok(request, bundle.gateway.auth_token):
+            return JSONResponse({"ok": False, "error": "invalid_auth"})
+        body = await _request_payload(request)
+        channel_name = _resolve_slack_channel_name(
+            runtime, str(body.get("channel", ""))
+        )
+        args = {
+            "channel": channel_name,
+            "text": f":{body.get('name', 'thumbsup')}:",
+            "thread_ts": body.get("timestamp"),
+        }
+        try:
+            _dispatch_request(
+                runtime,
+                request,
+                external_tool="slack.reactions.add",
+                resolved_tool="slack.send_message",
+                args=args,
+                focus_hint="slack",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"ok": False, "error": _provider_error_code(exc)})
+        return JSONResponse({"ok": True})
+
+    @app.get("/slack/api/users.list")
+    async def slack_users_list(request: Request) -> JSONResponse:
+        if not _slack_auth_ok(request, bundle.gateway.auth_token):
+            return JSONResponse({"ok": False, "error": "invalid_auth"})
+        try:
+            payload = _dispatch_request(
+                runtime,
+                request,
+                external_tool="slack.users.list",
+                resolved_tool="okta.list_users",
+                args={},
+                focus_hint="slack",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"ok": False, "error": _provider_error_code(exc)})
+        users = payload if isinstance(payload, list) else payload.get("users", [])
+        members = [
+            {
+                "id": _slack_user_id(str(u.get("email", u.get("user_id", "")))),
+                "name": str(u.get("login", u.get("email", ""))).split("@")[0],
+                "real_name": u.get("display_name", u.get("first_name", "")),
+                "profile": {
+                    "email": u.get("email", ""),
+                    "display_name": u.get("display_name", ""),
+                    "title": u.get("title", ""),
+                },
+            }
+            for u in users
+        ]
+        return JSONResponse({"ok": True, "members": members})
+
+    # --- Jira: issue create + update -------------------------------------------
+
+    @app.post("/jira/rest/api/3/issue")
+    async def jira_create_issue(request: Request) -> JSONResponse:
+        _require_bearer(request, bundle.gateway.auth_token)
+        body = await _request_payload(request)
+        fields = body.get("fields", body)
+        args = {
+            "title": str(fields.get("summary", "")),
+            "description": str(fields.get("description", "")),
+            "assignee": (
+                (fields.get("assignee") or {}).get("name", "")
+                if isinstance(fields.get("assignee"), dict)
+                else str(fields.get("assignee", ""))
+            ),
+            "priority": (
+                (fields.get("priority") or {}).get("name", "P3")
+                if isinstance(fields.get("priority"), dict)
+                else str(fields.get("priority", "P3"))
+            ),
+            "labels": fields.get("labels", []),
+        }
+        try:
+            payload = _dispatch_request(
+                runtime,
+                request,
+                external_tool="jira.issue.create",
+                resolved_tool="jira.create_issue",
+                args=args,
+                focus_hint="tickets",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _http_exception(exc) from exc
+        issue_id = str(payload.get("issue_id", payload.get("ticket_id", "")))
+        return JSONResponse(
+            {"id": issue_id, "key": issue_id, "self": f"/rest/api/3/issue/{issue_id}"},
+            status_code=201,
+        )
+
+    @app.put("/jira/rest/api/3/issue/{issue_id}")
+    async def jira_update_issue(request: Request, issue_id: str) -> Response:
+        _require_bearer(request, bundle.gateway.auth_token)
+        body = await _request_payload(request)
+        fields = body.get("fields", body)
+        args: dict[str, Any] = {"issue_id": issue_id}
+        if "summary" in fields:
+            args["title"] = str(fields["summary"])
+        if "description" in fields:
+            args["description"] = str(fields["description"])
+        if "assignee" in fields:
+            assignee = fields["assignee"]
+            args["assignee"] = (
+                assignee.get("name", "")
+                if isinstance(assignee, dict)
+                else str(assignee)
+            )
+        if "priority" in fields:
+            priority = fields["priority"]
+            args["priority"] = (
+                priority.get("name", "P3")
+                if isinstance(priority, dict)
+                else str(priority)
+            )
+        if "labels" in fields:
+            args["labels"] = fields["labels"]
+        try:
+            _dispatch_request(
+                runtime,
+                request,
+                external_tool="jira.issue.update",
+                resolved_tool="jira.update_issue",
+                args=args,
+                focus_hint="tickets",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _http_exception(exc) from exc
+        return Response(status_code=204)
+
+    # --- Salesforce: opportunity PATCH + contact endpoints ----------------------
+
+    @app.patch("/salesforce/services/data/v60.0/sobjects/Opportunity/{record_id}")
+    async def salesforce_opportunity_patch(
+        request: Request, record_id: str
+    ) -> Response:
+        _require_bearer(request, bundle.gateway.auth_token)
+        body = await _request_payload(request)
+        args: dict[str, Any] = {"id": record_id}
+        if "StageName" in body:
+            args["stage"] = str(body["StageName"])
+        if "Amount" in body:
+            args["amount"] = float(body["Amount"] or 0)
+        if "Name" in body:
+            args["name"] = str(body["Name"])
+        if "CloseDate" in body:
+            args["close_date"] = body["CloseDate"]
+        try:
+            _dispatch_request(
+                runtime,
+                request,
+                external_tool="salesforce.opportunity.update",
+                resolved_tool="salesforce.opportunity.update",
+                args=args,
+                focus_hint="crm",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _http_exception(exc) from exc
+        return Response(status_code=204)
+
+    @app.get("/salesforce/services/data/v60.0/sobjects/Contact/{record_id}")
+    async def salesforce_contact_get(request: Request, record_id: str) -> JSONResponse:
+        _require_bearer(request, bundle.gateway.auth_token)
+        try:
+            payload = _dispatch_request(
+                runtime,
+                request,
+                external_tool="salesforce.contact.get",
+                resolved_tool="salesforce.contact.get",
+                args={"id": record_id},
+                focus_hint="crm",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _http_exception(exc) from exc
+        return JSONResponse(_salesforce_contact(payload))
+
+    @app.get("/salesforce/services/data/v60.0/sobjects/Account/{record_id}")
+    async def salesforce_account_get(request: Request, record_id: str) -> JSONResponse:
+        _require_bearer(request, bundle.gateway.auth_token)
+        try:
+            payload = _dispatch_request(
+                runtime,
+                request,
+                external_tool="salesforce.account.get",
+                resolved_tool="salesforce.account.get",
+                args={"id": record_id},
+                focus_hint="crm",
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise _http_exception(exc) from exc
+        return JSONResponse(_salesforce_account(payload))
+
     return app
 
 
