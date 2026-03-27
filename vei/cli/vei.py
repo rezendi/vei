@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from vei.cli.vei_bench import app as bench_app
 from vei.cli.vei_blueprint import app as blueprint_app
 from vei.cli.vei_context import app as context_app
 from vei.cli.vei_contract import app as contract_app
@@ -57,6 +58,7 @@ app.add_typer(twin_app, name="twin")
 app.add_typer(synthesize_app, name="synthesize")
 app.add_typer(export_app, name="export")
 app.add_typer(ui_app, name="ui")
+app.add_typer(bench_app, name="bench")
 app.add_typer(blueprint_app, name="blueprint")
 app.add_typer(demo_app, name="demo")
 app.add_typer(det_app, name="det")

@@ -83,6 +83,7 @@ def create_world_session(
     scenario: Optional[Scenario] = None,
     connector_mode: Optional[str] = None,
     branch: str = "main",
+    surface_fidelity: Optional[Dict[str, Any]] = None,
 ) -> WorldSession:
     router = create_router(
         seed=seed,
@@ -90,6 +91,7 @@ def create_world_session(
         scenario=scenario,
         connector_mode=connector_mode,
         branch=branch,
+        surface_fidelity=surface_fidelity,
     )
     if getattr(router, "world_session", None) is None:
         router.world_session = WorldSession.attach_router(router)  # type: ignore[attr-defined]
