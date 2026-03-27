@@ -732,6 +732,48 @@ vei release nightly \
   --benchmark-scenario multi_channel
 ```
 
+## One-Command Demo
+
+The fastest way to see VEI in action:
+
+```bash
+vei quickstart run
+```
+
+This creates a workspace from a built-in vertical, starts both the Studio UI
+(`:3011`) and the Twin Gateway (`:3012`), runs a scripted baseline so you
+immediately see events flowing, and prints connection details including mock
+API URLs and an auth token. Press Ctrl-C to stop.
+
+Options: `--world digital_marketing_agency`, `--studio-port`, `--gateway-port`,
+`--seed`, `--no-baseline`.
+
+## Test Your Agent Against VEI
+
+```
+┌─────────────┐     HTTP / MCP      ┌──────────────────┐     call_tool      ┌──────────────┐
+│  Your Agent │ ──────────────────► │  Twin Gateway    │ ────────────────► │  WorldSession │
+│  (any lang) │ ◄────────────────── │  :3012           │ ◄──────────────── │  Kernel       │
+└─────────────┘   Slack/Jira/SFDC   └──────────────────┘   state + events  └──────────────┘
+                   shaped responses         │                                      │
+                                            ▼                                      ▼
+                                   Contract Evaluation                      Event Spine
+                                   (pass/fail/score)                       (events.jsonl)
+```
+
+1. **Start VEI**: `vei quickstart run` (or `vei twin serve --root workspace`)
+2. **Connect your agent** to the mock API endpoints printed on startup — Slack,
+   Jira, MS Graph, Salesforce — using the bearer token shown
+3. **Your agent takes actions** (sends Slack messages, transitions Jira tickets,
+   queries Salesforce) and VEI responds with coherent, stateful results
+4. **VEI evaluates** against the contract (success predicates, forbidden
+   predicates, policy invariants) and produces a scorecard
+5. **Inspect results** in the Studio UI timeline view, or read the run artifacts
+   (`events.jsonl`, contract evaluation, snapshots)
+
+For MCP-native agents, connect directly:
+`python -m vei.router --root workspace`
+
 ## Examples
 
 - `examples/sdk_playground_min.py`

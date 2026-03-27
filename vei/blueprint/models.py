@@ -507,6 +507,21 @@ class BlueprintSpec(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+SurfaceFidelityLevel = Literal["L1", "L2", "L3"]
+
+
+class SurfaceFidelitySpec(BaseModel):
+    """Per-surface fidelity configuration for progressive disclosure.
+
+    L1 (Static)  — canned responses, no state
+    L2 (Stateful) — key-value store, CRUD works, no cross-system causality
+    L3 (Coherent) — full capability graphs with causal links (default VEI)
+    """
+
+    level: SurfaceFidelityLevel = "L3"
+    static_responses: Dict[str, Any] = Field(default_factory=dict)
+
+
 class BlueprintAsset(BaseModel):
     name: str
     title: str
@@ -517,6 +532,7 @@ class BlueprintAsset(BaseModel):
     workflow_variant: Optional[str] = None
     workflow_parameters: Dict[str, Any] = Field(default_factory=dict)
     requested_facades: List[str] = Field(default_factory=list)
+    surface_fidelity: Dict[str, SurfaceFidelitySpec] = Field(default_factory=dict)
     capability_graphs: Optional[BlueprintCapabilityGraphsAsset] = None
     environment: Optional[BlueprintEnvironmentAsset] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
