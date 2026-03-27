@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vei"
+name = "pyvei"
 version = "0.2.0a1"
 description = "VEI — programmable replica of an enterprise software stack for agent testing, RL training, and operational simulation"
 readme = "README.md"
@@ -19,6 +19,10 @@ dependencies = [
   "rich>=13.7.0",
   "fastapi>=0.115.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/strangeloopcanon/vei"
+Repository = "https://github.com/strangeloopcanon/vei"
 
 [project.optional-dependencies]
 browser = [
