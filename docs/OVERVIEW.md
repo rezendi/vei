@@ -2,7 +2,7 @@
 
 VEI is a programmable replica of an entire company's operational software stack. You give it a company description — or connect it to real Slack, Gmail, Jira, and Teams data — and it builds a fully functioning simulated copy of that company with working Slack channels, email threads, ticket queues, CRM pipelines, document stores, identity systems, and more. An agent or a human can then operate inside it: play crisis scenarios, train on the traces, and synthesize operational artifacts from what happened.
 
-It is ~67,000 lines of Python (215 source files, 328 tests), a single-page Studio UI, and 28 CLI subcommands under one `vei` entry point.
+It is ~72,000 lines of Python (240 source files, 339 tests), a single-page Studio UI, and 31 CLI subcommands under one `vei` entry point.
 
 ## The Five Layers
 
@@ -18,6 +18,13 @@ The snapshot gets hydrated into a `BlueprintAsset` — VEI's portable, declarati
 - **Harbor Point Management** (Real Estate) — Tenant openings, vendor no-shows, lease revisions, double-booked units
 - **Northstar Growth** (Marketing Agency) — Campaign launch guardrails, creative approvals, budget runaways
 - **Atlas Storage Systems** (Storage/Logistics) — Capacity quotes, vendor dispatch gaps, fragmented inventory
+
+Two authoring tools lower the barrier to creating new verticals:
+
+- **`vei blueprint scaffold --openapi spec.yaml`** — reads an OpenAPI spec and generates a skeleton blueprint with Pydantic models, router stubs, and capability graph entries. You fill in the causal links.
+- **`vei blueprint generate --prompt "..."`** — uses an LLM to draft a complete blueprint from a natural language description of a company, its tools, and a crisis scenario. Produces actors, Slack channels, mail threads, tickets, documents, causal links, and contract predicates.
+
+Blueprints support **progressive disclosure** via per-surface fidelity levels: L1 (static canned responses), L2 (stateful key-value store, no cross-system causality), and L3 (full coherent simulation, the default). A single blueprint can mix levels — make Jira L3 while leaving Salesforce at L1.
 
 ### 3. World Simulation Engine
 
@@ -100,6 +107,8 @@ vei context capture \
   --domain acme.com \
   --output acme_snapshot.json
 ```
+
+Add `--anonymize` to strip PII (emails, phones, names) from captured data before it enters the simulation. The anonymizer uses deterministic pseudonymization — the same real identity always maps to the same fake identity, preserving referential integrity across all surfaces.
 
 ### Path 3: UI Connect panel
 
@@ -218,6 +227,16 @@ Five distinct user types, each with a different entry point into VEI:
 
 Any of the above can skip the per-step setup by running `vei pilot up`, which builds a twin, starts the gateway and Studio, and writes a manifest with bearer token, curl snippets, and a sample client script. The Pilot Console at `/pilot` shows connection details, live agent activity, outcome status, and reset/finalize controls — one command to get from zero to a working enterprise twin.
 
+### Quickstart: `vei quickstart run`
+
+The fastest path. One command creates a workspace from a built-in vertical, starts both the Studio UI (`:3011`) and the Twin Gateway (`:3012`), runs a scripted baseline so events are immediately flowing, and prints connection details (mock API URLs, auth token, MCP endpoint). Press Ctrl-C to stop.
+
+### Testing your agent
+
+The Twin Gateway exposes provider-shaped HTTP endpoints (Slack Web API, Jira REST v3, Microsoft Graph, Salesforce REST) backed by the simulation. Your agent connects with a bearer token and interacts as if talking to real services. VEI evaluates the run against the contract (success predicates, forbidden predicates, policy invariants) and produces a scorecard. Results appear in the Studio UI timeline and as run artifacts (`events.jsonl`, contract evaluation JSON, state snapshots).
+
+For MCP-native agents, bypass the HTTP gateway entirely: `python -m vei.router --root workspace`.
+
 ---
 
 ## What Holds It Together
@@ -230,11 +249,11 @@ This coherence is what makes the generated data useful for training, the benchma
 
 | Metric | Count |
 |--------|-------|
-| Python source files | 219 |
-| Lines of Python | ~68,000 |
-| Test files | 77 |
-| Tests | 333 |
-| CLI subcommands | 29 |
+| Python source files | 240 |
+| Lines of Python | ~72,000 |
+| Test files | 81 |
+| Tests | 339 |
+| CLI subcommands | 31 |
 | Simulated enterprise surfaces | ~15 major (Slack, Mail, Browser, Docs, Tickets, CRM, ERP, Identity, ServiceDesk, SIEM, HRIS, PagerDuty, Feature Flags, Spreadsheet, Calendar) |
 | Built-in company verticals | 4 |
 | Scenario variants | ~25 |
