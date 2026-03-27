@@ -17,6 +17,7 @@ from vei.cli.vei_llm_test import app as llm_test_app
 from vei.cli.vei_pack import app as pack_app
 from vei.cli.vei_pilot import app as pilot_app
 from vei.cli.vei_project import app as project_app
+from vei.cli.vei_quickstart import app as quickstart_app
 from vei.cli.vei_release import app as release_app
 from vei.cli.vei_report import app as report_app
 from vei.cli.vei_rollout import app as rollout_app
@@ -41,6 +42,7 @@ app = typer.Typer(
 )
 
 app.add_typer(project_app, name="project")
+app.add_typer(quickstart_app, name="quickstart")
 app.add_typer(context_app, name="context")
 app.add_typer(contract_app, name="contract")
 app.add_typer(dataset_app, name="dataset")

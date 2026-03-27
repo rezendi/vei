@@ -35,6 +35,11 @@ class JiraContextProvider:
         issues = _fetch_issues(base_url, headers, timeout, jql=jql, limit=limit)
         projects = _fetch_projects(base_url, headers, timeout)
 
+        for issue in issues[:10]:
+            issue["transitions"] = _fetch_transitions(
+                base_url, headers, timeout, issue["ticket_id"]
+            )
+
         return ContextSourceResult(
             provider="jira",
             captured_at=iso_now(),
@@ -58,31 +63,78 @@ def _fetch_issues(
     jql: str,
     limit: int,
 ) -> List[Dict[str, Any]]:
-    url = join_url(
-        base_url,
-        f"/rest/api/3/search?jql={jql}&maxResults={limit}"
-        "&fields=summary,status,assignee,description,issuetype,priority,updated",
-    )
-    result = api_get_json(url, headers=headers, timeout_s=timeout)
-    raw_issues = result.get("issues", []) if isinstance(result, dict) else []
     issues: List[Dict[str, Any]] = []
-    for issue in raw_issues:
-        if not isinstance(issue, dict):
-            continue
-        fields = issue.get("fields") or {}
-        issues.append(
-            {
-                "ticket_id": str(issue.get("key", "")),
-                "title": str(fields.get("summary", "")),
-                "status": _nested_name(fields.get("status")),
-                "assignee": _nested_name(fields.get("assignee"), key="displayName"),
-                "description": _adf_to_text(fields.get("description")),
-                "issue_type": _nested_name(fields.get("issuetype")),
-                "priority": _nested_name(fields.get("priority")),
-                "updated": str(fields.get("updated", "")),
-            }
+    start_at = 0
+    while len(issues) < limit:
+        page_size = min(50, limit - len(issues))
+        url = join_url(
+            base_url,
+            f"/rest/api/3/search?jql={jql}&maxResults={page_size}&startAt={start_at}"
+            "&fields=summary,status,assignee,description,issuetype,priority,updated,comment",
         )
-    return issues
+        result = api_get_json(url, headers=headers, timeout_s=timeout)
+        raw_issues = result.get("issues", []) if isinstance(result, dict) else []
+        if not raw_issues:
+            break
+        for issue in raw_issues:
+            if not isinstance(issue, dict):
+                continue
+            fields = issue.get("fields") or {}
+            comments_data = fields.get("comment", {})
+            comments = _extract_comments(comments_data)
+            issues.append(
+                {
+                    "ticket_id": str(issue.get("key", "")),
+                    "title": str(fields.get("summary", "")),
+                    "status": _nested_name(fields.get("status")),
+                    "assignee": _nested_name(fields.get("assignee"), key="displayName"),
+                    "description": _adf_to_text(fields.get("description")),
+                    "issue_type": _nested_name(fields.get("issuetype")),
+                    "priority": _nested_name(fields.get("priority")),
+                    "updated": str(fields.get("updated", "")),
+                    "comments": comments,
+                }
+            )
+        total = result.get("total", 0) if isinstance(result, dict) else 0
+        start_at += len(raw_issues)
+        if start_at >= total:
+            break
+    return issues[:limit]
+
+
+def _fetch_transitions(
+    base_url: str,
+    headers: Dict[str, str],
+    timeout: int,
+    issue_key: str,
+) -> List[Dict[str, Any]]:
+    url = join_url(base_url, f"/rest/api/3/issue/{issue_key}/transitions")
+    try:
+        result = api_get_json(url, headers=headers, timeout_s=timeout)
+    except Exception:
+        return []
+    raw = result.get("transitions", []) if isinstance(result, dict) else []
+    return [
+        {"id": str(t.get("id", "")), "name": str(t.get("name", ""))}
+        for t in raw
+        if isinstance(t, dict)
+    ]
+
+
+def _extract_comments(comment_data: Any) -> List[Dict[str, Any]]:
+    if not isinstance(comment_data, dict):
+        return []
+    raw = comment_data.get("comments", [])
+    return [
+        {
+            "id": str(c.get("id", "")),
+            "author": _nested_name(c.get("author"), key="displayName"),
+            "body": _adf_to_text(c.get("body")),
+            "created": str(c.get("created", "")),
+        }
+        for c in raw
+        if isinstance(c, dict)
+    ]
 
 
 def _fetch_projects(

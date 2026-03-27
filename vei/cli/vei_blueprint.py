@@ -297,5 +297,68 @@ def facades(
     )
 
 
+@app.command("generate")
+def generate_command(
+    prompt: str = typer.Option(
+        ..., help="Natural language description of the company, tools, and scenario"
+    ),
+    provider: str = typer.Option(
+        "openai", help="LLM provider: openai|anthropic|google"
+    ),
+    model: str = typer.Option("gpt-4o", help="Model name"),
+    output: Optional[str] = typer.Option(
+        None, help="Output path for the generated blueprint JSON"
+    ),
+    indent: int = typer.Option(2, help="Pretty indent"),
+) -> None:
+    """Generate a VEI blueprint from a natural language description using an LLM."""
+
+    from vei.blueprint.llm_generate import generate_blueprint_from_prompt
+
+    try:
+        asset = generate_blueprint_from_prompt(prompt, provider=provider, model=model)
+    except Exception as exc:
+        raise typer.BadParameter(f"LLM generation failed: {exc}") from exc
+
+    payload = asset.model_dump(mode="json")
+    if output:
+        from pathlib import Path
+
+        out_path = Path(output).expanduser().resolve()
+        out_path.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
+        typer.echo(f"  wrote {out_path}")
+    else:
+        typer.echo(json.dumps(payload, indent=indent))
+
+
+@app.command("scaffold")
+def scaffold_command(
+    openapi: str = typer.Option(..., help="Path to an OpenAPI spec (JSON or YAML)"),
+    name: Optional[str] = typer.Option(
+        None, help="Service name override (inferred from spec title if omitted)"
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        help="Output directory for generated files (prints to stdout if omitted)",
+    ),
+    indent: int = typer.Option(2, help="Pretty indent"),
+) -> None:
+    """Scaffold a VEI blueprint + router stubs from an OpenAPI spec."""
+
+    from vei.blueprint.scaffold import scaffold_from_openapi
+
+    result = scaffold_from_openapi(openapi, service_name=name, output_dir=output)
+    if output:
+        for path in result["files_written"]:
+            typer.echo(f"  wrote {path}")
+    else:
+        payload = {
+            "blueprint_asset": result["blueprint_asset"].model_dump(mode="json"),
+            "model_stubs": result["model_stubs"],
+            "router_stubs": result["router_stubs"],
+        }
+        typer.echo(json.dumps(payload, indent=indent))
+
+
 if __name__ == "__main__":
     app()
