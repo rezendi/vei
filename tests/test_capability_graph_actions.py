@@ -4,6 +4,7 @@ from vei.blueprint.api import (
     build_blueprint_asset_for_example,
     create_world_session_from_blueprint,
 )
+from vei.verticals import build_vertical_blueprint_asset
 from vei.world.api import create_world_session, get_catalog_scenario
 
 
@@ -72,3 +73,26 @@ def test_revenue_ops_graph_plan_and_explicit_rollout_action() -> None:
     flags = {row["flag_key"]: row for row in result.graph["flags"]}
     assert flags["checkout_v2"]["rollout_pct"] == 0
     assert "feature_flags" in result.next_focuses
+
+
+def test_service_ops_graph_plan_stays_on_service_story() -> None:
+    asset = build_vertical_blueprint_asset("service_ops")
+    session = create_world_session_from_blueprint(asset, seed=17)
+
+    plan = session.graph_plan(domain="ops_graph", limit=8)
+
+    step_ids = [step.step_id for step in plan.suggested_steps]
+    dispatch_steps = [
+        step
+        for step in plan.suggested_steps
+        if step.action == "assign_dispatch"
+        and step.args.get("work_order_id") == "WO-CFS-100"
+    ]
+
+    assert "service_ops" in plan.next_focuses
+    assert "feature_flags" not in plan.next_focuses
+    assert all(
+        not step.tool.startswith("feature_flags.") for step in plan.suggested_steps
+    )
+    assert len(step_ids) == len(set(step_ids))
+    assert len(dispatch_steps) == 1
