@@ -215,6 +215,15 @@ class TestAssignDispatch:
         assert sim.technicians["T1"].get("current_appointment_id") is None
         assert sim.technicians["T4"]["current_appointment_id"] == "APT1"
 
+    def test_busy_technician_rejected(self):
+        sim = _sim()
+        sim.appointments["APT2"]["technician_id"] = "T1"
+        sim.appointments["APT2"]["dispatch_status"] = "assigned"
+        sim.appointments["APT2"]["status"] = "scheduled"
+        sim.technicians["T1"]["current_appointment_id"] = "APT2"
+
+        _expect_mcp("service_ops.technician_busy", sim.assign_dispatch, "WO1", "T1")
+
 
 class TestRescheduleDispatch:
     def test_reschedule_within_limit(self):

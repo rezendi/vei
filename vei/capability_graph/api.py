@@ -209,9 +209,9 @@ def build_graph_action_plan(
     max_steps = max(1, int(limit))
     trimmed_steps = steps[:max_steps]
     next_focuses = _unique(
-        _focus_for_domain(step.domain)
+        _focus_for_plan_step(step)
         for step in trimmed_steps
-        if _focus_for_domain(step.domain)
+        if _focus_for_plan_step(step)
     )
     return CapabilityGraphPlan(
         branch=state.branch,
@@ -1235,6 +1235,7 @@ def _ops_steps(
     if graph is None:
         return []
     steps: list[CapabilityGraphPlanStep] = []
+    planned_dispatch_work_orders: set[str] = set()
     for flag in graph.flags:
         if flag.enabled and flag.rollout_pct > 50 and "kill" not in flag.flag_key:
             target_rollout = (
@@ -1295,6 +1296,8 @@ def _ops_steps(
             issue.type.lower() in {"technician_unavailable", "sla_risk", "dispatch_gap"}
             and work_order is not None
         ):
+            if work_order.work_order_id in planned_dispatch_work_orders:
+                continue
             required_skill = (work_order.required_skill or "").strip().lower()
             matching_technician = next(
                 (
@@ -1326,6 +1329,7 @@ def _ops_steps(
                         tags=["dispatch", "sla"],
                     )
                 )
+                planned_dispatch_work_orders.add(work_order.work_order_id)
                 continue
         steps.append(
             _plan_step(
@@ -1943,6 +1947,20 @@ def _focus_for_domain(domain: CapabilityDomain) -> Optional[str]:
     return _DOMAIN_FOCUS.get(domain)
 
 
+def _focus_for_plan_step(step: CapabilityGraphPlanStep) -> Optional[str]:
+    tool_focus = _focus_for_tool(step.tool)
+    if tool_focus is not None:
+        return tool_focus
+    return _focus_for_domain(step.domain)
+
+
+def _focus_for_tool(tool: Optional[str]) -> Optional[str]:
+    if not tool:
+        return None
+    tool_prefix = tool.strip().lower().split(".", 1)[0]
+    return _TOOL_FOCUS.get(tool_prefix)
+
+
 def _schema(
     *,
     domain: CapabilityDomain,
@@ -2445,10 +2463,14 @@ _DOMAIN_FOCUS = {
     "revenue_graph": "crm",
     "data_graph": "spreadsheet",
     "obs_graph": "pagerduty",
-    "ops_graph": "feature_flags",
     "property_graph": "property",
     "campaign_graph": "campaign",
     "inventory_graph": "inventory",
+}
+
+_TOOL_FOCUS = {
+    "feature_flags": "feature_flags",
+    "service_ops": "service_ops",
 }
 
 

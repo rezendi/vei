@@ -473,6 +473,7 @@ def _b2b_saas_scenario(name: str, slack_msg: str) -> Scenario:
 def _service_ops_scenario(name: str, slack_msg: str) -> Scenario:
     return Scenario(
         slack_initial_message=slack_msg,
+        feature_flags={"flags": {}},
         metadata={
             "benchmark_family": "service_ops",
             "scenario_type": "vertical_demo",
