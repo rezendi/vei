@@ -164,6 +164,16 @@ class ServiceOpsSim:
                 "service_ops.technician_unavailable",
                 f"Technician {technician_id} is not available for dispatch",
             )
+        active_appointment_id = self._find_active_appointment_for_technician(
+            technician_id,
+            exclude_appointment_id=resolved_appointment_id,
+        )
+        if active_appointment_id is not None:
+            raise MCPError(
+                "service_ops.technician_busy",
+                f"Technician {technician_id} is already assigned to appointment "
+                f"{active_appointment_id}",
+            )
 
         previous_technician_id = appointment.get("technician_id")
         if previous_technician_id and previous_technician_id in self.technicians:
@@ -299,6 +309,38 @@ class ServiceOpsSim:
         "sla_risk",
         "schedule_collision",
     }
+
+    def _find_active_appointment_for_technician(
+        self,
+        technician_id: str,
+        *,
+        exclude_appointment_id: str,
+    ) -> Optional[str]:
+        technician = self.technicians.get(technician_id, {})
+        current_appointment_id = str(technician.get("current_appointment_id") or "")
+        if current_appointment_id and current_appointment_id != exclude_appointment_id:
+            current_appointment = self.appointments.get(current_appointment_id)
+            if current_appointment is None or self._appointment_is_active(
+                current_appointment
+            ):
+                return current_appointment_id
+
+        for appointment_id, appointment in self.appointments.items():
+            if appointment_id == exclude_appointment_id:
+                continue
+            if str(appointment.get("technician_id") or "") != technician_id:
+                continue
+            if self._appointment_is_active(appointment):
+                return appointment_id
+        return None
+
+    @staticmethod
+    def _appointment_is_active(appointment: Dict[str, Any]) -> bool:
+        status = str(appointment.get("status", "")).lower()
+        if status in {"cancelled", "completed", "closed", "resolved"}:
+            return False
+        dispatch_status = str(appointment.get("dispatch_status", "")).lower()
+        return dispatch_status not in {"cancelled", "completed", "closed", "resolved"}
 
     def _resolve_related_exceptions(
         self,

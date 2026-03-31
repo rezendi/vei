@@ -448,13 +448,11 @@ def materialize_scenario_from_blueprint(asset: BlueprintAsset) -> Scenario:
         )
     if asset.capability_graphs is not None and asset.capability_graphs.ops_graph:
         ops_graph = asset.capability_graphs.ops_graph
-        if ops_graph.flags:
-            scenario.feature_flags = {
-                "flags": {
-                    item.flag_key: item.model_dump(mode="json")
-                    for item in ops_graph.flags
-                }
+        scenario.feature_flags = {
+            "flags": {
+                item.flag_key: item.model_dump(mode="json") for item in ops_graph.flags
             }
+        }
         scenario.service_ops = {
             "customers": [item.model_dump(mode="json") for item in ops_graph.customers],
             "work_orders": [
