@@ -482,7 +482,7 @@ def _build_snippets(manifest: PilotManifest) -> list[PilotSnippet]:
         f"curl -X POST -H 'Authorization: Bearer {manifest.bearer_token}' "
         "-H 'Content-Type: application/json' "
         f"'{manifest.gateway_url}/api/mirror/agents' "
-        "-d '{\"agent_id\":\"starter-agent\",\"name\":\"starter-agent\",\"mode\":\"proxy\"}'"
+        '-d \'{"agent_id":"starter-agent","name":"starter-agent","mode":"proxy"}\''
     )
     slack_curl = (
         f"curl -H 'Authorization: Bearer {manifest.bearer_token}' "
