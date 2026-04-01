@@ -218,3 +218,33 @@ def test_diff_cross_run_snapshots_detects_changes(tmp_path: Path) -> None:
     assert isinstance(diff["added"], dict)
     assert isinstance(diff["removed"], dict)
     assert isinstance(diff["changed"], dict)
+
+
+def test_diff_cross_run_snapshots_ignores_run_local_branch_metadata(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+
+    run_a = launch_workspace_run(root, runner="workflow", run_id="cross-a")
+    run_b = launch_workspace_run(root, runner="workflow", run_id="cross-b")
+
+    snaps_a = list_run_snapshots(root, run_a.run_id)
+    snaps_b = list_run_snapshots(root, run_b.run_id)
+    assert snaps_a and snaps_b
+
+    diff = diff_cross_run_snapshots(
+        root,
+        run_a.run_id,
+        snaps_a[-1].snapshot_id,
+        run_b.run_id,
+        snaps_b[-1].snapshot_id,
+    )
+
+    assert "branch" not in diff["changed"]
+    assert "audit_state.state.meta.branch" not in diff["changed"]
+    assert diff["changed"] == {}

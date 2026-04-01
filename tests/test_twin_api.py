@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import sleep
 from threading import Event, Thread
 
 from fastapi.testclient import TestClient
@@ -198,6 +199,43 @@ def test_service_ops_twin_mirror_demo_exposes_agents_and_generates_activity(
 
         runtime_payload = client.get("/api/twin").json()
         assert runtime_payload["runtime"]["request_count"] >= 1
+
+
+def test_workspace_mirror_marks_autoplay_stopped_after_demo_finishes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "service_ops_autoplay_status"
+    bundle = build_customer_twin(
+        root,
+        snapshot=_sample_snapshot(),
+        organization_domain="clearwater.example.com",
+        mold=ContextMoldConfig(archetype="service_ops"),
+        mirror_config=default_mirror_workspace_config(
+            demo_mode=True,
+            autoplay=True,
+            demo_interval_ms=250,
+            hero_world="service_ops",
+        ),
+    )
+    auth_headers = {"Authorization": f"Bearer {bundle.gateway.auth_token}"}
+
+    with (
+        TestClient(create_twin_gateway_app(root)) as gateway_client,
+        TestClient(create_ui_app(root)) as ui_client,
+    ):
+        for _ in range(20):
+            mirror = gateway_client.get("/api/mirror", headers=auth_headers).json()
+            if mirror["pending_demo_steps"] == 0:
+                break
+            sleep(0.2)
+
+        gateway_mirror = gateway_client.get("/api/mirror", headers=auth_headers).json()
+        workspace_mirror = ui_client.get("/api/workspace/mirror").json()
+
+        assert gateway_mirror["pending_demo_steps"] == 0
+        assert gateway_mirror["autoplay_running"] is False
+        assert workspace_mirror["pending_demo_steps"] == 0
+        assert workspace_mirror["autoplay_running"] is False
 
 
 def test_mirror_ingest_event_updates_history_and_slack_surface(
