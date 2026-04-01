@@ -90,13 +90,16 @@ def quickstart_command(
 
     # --- 2. Build twin bundle for gateway ----------------------------------------
     console.print("[dim]Building twin gateway bundle...[/dim]")
-    _ensure_twin_bundle(
-        root,
-        world,
-        connector_mode=connector_mode,
-        mirror_demo=mirror_demo,
-        mirror_demo_interval_ms=mirror_demo_interval_ms,
-    )
+    try:
+        _ensure_twin_bundle(
+            root,
+            world,
+            connector_mode=connector_mode,
+            mirror_demo=mirror_demo,
+            mirror_demo_interval_ms=mirror_demo_interval_ms,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     console.print("  [green]Twin gateway bundle ready[/green]")
 
     # --- 3. Launch servers -------------------------------------------------------

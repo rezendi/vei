@@ -337,6 +337,43 @@ def test_workspace_mirror_state_reflects_live_activity(
         assert workspace_mirror["recent_events"][-1]["handled_by"] == "denied"
 
 
+def test_workspace_mirror_uses_current_external_run_only(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "service_ops_current_run"
+    bundle = build_customer_twin(
+        root,
+        snapshot=_sample_snapshot(),
+        organization_domain="clearwater.example.com",
+        mold=ContextMoldConfig(archetype="service_ops"),
+        mirror_config=default_mirror_workspace_config(hero_world="service_ops"),
+    )
+    auth_headers = {"Authorization": f"Bearer {bundle.gateway.auth_token}"}
+
+    with TestClient(create_twin_gateway_app(root)) as first_gateway:
+        register_response = first_gateway.post(
+            "/api/mirror/agents",
+            headers=auth_headers,
+            json={
+                "agent_id": "old-bot",
+                "name": "Old Bot",
+                "mode": "ingest",
+                "allowed_surfaces": ["slack"],
+            },
+        )
+        assert register_response.status_code == 201
+
+    with (
+        TestClient(create_twin_gateway_app(root)),
+        TestClient(create_ui_app(root)) as ui_client,
+    ):
+        mirror = ui_client.get("/api/workspace/mirror").json()
+        assert mirror["config"]["hero_world"] == "service_ops"
+        assert mirror["agents"] == []
+        assert mirror["event_count"] == 0
+        assert mirror["recent_events"] == []
+
+
 def test_registered_proxy_agent_updates_mirror_state_from_gateway_route(
     tmp_path: Path,
 ) -> None:

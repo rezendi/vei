@@ -1842,7 +1842,7 @@ function renderSituationRoom() {
 function renderMirrorFleetPanel() {
   const el = document.getElementById("mirror-fleet-strip");
   if (!el) return;
-  const mirror = state.mirrorStatus || state.activeRun?.metadata?.mirror;
+  const mirror = state.mirrorStatus;
   if (!mirror || !mirror.config) {
     el.innerHTML = "";
     return;
@@ -3781,7 +3781,7 @@ async function refreshActiveRun(
   { connectStream = false, previousSurfaceState = null, preserveSurfaceHighlights = false } = {}
 ) {
   const generation = ++state.refreshGeneration;
-  const [run, timeline, orientation, graphs, snapshots, contract, surfaces] = await Promise.all([
+  const [run, timeline, orientation, graphs, snapshots, contract, surfaces, mirrorStatus] = await Promise.all([
     getJson(`/api/runs/${runId}`),
     getJson(`/api/runs/${runId}/timeline`),
     getJson(`/api/runs/${runId}/orientation`),
@@ -3789,6 +3789,7 @@ async function refreshActiveRun(
     getJson(`/api/runs/${runId}/snapshots`),
     getJson(`/api/runs/${runId}/contract`),
     getJson(`/api/runs/${runId}/surfaces`).catch(() => null),
+    getJson("/api/workspace/mirror").catch(() => null),
   ]);
 
   if (generation !== state.refreshGeneration) return;
@@ -3803,6 +3804,7 @@ async function refreshActiveRun(
   });
   state.snapshots = snapshots;
   state.activeRunContract = contract;
+  state.mirrorStatus = nonEmptyPayload(mirrorStatus);
   await refreshStoryArtifacts();
   await refreshPlayableArtifacts();
   if (state.selectedEventIndex >= timeline.length) {

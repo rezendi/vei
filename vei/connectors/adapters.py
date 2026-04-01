@@ -351,13 +351,19 @@ def _execute_live_backend(request: ConnectorRequest) -> ConnectorResult | None:
 
 
 def _execute_live_slack(request: ConnectorRequest) -> ConnectorResult | None:
+    started = time.perf_counter()
     token = os.environ.get("VEI_LIVE_SLACK_TOKEN", "").strip()
     if not token:
-        return None
+        return _failed_live_result(
+            request,
+            code="slack.live_backend_unavailable",
+            message="VEI_LIVE_SLACK_TOKEN is required for live Slack passthrough",
+            status_code=503,
+            latency_ms=started,
+        )
     base_url = os.environ.get(
         "VEI_LIVE_SLACK_BASE_URL", "https://slack.com/api"
     ).rstrip("/")
-    started = time.perf_counter()
     try:
         if request.operation == "list_channels":
             payload = _perform_live_http_json(
