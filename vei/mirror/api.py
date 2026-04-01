@@ -200,6 +200,7 @@ class MirrorRuntime:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._autoplay_running = False
         self._event_count = 0
         self._last_event_at: str | None = None
         self._agents: dict[str, MirrorAgentSpec] = {}
@@ -216,7 +217,7 @@ class MirrorRuntime:
                 event_count=self._event_count,
                 pending_demo_steps=len(self._demo_steps),
                 last_event_at=self._last_event_at,
-                autoplay_running=bool(self._thread and self._thread.is_alive()),
+                autoplay_running=self._autoplay_running,
                 recent_events=list(self._recent_events),
             )
 
@@ -323,6 +324,8 @@ class MirrorRuntime:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
+        with self._lock:
+            self._autoplay_running = True
         self._thread = threading.Thread(
             target=self._autoplay_loop,
             name="vei-mirror-demo",
@@ -351,16 +354,24 @@ class MirrorRuntime:
 
     def _autoplay_loop(self) -> None:
         interval_s = max(0.25, self.config.demo_interval_ms / 1000.0)
-        while not self._stop.is_set():
-            if not self._demo_steps:
-                return
-            if self._stop.wait(interval_s):
-                return
+        try:
+            while not self._stop.is_set():
+                if not self._demo_steps:
+                    return
+                if self._stop.wait(interval_s):
+                    return
+                try:
+                    self.demo_tick()
+                except Exception:
+                    logger.warning("mirror autoplay tick failed", exc_info=True)
+                    return
+        finally:
+            with self._lock:
+                self._autoplay_running = False
             try:
-                self.demo_tick()
+                self._target.sync_mirror_runtime_state()
             except Exception:
-                logger.warning("mirror autoplay tick failed", exc_info=True)
-                return
+                logger.warning("mirror runtime state sync failed", exc_info=True)
 
 
 def _iso_now() -> str:

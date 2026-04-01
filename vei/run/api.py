@@ -680,6 +680,8 @@ def diff_cross_run_snapshots(
     flat_after: Dict[str, Any] = {}
     _flatten_json("", before.get("data", {}), flat_before)
     _flatten_json("", after.get("data", {}), flat_after)
+    _remove_cross_run_metadata(flat_before)
+    _remove_cross_run_metadata(flat_after)
     keys = sorted(set(flat_before) | set(flat_after))
     return {
         "run_a": run_id_a,
@@ -895,6 +897,11 @@ def _flatten_json(prefix: str, value: Any, out: Dict[str, Any]) -> None:
             _flatten_json(next_prefix, item, out)
         return
     out[prefix] = value
+
+
+def _remove_cross_run_metadata(payload: Dict[str, Any]) -> None:
+    for key in ("branch", "audit_state.state.meta.branch"):
+        payload.pop(key, None)
 
 
 def _contract_summary(
