@@ -59,6 +59,7 @@ const state = {
   surfaceHighlightTimer: null,
   lastMoveImpact: null,
   snapshots: [],
+  snapshotForkError: null,
   selectedEventIndex: 0,
   selectedSnapshotFrom: null,
   selectedSnapshotTo: null,
@@ -117,6 +118,32 @@ async function fetchPlayableArtifacts() {
 
 function el(id) {
   return document.getElementById(id);
+}
+
+function currentSnapshotForkRunId() {
+  const missionRunId = state.missionState?.run_id || null;
+  if (!missionRunId || state.activeRunId !== missionRunId) {
+    return null;
+  }
+  return missionRunId;
+}
+
+async function requestMissionBranch(runId, snapshotId = null) {
+  const body = snapshotId === null ? {} : { snapshot_id: snapshotId };
+  return await getJson(`/api/missions/${encodeURIComponent(runId)}/branch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function activateMissionBranch(payload) {
+  const previousSurfaceState = state.surfaceState;
+  state.snapshotForkError = null;
+  state.missionState = payload;
+  await loadRuns({ selectActiveRun: false });
+  await selectRun(payload.run_id, { previousSurfaceState });
+  state.missionState = payload;
 }
 
 function renderJson(id, payload) {
@@ -1251,6 +1278,15 @@ function renderTimelineView() {
   if (state.compareMode) {
     html += renderCompareTimelines();
     section.innerHTML = html;
+    const pickerA = document.getElementById("compare-picker-a");
+    const pickerB = document.getElementById("compare-picker-b");
+    if (pickerA && pickerB && state.compareRunA && state.compareRunB) {
+      pickerA.value = state.compareRunA.run_id;
+      pickerB.value = state.compareRunB.run_id;
+      pickerA.addEventListener("change", onCompareRunPickerChange);
+      pickerB.addEventListener("change", onCompareRunPickerChange);
+    }
+    document.getElementById("compare-diff-btn")?.addEventListener("click", onCompareDiffClick);
     return;
   }
 
@@ -1366,6 +1402,25 @@ function showTimelineDetail(eventIndex) {
   existing.querySelector(".tl-detail-close")?.addEventListener("click", () => { existing.style.display = "none"; });
 }
 
+async function loadCompareRunData(runA, runB) {
+  const [tlA, tlB, contractA, contractB, missionA, missionB] = await Promise.all([
+    getJson(`/api/runs/${runA.run_id}/timeline`),
+    getJson(`/api/runs/${runB.run_id}/timeline`),
+    getJson(`/api/runs/${runA.run_id}/contract`).catch(() => null),
+    getJson(`/api/runs/${runB.run_id}/contract`).catch(() => null),
+    getJson(`/api/missions/state?run_id=${encodeURIComponent(runA.run_id)}`).catch(() => null),
+    getJson(`/api/missions/state?run_id=${encodeURIComponent(runB.run_id)}`).catch(() => null),
+  ]);
+  state.compareRunA = runA;
+  state.compareRunB = runB;
+  state.compareTimelineA = tlA;
+  state.compareTimelineB = tlB;
+  state.compareContractA = contractA;
+  state.compareContractB = contractB;
+  state.compareMissionA = nonEmptyPayload(missionA);
+  state.compareMissionB = nonEmptyPayload(missionB);
+}
+
 async function toggleCompareMode() {
   closeToolbarMenus();
   state.compareMode = !state.compareMode;
@@ -1388,23 +1443,88 @@ async function toggleCompareMode() {
     renderTimelineView();
     return;
   }
-  state.compareRunA = runs[0];
-  state.compareRunB = runs[1];
-  const [tlA, tlB, contractA, contractB, missionA, missionB] = await Promise.all([
-    getJson(`/api/runs/${runs[0].run_id}/timeline`),
-    getJson(`/api/runs/${runs[1].run_id}/timeline`),
-    getJson(`/api/runs/${runs[0].run_id}/contract`).catch(() => null),
-    getJson(`/api/runs/${runs[1].run_id}/contract`).catch(() => null),
-    getJson(`/api/missions/state?run_id=${encodeURIComponent(runs[0].run_id)}`).catch(() => null),
-    getJson(`/api/missions/state?run_id=${encodeURIComponent(runs[1].run_id)}`).catch(() => null),
-  ]);
-  state.compareTimelineA = tlA;
-  state.compareTimelineB = tlB;
-  state.compareContractA = contractA;
-  state.compareContractB = contractB;
-  state.compareMissionA = nonEmptyPayload(missionA);
-  state.compareMissionB = nonEmptyPayload(missionB);
+  await loadCompareRunData(runs[0], runs[1]);
   renderTimelineView();
+}
+
+async function onCompareRunPickerChange() {
+  const selA = document.getElementById("compare-picker-a");
+  const selB = document.getElementById("compare-picker-b");
+  if (!selA || !selB) return;
+  const runs = state.runs || [];
+  const runA = runs.find((r) => r.run_id === selA.value);
+  const runB = runs.find((r) => r.run_id === selB.value);
+  if (!runA || !runB || runA.run_id === runB.run_id) return;
+  await loadCompareRunData(runA, runB);
+  renderTimelineView();
+}
+
+async function onCompareDiffClick() {
+  const container = document.getElementById("compare-diff-result");
+  if (!container) return;
+  const runA = state.compareRunA;
+  const runB = state.compareRunB;
+  if (!runA || !runB) {
+    container.innerHTML = `<p class="metric-detail">Select two runs to diff.</p>`;
+    return;
+  }
+  container.innerHTML = `<p class="metric-detail">Loading diff...</p>`;
+  try {
+    const snapsA = runA.snapshots || [];
+    const snapsB = runB.snapshots || [];
+    const snapA = snapsA.length ? snapsA[snapsA.length - 1].snapshot_id : null;
+    const snapB = snapsB.length ? snapsB[snapsB.length - 1].snapshot_id : null;
+    if (snapA == null || snapB == null) {
+      const [fetchedA, fetchedB] = await Promise.all([
+        getJson(`/api/runs/${runA.run_id}/snapshots`).catch(() => []),
+        getJson(`/api/runs/${runB.run_id}/snapshots`).catch(() => []),
+      ]);
+      const lastA = Array.isArray(fetchedA) && fetchedA.length ? fetchedA[fetchedA.length - 1].snapshot_id : null;
+      const lastB = Array.isArray(fetchedB) && fetchedB.length ? fetchedB[fetchedB.length - 1].snapshot_id : null;
+      if (lastA == null || lastB == null) {
+        container.innerHTML = `<p class="metric-detail">One or both runs have no snapshots.</p>`;
+        return;
+      }
+      const diff = await getJson(`/api/runs/diff-cross?run_a=${encodeURIComponent(runA.run_id)}&snap_a=${lastA}&run_b=${encodeURIComponent(runB.run_id)}&snap_b=${lastB}`);
+      renderCrossRunDiff(container, diff, runA, runB);
+      return;
+    }
+    const diff = await getJson(`/api/runs/diff-cross?run_a=${encodeURIComponent(runA.run_id)}&snap_a=${snapA}&run_b=${encodeURIComponent(runB.run_id)}&snap_b=${snapB}`);
+    renderCrossRunDiff(container, diff, runA, runB);
+  } catch (err) {
+    container.innerHTML = `<p class="metric-detail">Diff failed: ${escapeHtml(String(err))}</p>`;
+  }
+}
+
+function renderCrossRunDiff(container, diff, runA, runB) {
+  const changedCount = Object.keys(diff.changed || {}).length;
+  const addedCount = Object.keys(diff.added || {}).length;
+  const removedCount = Object.keys(diff.removed || {}).length;
+  const nameA = runA.runner || runA.run_id?.split("_").slice(0, 2).join("_") || "A";
+  const nameB = runB.runner || runB.run_id?.split("_").slice(0, 2).join("_") || "B";
+  let html = `<div class="compare-diff-header"><strong>World State Diff</strong> <span class="metric-detail">${escapeHtml(nameA)} vs ${escapeHtml(nameB)}</span></div>`;
+  html += `<div class="detail-grid">`;
+  html += detailTile("Changed", String(changedCount));
+  html += detailTile("Added", String(addedCount));
+  html += detailTile("Removed", String(removedCount));
+  html += `</div>`;
+  if (changedCount + addedCount + removedCount === 0) {
+    html += `<p class="metric-detail">World states are identical.</p>`;
+  } else {
+    const entries = [];
+    for (const [key, val] of Object.entries(diff.changed || {})) {
+      entries.push(`<div class="diff-entry diff-changed"><span class="diff-key">${escapeHtml(key)}</span><span class="diff-val">${escapeHtml(String(val.from))} → ${escapeHtml(String(val.to))}</span></div>`);
+    }
+    for (const [key, val] of Object.entries(diff.added || {})) {
+      entries.push(`<div class="diff-entry diff-added"><span class="diff-key">+ ${escapeHtml(key)}</span><span class="diff-val">${escapeHtml(String(val))}</span></div>`);
+    }
+    for (const [key, val] of Object.entries(diff.removed || {})) {
+      entries.push(`<div class="diff-entry diff-removed"><span class="diff-key">- ${escapeHtml(key)}</span><span class="diff-val">${escapeHtml(String(val))}</span></div>`);
+    }
+    html += `<div class="diff-entries">${entries.slice(0, 50).join("")}</div>`;
+    if (entries.length > 50) html += `<p class="metric-detail">${entries.length - 50} more entries...</p>`;
+  }
+  container.innerHTML = html;
 }
 
 function renderCompareTimelines() {
@@ -1517,11 +1637,26 @@ function renderCompareTimelines() {
   }
   html += `</div>`;
 
+  const allRuns = state.runs || [];
+  const runOptions = allRuns.map((r) => {
+    const label = r.runner || r.run_id?.split("_").slice(0, 2).join("_") || r.run_id;
+    const status = r.status ? ` [${r.status}]` : "";
+    return `<option value="${escapeHtml(r.run_id)}">${escapeHtml(label)}${escapeHtml(status)}</option>`;
+  }).join("");
+
   html += `<div class="tl-compare-header">`;
-  html += `<span class="tl-compare-pill tl-pill-a">${escapeHtml(nameA)} (${stepsA} steps)</span>`;
-  html += `<span class="tl-compare-vs">vs</span>`;
-  html += `<span class="tl-compare-pill tl-pill-b">${escapeHtml(nameB)} (${stepsB} steps)</span>`;
+  if (allRuns.length > 2) {
+    html += `<select id="compare-picker-a" class="compare-run-picker">${runOptions}</select>`;
+    html += `<span class="tl-compare-vs">vs</span>`;
+    html += `<select id="compare-picker-b" class="compare-run-picker">${runOptions}</select>`;
+  } else {
+    html += `<span class="tl-compare-pill tl-pill-a">${escapeHtml(nameA)} (${stepsA} steps)</span>`;
+    html += `<span class="tl-compare-vs">vs</span>`;
+    html += `<span class="tl-compare-pill tl-pill-b">${escapeHtml(nameB)} (${stepsB} steps)</span>`;
+  }
+  html += `<button id="compare-diff-btn" class="compare-diff-btn">Diff world state</button>`;
   html += `</div>`;
+  html += `<div id="compare-diff-result" class="compare-diff-result"></div>`;
   html += `<div class="tl-compare-grid">`;
   html += `<div class="tl-compare-labels"><div class="tl-corner"></div>`;
   for (const s of allSurfaces) {
@@ -1548,6 +1683,7 @@ function renderLivingCompanyView() {
   }
   renderLivingCompanyContext();
   renderSituationRoom();
+  renderMirrorFleetPanel();
   renderLivingCompanyImpact();
   renderSurfaceWall();
   renderLivingCompanyRail();
@@ -1727,6 +1863,80 @@ function renderSituationRoom() {
       <span class="sit-value">${riskLevel}</span>
       <span class="sit-detail">${sc ? `score: ${sc.overall_score}` : ""}</span>
     </div>
+  `;
+}
+
+function renderMirrorFleetPanel() {
+  const el = document.getElementById("mirror-fleet-strip");
+  if (!el) return;
+  const mirror = state.mirrorStatus;
+  if (!mirror || !mirror.config) {
+    el.innerHTML = "";
+    return;
+  }
+  const agents = Array.isArray(mirror.agents) ? mirror.agents : [];
+  if (!agents.length && !mirror.config.demo_mode) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const mode = mirror.config.connector_mode === "live"
+    ? "live"
+    : (mirror.config.demo_mode ? "demo" : "sim");
+  const badgeClass = mode === "live"
+    ? "fleet-badge-live"
+    : (mode === "demo" ? "fleet-badge-demo" : "fleet-badge-sim");
+  const eventCount = mirror.event_count || 0;
+  const pending = mirror.pending_demo_steps || 0;
+  const autoplay = mirror.autoplay_running ? "autoplay" : "manual";
+
+  const agentCards = agents.map((agent) => {
+    const statusClass = `agent-status-${agent.status || "registered"}`;
+    const role = agent.role ? agent.role.replace(/_/g, " ") : agent.mode || "agent";
+    const surfaces = Array.isArray(agent.allowed_surfaces) ? agent.allowed_surfaces.join(", ") : "";
+    const lastAction = agent.last_action ? `<span class="agent-last-action">${escapeHtml(agent.last_action)}</span>` : "";
+    const deniedBadge = (agent.denied_count || 0) > 0
+      ? `<span class="agent-denied-badge">${agent.denied_count} denied</span>`
+      : "";
+    return `
+      <div class="mirror-agent-card">
+        <span class="agent-name">${escapeHtml(agent.name || agent.agent_id)}${deniedBadge}</span>
+        <span class="agent-role">${escapeHtml(role)}${surfaces ? " · " + escapeHtml(surfaces) : ""}</span>
+        <span class="agent-status ${statusClass}">${agent.status || "registered"}</span>
+        ${lastAction}
+      </div>
+    `;
+  }).join("");
+
+  const recentEvents = Array.isArray(mirror.recent_events) ? mirror.recent_events : [];
+  let eventFeedHtml = "";
+  if (recentEvents.length > 0) {
+    const feedItems = recentEvents.slice(-10).reverse().map((evt) => {
+      const denied = evt.handled_by === "denied";
+      const cls = denied ? "mirror-feed-item mirror-feed-denied" : "mirror-feed-item";
+      const label = evt.label || evt.tool || "event";
+      return `<div class="${cls}"><span class="feed-agent">${escapeHtml(evt.agent_id)}</span><span class="feed-label">${escapeHtml(label)}</span>${denied ? '<span class="feed-denied-tag">denied</span>' : ""}</div>`;
+    }).join("");
+    eventFeedHtml = `
+      <details class="mirror-event-feed">
+        <summary class="mirror-feed-toggle">Mirror Activity (${recentEvents.length})</summary>
+        <div class="mirror-feed-list">${feedItems}</div>
+      </details>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="mirror-fleet-header">
+      <span class="fleet-label">Agent Fleet</span>
+      <span class="fleet-badge ${badgeClass}">${mode} mode</span>
+    </div>
+    ${agentCards}
+    <div class="mirror-fleet-stats">
+      <span class="stat-label">Events</span>
+      <span class="stat-value">${eventCount}</span>
+      <span class="stat-detail">${pending ? pending + " queued" : autoplay}</span>
+    </div>
+    ${eventFeedHtml}
   `;
 }
 
@@ -3125,9 +3335,23 @@ function renderSnapshots() {
   const rail = document.getElementById("snapshots-panel");
   const fromSelect = document.getElementById("snapshot-from-select");
   const toSelect = document.getElementById("snapshot-to-select");
+  const forkRunId = currentSnapshotForkRunId();
   rail.innerHTML = "";
   fromSelect.innerHTML = "";
   toSelect.innerHTML = "";
+
+  if (state.snapshotForkError) {
+    rail.insertAdjacentHTML(
+      "beforeend",
+      `<p class="metric-detail">${escapeHtml(state.snapshotForkError)}</p>`
+    );
+  }
+  if (!forkRunId) {
+    rail.insertAdjacentHTML(
+      "beforeend",
+      `<p class="metric-detail">Forking is only available on the current playable mission run.</p>`
+    );
+  }
 
   for (const snapshot of snapshots) {
     const card = document.createElement("div");
@@ -3142,8 +3366,27 @@ function renderSnapshots() {
         ${chip(`id=${snapshot.snapshot_id}`)}
         ${chip(`t=${formatMs(snapshot.time_ms)}`)}
       </div>
+      ${
+        forkRunId
+          ? `<button class="fork-from-btn" data-snapshot-id="${snapshot.snapshot_id}">Fork from here</button>`
+          : ""
+      }
     `;
     rail.appendChild(card);
+    card.querySelector(".fork-from-btn")?.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const snapId = parseInt(e.target.dataset.snapshotId, 10);
+      try {
+        const result = await requestMissionBranch(forkRunId, snapId);
+        if (result?.run_id) {
+          await activateMissionBranch(result);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        state.snapshotForkError = `Fork failed: ${message}`;
+        renderSnapshots();
+      }
+    });
 
     for (const select of [fromSelect, toSelect]) {
       const option = document.createElement("option");
@@ -3221,7 +3464,7 @@ function togglePlayback() {
 }
 
 async function loadWorkspace() {
-  const [workspace, storyArtifacts, exerciseArtifacts, playableArtifacts, scenarios, importSummary, identityFlow, importSources, importNormalization, importReview, generatedImportScenarios, provenanceIndex] = await Promise.all([
+  const [workspace, storyArtifacts, exerciseArtifacts, playableArtifacts, scenarios, importSummary, identityFlow, importSources, importNormalization, importReview, generatedImportScenarios, provenanceIndex, mirrorStatus] = await Promise.all([
     getJson("/api/workspace"),
     fetchStoryArtifacts(),
     fetchExerciseArtifacts(),
@@ -3234,8 +3477,10 @@ async function loadWorkspace() {
     getJson("/api/imports/review").catch(() => ({})),
     getJson("/api/imports/scenarios").catch(() => []),
     getJson("/api/imports/provenance").catch(() => []),
+    getJson("/api/workspace/mirror").catch(() => ({})),
   ]);
   state.workspace = workspace;
+  state.mirrorStatus = mirrorStatus;
   state.story = nonEmptyPayload(storyArtifacts.story);
   state.exercise = nonEmptyPayload(exerciseArtifacts.exercise);
   state.exportsPreview = storyArtifacts.exportsPreview;
@@ -3516,15 +3761,8 @@ async function branchMission() {
   status.textContent = "Creating branch...";
   state.lastMoveImpact = null;
   try {
-    const payload = await getJson(`/api/missions/${state.missionState.run_id}/branch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    state.missionState = payload;
-    await loadRuns({ selectActiveRun: false });
-    await selectRun(payload.run_id, { previousSurfaceState: state.surfaceState });
-    state.missionState = payload;
+    const payload = await requestMissionBranch(state.missionState.run_id);
+    await activateMissionBranch(payload);
     status.textContent = `Branch ${payload.branch_name} is live.`;
     setStudioView("outcome");
   } catch (error) {
@@ -3582,7 +3820,7 @@ async function refreshActiveRun(
   { connectStream = false, previousSurfaceState = null, preserveSurfaceHighlights = false } = {}
 ) {
   const generation = ++state.refreshGeneration;
-  const [run, timeline, orientation, graphs, snapshots, contract, surfaces] = await Promise.all([
+  const [run, timeline, orientation, graphs, snapshots, contract, surfaces, mirrorStatus] = await Promise.all([
     getJson(`/api/runs/${runId}`),
     getJson(`/api/runs/${runId}/timeline`),
     getJson(`/api/runs/${runId}/orientation`),
@@ -3590,6 +3828,7 @@ async function refreshActiveRun(
     getJson(`/api/runs/${runId}/snapshots`),
     getJson(`/api/runs/${runId}/contract`),
     getJson(`/api/runs/${runId}/surfaces`).catch(() => null),
+    getJson("/api/workspace/mirror").catch(() => null),
   ]);
 
   if (generation !== state.refreshGeneration) return;
@@ -3604,6 +3843,7 @@ async function refreshActiveRun(
   });
   state.snapshots = snapshots;
   state.activeRunContract = contract;
+  state.mirrorStatus = nonEmptyPayload(mirrorStatus);
   await refreshStoryArtifacts();
   await refreshPlayableArtifacts();
   if (state.selectedEventIndex >= timeline.length) {
@@ -3646,6 +3886,9 @@ function connectRunStream(runId) {
 }
 
 async function selectRun(runId, options = {}) {
+  if (state.activeRunId !== runId) {
+    state.snapshotForkError = null;
+  }
   state.activeRunId = runId;
   renderRuns();
   await refreshActiveRun(runId, { connectStream: true, ...options });

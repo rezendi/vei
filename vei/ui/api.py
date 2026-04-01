@@ -33,6 +33,7 @@ from vei.pilot import (
 )
 from vei.run.api import (
     build_run_timeline,
+    diff_cross_run_snapshots,
     diff_run_snapshots,
     generate_run_id,
     get_run_capability_graphs,
@@ -110,6 +111,7 @@ class MissionStartRequest(BaseModel):
 
 class MissionBranchRequest(BaseModel):
     branch_name: str | None = None
+    snapshot_id: int | None = None
 
 
 class ContextCaptureRequest(BaseModel):
@@ -168,6 +170,26 @@ def _context_capture_org_name(workspace_root: Path) -> str:
     return workspace.manifest.title or workspace.manifest.name or "Unknown"
 
 
+def _load_workspace_mirror_payload(root: Path) -> dict[str, Any]:
+    twin_path = root / "twin_manifest.json"
+    fallback: dict[str, Any] = {}
+    if twin_path.exists():
+        try:
+            data = json.loads(twin_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            data = {}
+        fallback = dict(data.get("metadata", {}).get("mirror", {}) or {})
+
+    for manifest in list_run_manifests(root):
+        if manifest.runner != "external" or manifest.status != "running":
+            continue
+        mirror = manifest.metadata.get("mirror", {})
+        if isinstance(mirror, dict):
+            return dict(mirror)
+        return fallback
+    return fallback
+
+
 def create_ui_app(workspace_root: str | Path) -> FastAPI:
     root = Path(workspace_root).expanduser().resolve()
     static_dir = Path(__file__).with_name("static")
@@ -190,6 +212,10 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
     @app.get("/api/workspace")
     def api_workspace() -> JSONResponse:
         return JSONResponse(show_workspace(root).model_dump(mode="json"))
+
+    @app.get("/api/workspace/mirror")
+    def api_workspace_mirror() -> JSONResponse:
+        return JSONResponse(_load_workspace_mirror_payload(root))
 
     @app.get("/api/story")
     def api_story() -> JSONResponse:
@@ -346,6 +372,7 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
                 root,
                 run_id=run_id,
                 branch_name=request.branch_name,
+                snapshot_id=request.snapshot_id,
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -535,6 +562,16 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
             {"ok": True, "run_id": resolved_run_id, "runner": normalized_runner}
         )
 
+    @app.get("/api/runs/diff-cross")
+    def api_runs_diff_cross(
+        run_a: str, snap_a: int, run_b: str, snap_b: int
+    ) -> JSONResponse:
+        try:
+            payload = diff_cross_run_snapshots(root, run_a, snap_a, run_b, snap_b)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload)
+
     @app.get("/api/runs/{run_id}")
     def api_run(run_id: str) -> JSONResponse:
         path = get_workspace_run_manifest_path(root, run_id)
@@ -595,9 +632,11 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/diff")
     def api_run_diff(run_id: str, snapshot_from: int, snapshot_to: int) -> JSONResponse:
-        return JSONResponse(
-            diff_run_snapshots(root, run_id, snapshot_from, snapshot_to)
-        )
+        try:
+            payload = diff_run_snapshots(root, run_id, snapshot_from, snapshot_to)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload)
 
     @app.get("/api/runs/{run_id}/stream")
     async def api_run_stream(run_id: str) -> StreamingResponse:
