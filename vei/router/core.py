@@ -8,18 +8,22 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from pydantic import BaseModel
-from vei.blueprint.plugins import FacadePlugin, list_runtime_facade_plugins
+from vei.blueprint import FacadePlugin, list_runtime_facade_plugins
 from vei.connectors import (
     ConnectorInvocationError,
     create_default_runtime,
     parse_adapter_mode,
 )
-from vei.world.scenario import Scenario
-from vei.world.scenarios import load_from_env
-from vei.monitors.manager import MonitorManager
+from vei.monitors import MonitorManager
 from vei.policy import DEFAULT_RULES, PolicyEngine, PromoteMonitorRule
-from vei.world.drift import DriftEngine
-from vei.world.state import Event as StateEvent, StateStore
+from vei.world import (
+    DriftEngine,
+    Event as StateEvent,
+    ReplayAdapter,
+    Scenario,
+    StateStore,
+    load_from_env,
+)
 from .alias_packs import CRM_ALIAS_PACKS, ERP_ALIAS_PACKS
 from .calendar import CalendarSim
 from .datadog import DatadogSim, DatadogToolProvider
@@ -80,7 +84,7 @@ class Router:
             (v.level if hasattr(v, "level") else v.get("level")) == "L2"
             for v in self._surface_fidelity.values()
         ):
-            from vei.blueprint.fidelity import L2Store
+            from vei.blueprint import L2Store
 
             self._l2_store = L2Store()
         self.bus = EventBus(seed)
@@ -151,7 +155,6 @@ class Router:
         if dataset_path:
             try:
                 from vei.data.models import VEIDataset
-                from vei.world.replay import ReplayAdapter
                 import json
 
                 data = json.loads(Path(dataset_path).read_text(encoding="utf-8"))
@@ -1661,7 +1664,7 @@ class Router:
         """Return an intercepted response for L1/L2 surfaces, or None for L3."""
         if not self._surface_fidelity or tool.startswith("vei."):
             return None
-        from vei.blueprint.fidelity import resolve_surface
+        from vei.blueprint import resolve_surface
 
         surface = resolve_surface(tool)
         spec = self._surface_fidelity.get(surface)
@@ -1671,7 +1674,7 @@ class Router:
         if level == "L3":
             return None
         if level == "L1":
-            from vei.blueprint.fidelity import l1_response
+            from vei.blueprint import l1_response
 
             return l1_response(spec, tool)
         if level == "L2" and self._l2_store is not None:
