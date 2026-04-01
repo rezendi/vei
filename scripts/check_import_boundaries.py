@@ -16,8 +16,8 @@ Exit 0 if clean, 1 if violations found.
 from __future__ import annotations
 
 import ast
-import sys
 from pathlib import Path
+import sys
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "vei"
 
@@ -87,19 +87,8 @@ def check_file(path: Path, *, strict: bool = False) -> list[tuple[str, bool]]:
 
     return violations
 
-
-def _parse_max_violations() -> int | None:
-    for i, arg in enumerate(sys.argv[1:], 1):
-        if arg == "--max-violations" and i < len(sys.argv) - 1:
-            return int(sys.argv[i + 1])
-        if arg.startswith("--max-violations="):
-            return int(arg.split("=", 1)[1])
-    return None
-
-
 def main() -> int:
     strict = "--strict" in sys.argv
-    max_violations = _parse_max_violations()
 
     all_violations: list[tuple[str, bool]] = []
     for py_file in sorted(PACKAGE_ROOT.rglob("*.py")):
@@ -130,19 +119,6 @@ def main() -> int:
             "Cross-module imports must go through api.py. "
             "Use 'from vei.<module>.api import ...' instead."
         )
-
-    if max_violations is not None:
-        if total > max_violations:
-            print(
-                f"\nRatchet FAILED: {total} violations exceeds "
-                f"max allowed ({max_violations}). Fix new violations "
-                f"before merging."
-            )
-            return 1
-        print(
-            f"\nRatchet OK: {total} violations <= {max_violations} max allowed."
-        )
-        return 0
 
     return 1 if total else 0
 

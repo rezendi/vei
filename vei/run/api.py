@@ -17,8 +17,8 @@ from vei.visualization.api import (
     flow_channel_from_tool,
     load_trace,
 )
+from vei.world import StateStore
 from vei.world.models import WorldState
-from vei.world.state import StateStore
 from vei.workspace.api import (
     compile_workspace,
     evaluate_workspace_contract_against_state,

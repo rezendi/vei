@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import threading
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 
 class TraceLogger:
@@ -50,7 +53,7 @@ class TraceLogger:
         try:
             self._q.put_nowait(entry)
         except queue.Full:
-            pass
+            logger.warning("trace stream queue is full; dropping trace entry")
 
     def _poster_loop(self) -> None:
         import urllib.request
@@ -73,7 +76,11 @@ class TraceLogger:
                 with urllib.request.urlopen(req, timeout=1.0) as _:  # nosec B310
                     pass
             except Exception:
-                pass
+                logger.warning(
+                    "trace stream post failed for %s",
+                    self.post_url,
+                    exc_info=True,
+                )
 
     def record_call(
         self, tool: str, args: Dict[str, Any], response: Any, time_ms: int

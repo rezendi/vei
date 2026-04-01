@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from vei.world.state import Event as StateEvent
+from vei.world import Event as StateEvent
 
 FAULT_PROFILES: Dict[str, Dict[str, float]] = {
     "off": {},
