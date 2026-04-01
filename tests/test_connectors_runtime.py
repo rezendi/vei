@@ -156,6 +156,27 @@ def test_live_slack_backend_fails_when_local_state_cannot_mirror(
     )
 
 
+def test_live_slack_backend_requires_token_in_live_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VEI_LIVE_ALLOW_WRITE_SAFE", "1")
+    monkeypatch.delenv("VEI_LIVE_SLACK_TOKEN", raising=False)
+
+    router = Router(seed=654, artifacts_dir=None, connector_mode="live")
+    with pytest.raises(MCPError) as exc:
+        router.call_and_step(
+            "slack.send_message",
+            {"channel": "#procurement", "text": "This must hit live Slack."},
+        )
+
+    assert exc.value.code == "slack.live_backend_unavailable"
+    receipt = router.state_snapshot(include_state=False, tool_tail=3)["connectors"][
+        "last_receipt"
+    ]
+    assert receipt["ok"] is False
+    assert receipt["status_code"] == 503
+
+
 def test_live_http_json_rejects_non_http_urls() -> None:
     with pytest.raises(RuntimeError, match="http or https"):
         connector_adapters._perform_live_http_json(

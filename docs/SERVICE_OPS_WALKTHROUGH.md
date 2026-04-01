@@ -203,7 +203,7 @@ vei quickstart run --world service_ops
 vei quickstart run --world service_ops --mirror-demo
 
 # With live connectors (requires VEI_LIVE_SLACK_TOKEN)
-vei quickstart run --world service_ops --mirror-demo --connector-mode live
+vei quickstart run --world service_ops --connector-mode live
 ```
 
 The Studio UI runs on `http://127.0.0.1:3011` and the Twin Gateway on `http://127.0.0.1:3012`.

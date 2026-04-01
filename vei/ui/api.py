@@ -170,6 +170,26 @@ def _context_capture_org_name(workspace_root: Path) -> str:
     return workspace.manifest.title or workspace.manifest.name or "Unknown"
 
 
+def _load_workspace_mirror_payload(root: Path) -> dict[str, Any]:
+    twin_path = root / "twin_manifest.json"
+    fallback: dict[str, Any] = {}
+    if twin_path.exists():
+        try:
+            data = json.loads(twin_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            data = {}
+        fallback = dict(data.get("metadata", {}).get("mirror", {}) or {})
+
+    for manifest in list_run_manifests(root):
+        if manifest.runner != "external" or manifest.status != "running":
+            continue
+        mirror = manifest.metadata.get("mirror", {})
+        if isinstance(mirror, dict):
+            return dict(mirror)
+        return fallback
+    return fallback
+
+
 def create_ui_app(workspace_root: str | Path) -> FastAPI:
     root = Path(workspace_root).expanduser().resolve()
     static_dir = Path(__file__).with_name("static")
@@ -195,21 +215,7 @@ def create_ui_app(workspace_root: str | Path) -> FastAPI:
 
     @app.get("/api/workspace/mirror")
     def api_workspace_mirror() -> JSONResponse:
-        twin_path = root / "twin_manifest.json"
-        if not twin_path.exists():
-            return JSONResponse({})
-        try:
-            data = json.loads(twin_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return JSONResponse({})
-        mirror = data.get("metadata", {}).get("mirror", {})
-        all_manifests = [m.model_dump(mode="json") for m in list_run_manifests(root)]
-        for m in all_manifests:
-            run_mirror = m.get("metadata", {}).get("mirror", {})
-            if run_mirror.get("agents"):
-                mirror = run_mirror
-                break
-        return JSONResponse(mirror)
+        return JSONResponse(_load_workspace_mirror_payload(root))
 
     @app.get("/api/story")
     def api_story() -> JSONResponse:
