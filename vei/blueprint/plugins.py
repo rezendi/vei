@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, TYPE_CHECKING
 from .models import FacadeManifest
 
 if TYPE_CHECKING:
-    from vei.world.scenario import Scenario
+    from vei.world.api import Scenario
 
 
 SummaryBuilder = Callable[[Any, Any], str]

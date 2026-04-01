@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Literal, Optional, TypeVar
+from typing import Any, Dict, Iterable, Iterator, Literal, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -1066,7 +1066,7 @@ def load_or_bootstrap_contract(
 
 
 @contextmanager
-def temporary_env(name: str, value: str | None):
+def temporary_env(name: str, value: str | None) -> Iterator[None]:
     import os
 
     previous = os.environ.get(name)

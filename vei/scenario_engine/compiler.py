@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from vei.world.compiler import compile_scene
-from vei.world.scenario import Scenario
+from vei.world.api import Scenario
 from vei.world.scenarios import generate_scenario, get_scenario
 
 from .models import WorkflowScenarioSpec, WorkflowStepSpec

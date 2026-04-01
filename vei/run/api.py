@@ -4,7 +4,7 @@ import json
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 from uuid import uuid4
 
 from vei.benchmark.api import run_benchmark_case
@@ -901,7 +901,7 @@ def _relative_if_exists(root: Path, path: Path) -> str | None:
 
 
 @contextmanager
-def _temporary_env(name: str, value: str | None):
+def _temporary_env(name: str, value: str | None) -> Iterator[None]:
     import os
 
     previous = os.environ.get(name)

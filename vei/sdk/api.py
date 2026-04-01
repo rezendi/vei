@@ -87,7 +87,7 @@ from vei.release.api import (
 )
 from vei.router.api import RouterAPI, RouterToolProvider
 from vei.scenario_engine.api import compile_workflow
-from vei.scenario_engine.compiler import CompiledWorkflow
+from vei.scenario_engine.api import CompiledWorkflow
 from vei.scenario_engine.models import WorkflowScenarioSpec
 from vei.scenario_runner.api import run_workflow, validate_workflow
 from vei.scenario_runner.models import ScenarioRunResult, ValidationReport
