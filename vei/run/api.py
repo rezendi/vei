@@ -667,6 +667,39 @@ def diff_run_snapshots(
     }
 
 
+def diff_cross_run_snapshots(
+    root: str | Path,
+    run_id_a: str,
+    snapshot_a: int,
+    run_id_b: str,
+    snapshot_b: int,
+) -> Dict[str, Any]:
+    before = load_run_snapshot_payload(root, run_id_a, snapshot_a)
+    after = load_run_snapshot_payload(root, run_id_b, snapshot_b)
+    flat_before: Dict[str, Any] = {}
+    flat_after: Dict[str, Any] = {}
+    _flatten_json("", before.get("data", {}), flat_before)
+    _flatten_json("", after.get("data", {}), flat_after)
+    _remove_cross_run_metadata(flat_before)
+    _remove_cross_run_metadata(flat_after)
+    keys = sorted(set(flat_before) | set(flat_after))
+    return {
+        "run_a": run_id_a,
+        "snapshot_a": snapshot_a,
+        "run_b": run_id_b,
+        "snapshot_b": snapshot_b,
+        "added": {key: flat_after[key] for key in keys if key not in flat_before},
+        "removed": {key: flat_before[key] for key in keys if key not in flat_after},
+        "changed": {
+            key: {"from": flat_before[key], "to": flat_after[key]}
+            for key in keys
+            if key in flat_before
+            and key in flat_after
+            and flat_before[key] != flat_after[key]
+        },
+    }
+
+
 def get_run_orientation(root: str | Path, run_id: str) -> Dict[str, Any]:
     state = _latest_run_state(root, run_id)
     return build_world_orientation(state).model_dump(mode="json")
@@ -864,6 +897,11 @@ def _flatten_json(prefix: str, value: Any, out: Dict[str, Any]) -> None:
             _flatten_json(next_prefix, item, out)
         return
     out[prefix] = value
+
+
+def _remove_cross_run_metadata(payload: Dict[str, Any]) -> None:
+    for key in ("branch", "audit_state.state.meta.branch"):
+        payload.pop(key, None)
 
 
 def _contract_summary(
