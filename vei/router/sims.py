@@ -47,9 +47,18 @@ def _next_slack_ts(channels: Dict[str, Dict[str, Any]]) -> str:
     return str(max((_safe_int(value, 0) for value in raw_values), default=0) + 1)
 
 
+def _builder_environment(scenario: Optional[Scenario]) -> dict[str, Any]:
+    if scenario is None or not isinstance(scenario.metadata, dict):
+        return {}
+    payload = scenario.metadata.get("builder_environment")
+    return payload if isinstance(payload, dict) else {}
+
+
 class SlackSim:
     def __init__(self, bus: "EventBus", scenario: Optional[Scenario] = None):
         self.bus = bus
+        builder_environment = _builder_environment(scenario)
+        strict_empty_slack = bool(builder_environment.get("strict_empty_slack", False))
         if scenario and scenario.budget_cap_usd is not None:
             self.budget_cap_usd = int(scenario.budget_cap_usd)
         else:
@@ -90,6 +99,8 @@ class SlackSim:
                     "messages": messages,
                     "unread": int(base.get("unread", 0)),
                 }
+        elif strict_empty_slack:
+            self.channels = {}
         else:
             self.channels = {
                 "#procurement": {
@@ -226,8 +237,14 @@ class MailSim:
         self.messages: Dict[str, Dict[str, Any]] = {}
         self.inbox: List[str] = []
         self.counter = 1
+        builder_environment = _builder_environment(scenario)
         self.local_domains = self._local_domains(scenario)
-        self.local_mailbox = "me@example"
+        self.archive_mailbox_view = bool(
+            builder_environment.get("mail_archive_view", False)
+        )
+        self.local_mailbox = str(
+            builder_environment.get("mail_archive_mailbox", "me@example")
+        )
         self._variants_override = (
             scenario.vendor_reply_variants
             if scenario and scenario.vendor_reply_variants
@@ -275,7 +292,7 @@ class MailSim:
                         "category": category,
                     }
                     self.messages[mid] = record
-                    if self._is_local_recipient(recipient):
+                    if self.archive_mailbox_view or self._is_local_recipient(recipient):
                         seeded_inbox.append((time_ms, mid))
             seeded_inbox.sort(key=lambda item: item[0], reverse=True)
             self.inbox = [message_id for _, message_id in seeded_inbox]
@@ -300,6 +317,8 @@ class MailSim:
         subj: str,
         body_text: str,
         attachments: Optional[List[str]] = None,
+        thread_id: Optional[str] = None,
+        category: str = "external",
     ) -> Dict[str, Any]:
         mid = f"m{self.counter}"
         self.counter += 1
@@ -312,6 +331,8 @@ class MailSim:
             "unread": False,
             "headers": {"From": self.local_mailbox, "To": to, "Subject": subj},
             "body_text": body_text,
+            "thread_id": thread_id or mid,
+            "category": category,
         }
         variants = self._variants_override or [
             "Thanks — Price: $3199, ETA: 5-7 business days.",
@@ -328,8 +349,11 @@ class MailSim:
             payload={
                 "in_reply_to": mid,
                 "from": to,
+                "to": self.local_mailbox,
                 "subj": f"Re: {subj}",
                 "body_text": body,
+                "thread_id": thread_id or mid,
+                "category": category,
             },
         )
         return {"id": mid}
@@ -339,28 +363,36 @@ class MailSim:
         if not message:
             raise MCPError("unknown_message", f"Unknown mail id: {id}")
         return self.compose(
-            to=message["from"], subj=f"Re: {message['subj']}", body_text=body_text
+            to=message["from"],
+            subj=f"Re: {message['subj']}",
+            body_text=body_text,
+            thread_id=message.get("thread_id"),
+            category=str(message.get("category", "external")),
         )
 
     def deliver(self, event: Dict[str, Any]) -> Dict[str, Any]:
         mid = f"m{self.counter}"
         self.counter += 1
+        recipient = str(event.get("to", self.local_mailbox))
         msg = {
             "id": mid,
             "from": event["from"],
-            "to": self.local_mailbox,
+            "to": recipient,
             "subj": event["subj"],
             "time": self.bus.clock_ms,
             "unread": True,
             "headers": {
                 "From": event["from"],
-                "To": self.local_mailbox,
+                "To": recipient,
                 "Subject": event["subj"],
             },
             "body_text": event["body_text"],
+            "thread_id": event.get("thread_id", mid),
+            "category": str(event.get("category", "external")),
         }
         self.messages[mid] = msg
-        self.inbox.insert(0, mid)
+        if self.archive_mailbox_view or self._is_local_recipient(recipient):
+            self.inbox.insert(0, mid)
         return {"id": mid}
 
     def _is_local_recipient(self, address: str) -> bool:

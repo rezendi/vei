@@ -4,7 +4,7 @@ VEI is a programmable replica of an entire company's operational software stack.
 
 It spans hundreds of Python files and tests, a single-page Studio UI, and one unified `vei` CLI for project setup, world simulation, benchmarking, release/export, and evaluation.
 
-Use the root `README.md` for install and operator quickstart. Use this document for product framing, personas, and the end-to-end story. Use `docs/ARCHITECTURE.md` for the technical map.
+Use the root `README.md` for install and operator quickstart. Use this document for product framing, personas, and the end-to-end story. Use `docs/ARCHITECTURE.md` for the technical map. Use `docs/WHATIF.md` for the historical counterfactual workflow.
 
 ## One Kernel, Four Modes
 
@@ -18,6 +18,24 @@ VEI is best understood as **one kernel with four operating modes**, not as a pil
 Those four modes share the same world session, connector layer, event spine, replay model, and contract scoring. The world simulation is the substrate for all of them. Governor mode is the special case with live edges: VEI still uses the same kernel, but some actions also flow to or from real systems.
 
 `llm-siem` fits beside VEI, not inside it. It is a useful companion for the thinking layer of agent operations — fleet posture, LLM-call observability, and later cross-agent correlation — while VEI owns the acting layer: enterprise actions, world state, contracts, and consequences.
+
+### Historical What-Ifs
+
+VEI also supports a more grounded historical version of the sandbox story: take a real communication corpus, ask “what would this rule or decision have changed?”, and then drill into one moment for replay.
+
+The first version of that flow is mail-first:
+
+- a whole-history explorer can scan archive-backed datasets such as the Enron Rosetta event tables
+- a selected thread can then be materialized into a strict historical workspace
+- that workspace replays real past messages up to the branch point and schedules the later historical messages as the baseline future
+- only after that branch point does VEI run counterfactual continuation logic
+
+Two compare paths exist today:
+
+- **LLM actor continuation** — bounded email-only continuation on the affected thread
+- **Forecast adapter** — an E-JEPA-style proxy forecaster that estimates risk and volume deltas from the same intervention
+
+That second path is intentionally described as a forecast adapter, not a learned world model yet.
 
 ## The Five Layers
 
@@ -48,6 +66,8 @@ The blueprint compiles into a live `WorldSession` — a deterministic, branchabl
 
 The connector layer routes each tool call through one of three adapters — simulated (default), replay (from recorded traces), or live (real API calls) — with policy gates classifying operations as READ, WRITE_SAFE, or WRITE_RISKY.
 
+For archive-backed historical episodes, the simulation stays deliberately narrow. If the source data only supports mail and identity, VEI exposes a mail-first workspace instead of inventing unrelated surfaces. Historical message bodies are also preserved as excerpts when the source data is truncated.
+
 ### 4. Playable Missions and Evaluation
 
 On top of the simulation sits a mission system. Each vertical has multiple crisis scenarios. A mission gives you a starting world state, a set of available moves (each triggering a sequence of tool calls), success/failure contracts, and a scorecard. You can play interactively, run a scripted baseline, or let an LLM agent play — then compare the paths.
@@ -56,6 +76,8 @@ The contract system defines predicates (what must happen), invariants (what must
 
 A lightweight RL layer provides a Gymnasium-compatible `VEIEnv`, behavior cloning trainer, and BC policy wrapper for learning policies from demonstration traces.
 
+The same idea extends naturally to historical what-if runs. Each branch point becomes a decision sample: one real baseline future, one counterfactual continuation, and a typed comparison result describing what changed.
+
 ### 5. Synthesis, Twin Gateway, and Governor Mode
 
 Finished runs produce structured outputs:
@@ -63,6 +85,7 @@ Finished runs produce structured outputs:
 - **Runbooks** — step-by-step operational procedures extracted from what actually happened
 - **Training sets** — conversation, trajectory, and demonstration data formatted for fine-tuning
 - **Agent configs** — system prompts, tool specs, guardrails, and success criteria for deploying agents
+- **Counterfactual bundles** — JSON and Markdown summaries for what-if experiments, including selected thread, baseline replay, LLM continuation, and forecast deltas
 
 The twin gateway takes a `ContextSnapshot` plus a vertical archetype, merges them into a "customer twin" — a workspace that mirrors the customer's actual company but runs on VEI's simulation. It exposes compatibility surface specs (Slack-shaped, Jira-shaped, Graph-shaped, Salesforce-shaped routes) so the twin can be addressed through familiar API shapes.
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from vei.blueprint.models import BlueprintAsset
 
@@ -103,6 +103,63 @@ def ingest_gmail_export(
         organization_domain=organization_domain,
         captured_at=iso_now(),
         sources=[result],
+    )
+
+
+def ingest_mail_archive_threads(
+    threads: list[dict[str, Any]],
+    *,
+    organization_name: str,
+    organization_domain: str = "",
+    actors: list[dict[str, Any]] | None = None,
+    captured_at: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ContextSnapshot:
+    """Wrap archive-style threaded mail into a ContextSnapshot."""
+    resolved_captured_at = captured_at or iso_now()
+    normalized_threads: list[dict[str, Any]] = []
+    message_count = 0
+
+    for thread in threads:
+        if not isinstance(thread, dict):
+            continue
+        messages = [
+            item for item in (thread.get("messages") or []) if isinstance(item, dict)
+        ]
+        if not messages:
+            continue
+        message_count += len(messages)
+        normalized_threads.append(
+            {
+                "thread_id": str(thread.get("thread_id", "")),
+                "subject": str(thread.get("subject", thread.get("title", ""))),
+                "category": str(thread.get("category", "archive")),
+                "messages": messages,
+            }
+        )
+
+    return ContextSnapshot(
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        captured_at=resolved_captured_at,
+        sources=[
+            ContextSourceResult(
+                provider="mail_archive",
+                captured_at=resolved_captured_at,
+                status="ok",
+                record_counts={
+                    "threads": len(normalized_threads),
+                    "messages": message_count,
+                    "actors": len(actors or []),
+                },
+                data={
+                    "threads": normalized_threads,
+                    "actors": list(actors or []),
+                    "profile": {},
+                },
+            )
+        ],
+        metadata=dict(metadata or {}),
     )
 
 

@@ -20,6 +20,7 @@ from vei.cli.vei_synthesize import app as synthesize_app
 from vei.cli.vei_twin import app as twin_app
 from vei.cli.vei_ui import app as ui_app
 from vei.cli.vei_visualize import app as visualize_app
+from vei.cli.vei_whatif import app as whatif_app
 from vei.cli.vei_world import app as world_app
 
 app = typer.Typer(
@@ -35,6 +36,7 @@ app.add_typer(eval_app, name="eval")
 app.add_typer(inspect_app, name="inspect")
 app.add_typer(twin_app, name="twin")
 app.add_typer(ui_app, name="ui")
+app.add_typer(whatif_app, name="whatif")
 app.add_typer(world_app, name="world")
 app.add_typer(blueprint_app, name="blueprint")
 app.add_typer(context_app, name="context")

@@ -124,6 +124,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `TwinRuntime` — FastAPI runtime behind `vei.twin.gateway`, with helper, route, and runtime internals separated for the compatibility layer
   - Governor decision pipeline: registration, agent mode, allowed surface, policy profile, connector safety, rate limit, then execution
   - Surface and policy denials, approval-required holds, unsupported live writes, and rate limits are recorded in the run timeline and exposed through provider-shaped responses
+  - archive-backed historical episodes can build strict mail-and-identity twins without inventing Slack or other unsupported surfaces
 - `vei.twin` launch layer
   - `TwinLaunchManifest` / `TwinLaunchRuntime` / `TwinLaunchStatus` — internal launch and handoff models used by the governed twin lifecycle
   - writes launch manifest, handoff guide, and runtime state for Studio + gateway orchestration
@@ -138,6 +139,14 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - stable public surface over grouped internal modules for mission flow, exports, and policy replay
   - `branch_workspace_mission_run(..., snapshot_id=...)` — fork a playable mission from any historical snapshot, rewinding move history to that point
   - `get_service_ops_policy_bundle()` / `replay_service_ops_with_policy_delta()` — service-ops-only what-if replay over four named policy knobs from the initial snapshot
+- `vei.whatif`
+  - `load_world()` — build a typed historical world from an archive-backed source such as Enron Rosetta
+  - `run_whatif()` — deterministic whole-history policy analysis over the imported event corpus
+  - `materialize_episode()` — turn one selected historical thread into a strict mail-first replay workspace
+  - `replay_episode_baseline()` — schedule the saved historical future into the world kernel for comparison
+  - `run_llm_counterfactual()` — bounded LLM email continuation on the selected thread after divergence
+  - `run_ejepa_proxy_counterfactual()` — explicit forecast adapter for KPI/risk deltas; not a trained checkpoint-backed E-JEPA model yet
+  - `run_counterfactual_experiment()` — one-command orchestration for selection, episode materialization, baseline replay, continuation, and artifact writing
 - `vei.ui.api`
   - stable public surface over grouped route registrars for workspace/governor, playable, run, and imports/context endpoints
   - `GET /api/runs/diff-cross` — HTTP endpoint for cross-run snapshot comparison
@@ -150,6 +159,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
 - `vei.context`
   - context capture from live enterprise APIs (Slack, Gmail, Teams, Jira, Google, Okta)
   - `ContextSnapshot` — structured record of a company's current state
+  - `ingest_mail_archive_threads()` — wraps threaded historical mail plus actor metadata into a normal context snapshot for twin building
 - `vei.synthesis`
   - extract runbooks, training data, and agent configs from completed world runs
 - `vei.connectors`
@@ -235,7 +245,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - launched by `vei quickstart run`, `vei twin serve`, or `vei twin up`
 - `vei`
   - unified CLI — all subcommands are now under `vei <group> <command>`
-  - `project`, `quickstart`, `contract`, `scenario`, `scenarios`, `run`, `inspect`, `showcase`, `studio`, `export`, `ui`, `world`, `blueprint`, `bench`, `eval`, `llm-test`, `pack`, `twin`, `rollout`, `train`, `score`, `smoke`, `demo`, `det`, `context`, `synthesize`, `release`, `report`, `visualize`
+  - `project`, `quickstart`, `contract`, `scenario`, `scenarios`, `run`, `inspect`, `showcase`, `studio`, `export`, `ui`, `world`, `blueprint`, `bench`, `eval`, `llm-test`, `pack`, `twin`, `rollout`, `train`, `score`, `smoke`, `demo`, `det`, `context`, `synthesize`, `release`, `report`, `visualize`, `whatif`
 
 ## Software Twins
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from vei.blueprint.models import (
     BlueprintAsset,
@@ -34,10 +34,11 @@ def hydrate_snapshot_to_blueprint(
     google_source = snapshot.source_for("google")
     okta_source = snapshot.source_for("okta")
     gmail_source = snapshot.source_for("gmail")
+    mail_archive_source = snapshot.source_for("mail_archive")
     teams_source = snapshot.source_for("teams")
 
     comm_graph = _build_comm_graph(slack_source, teams_source)
-    mail_threads = _build_mail_from_gmail(gmail_source)
+    mail_threads = _build_mail_threads(gmail_source, mail_archive_source)
     if comm_graph and mail_threads:
         comm_graph.mail_threads = mail_threads
     elif mail_threads:
@@ -45,7 +46,11 @@ def hydrate_snapshot_to_blueprint(
 
     doc_graph = _build_doc_graph(google_source)
     work_graph = _build_work_graph(jira_source)
-    identity_graph = _build_identity_graph(okta_source, google_source)
+    identity_graph = _build_identity_graph(
+        okta_source,
+        google_source,
+        mail_archive_source,
+    )
 
     facades = _infer_facades(
         slack_source,
@@ -53,6 +58,7 @@ def hydrate_snapshot_to_blueprint(
         google_source,
         okta_source,
         gmail_source,
+        mail_archive_source,
         teams_source,
     )
 
@@ -192,6 +198,63 @@ def _build_mail_from_gmail(
     return result
 
 
+def _build_mail_from_archive(
+    mail_archive_source: Optional[ContextSourceResult],
+) -> list[BlueprintMailThreadAsset]:
+    if not mail_archive_source or mail_archive_source.status == "error":
+        return []
+
+    result: list[BlueprintMailThreadAsset] = []
+    for thread in mail_archive_source.data.get("threads", []):
+        if not isinstance(thread, dict):
+            continue
+        mail_messages: list[BlueprintMailMessageAsset] = []
+        for message in thread.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            raw_time_ms = message.get("time_ms")
+            mail_messages.append(
+                BlueprintMailMessageAsset(
+                    from_address=str(message.get("from", "")),
+                    to_address=str(message.get("to", "")),
+                    subject=str(message.get("subj", message.get("subject", ""))),
+                    body_text=str(
+                        message.get(
+                            "body_text",
+                            message.get("snippet", message.get("content", "")),
+                        )
+                    ),
+                    unread=bool(message.get("unread", False)),
+                    time_ms=(
+                        int(raw_time_ms)
+                        if isinstance(raw_time_ms, (int, float, str))
+                        else None
+                    ),
+                )
+            )
+        if not mail_messages:
+            continue
+        result.append(
+            BlueprintMailThreadAsset(
+                thread_id=str(thread.get("thread_id", "")),
+                title=str(thread.get("title", thread.get("subject", ""))),
+                category=str(thread.get("category", "archive")),
+                messages=mail_messages,
+            )
+        )
+    return result
+
+
+def _build_mail_threads(
+    gmail_source: Optional[ContextSourceResult],
+    mail_archive_source: Optional[ContextSourceResult],
+) -> list[BlueprintMailThreadAsset]:
+    archive_threads = _build_mail_from_archive(mail_archive_source)
+    if archive_threads:
+        return archive_threads
+    return _build_mail_from_gmail(gmail_source)
+
+
 def _build_doc_graph(
     google_source: Optional[ContextSourceResult],
 ) -> Optional[BlueprintDocGraphAsset]:
@@ -244,6 +307,7 @@ def _build_work_graph(
 def _build_identity_graph(
     okta_source: Optional[ContextSourceResult],
     google_source: Optional[ContextSourceResult],
+    mail_archive_source: Optional[ContextSourceResult] = None,
 ) -> Optional[BlueprintIdentityGraphAsset]:
     users: list[BlueprintIdentityUserAsset] = []
     groups: list[BlueprintIdentityGroupAsset] = []
@@ -312,6 +376,9 @@ def _build_identity_graph(
                 )
             )
 
+    if mail_archive_source and mail_archive_source.status != "error":
+        _append_mail_archive_users(users, mail_archive_source.data)
+
     if not users and not groups and not apps:
         return None
 
@@ -328,6 +395,7 @@ def _infer_facades(
     google_source: Optional[ContextSourceResult],
     okta_source: Optional[ContextSourceResult],
     gmail_source: Optional[ContextSourceResult] = None,
+    mail_archive_source: Optional[ContextSourceResult] = None,
     teams_source: Optional[ContextSourceResult] = None,
 ) -> list[str]:
     facades: list[str] = []
@@ -340,9 +408,90 @@ def _infer_facades(
         facades.extend(["jira", "servicedesk"])
     if google_source and google_source.status != "error":
         facades.append("docs")
-    if gmail_source and gmail_source.status != "error":
+    if (gmail_source and gmail_source.status != "error") or (
+        mail_archive_source and mail_archive_source.status != "error"
+    ):
         if "mail" not in facades:
             facades.append("mail")
+    if (
+        mail_archive_source
+        and mail_archive_source.status != "error"
+        and "identity" not in facades
+    ):
+        facades.append("identity")
     if okta_source and okta_source.status != "error":
         facades.append("identity")
     return facades
+
+
+def _append_mail_archive_users(
+    users: list[BlueprintIdentityUserAsset],
+    payload: dict[str, Any],
+) -> None:
+    seen = {item.email.lower() for item in users if item.email}
+    actors = payload.get("actors", [])
+    if isinstance(actors, list):
+        for actor in actors:
+            if not isinstance(actor, dict):
+                continue
+            email = str(actor.get("email", "")).strip()
+            if not email or email.lower() in seen:
+                continue
+            first_name, last_name = _split_actor_name(
+                str(actor.get("display_name", "")) or email
+            )
+            users.append(
+                BlueprintIdentityUserAsset(
+                    user_id=str(actor.get("actor_id", email)),
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    login=email,
+                    display_name=(
+                        str(actor.get("display_name", "")).strip()
+                        or f"{first_name} {last_name}".strip()
+                    ),
+                    department=str(actor.get("department", "")) or None,
+                    title=str(actor.get("title", "")) or None,
+                    status="ACTIVE",
+                )
+            )
+            seen.add(email.lower())
+
+    if actors:
+        return
+
+    derived: dict[str, BlueprintIdentityUserAsset] = {}
+    for thread in payload.get("threads", []):
+        if not isinstance(thread, dict):
+            continue
+        for message in thread.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            for key in ("from", "to"):
+                email = str(message.get(key, "")).strip()
+                lowered = email.lower()
+                if not email or lowered in seen or lowered in derived:
+                    continue
+                first_name, last_name = _split_actor_name(email)
+                derived[lowered] = BlueprintIdentityUserAsset(
+                    user_id=email,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    login=email,
+                    display_name=f"{first_name} {last_name}".strip(),
+                    status="ACTIVE",
+                )
+    users.extend(derived.values())
+
+
+def _split_actor_name(value: str) -> tuple[str, str]:
+    cleaned = value.split("@", 1)[0].replace(".", " ").replace("_", " ").strip()
+    parts = [item for item in cleaned.split() if item]
+    if not parts:
+        return ("Unknown", "Actor")
+    if len(parts) == 1:
+        token = parts[0].capitalize()
+        return (token, "Actor")
+    return (parts[0].capitalize(), parts[-1].capitalize())
