@@ -1,0 +1,239 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import typer
+
+from vei.whatif import (
+    list_supported_scenarios,
+    load_experiment_result,
+    load_world,
+    materialize_episode,
+    replay_episode_baseline,
+    run_counterfactual_experiment,
+    run_whatif,
+)
+from vei.whatif.render import (
+    render_episode,
+    render_experiment,
+    render_replay,
+    render_result,
+    render_world_summary,
+)
+
+app = typer.Typer(
+    add_completion=False,
+    help="Explore counterfactuals and materialize replayable what-if episodes.",
+)
+
+
+def _emit(payload: object, *, format: str) -> None:
+    if format == "markdown":
+        typer.echo(str(payload))
+        return
+    typer.echo(json.dumps(payload, indent=2))
+
+
+@app.command("scenarios")
+def list_scenarios_command(
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """List the currently supported what-if scenarios."""
+
+    scenarios = list_supported_scenarios()
+    if format == "markdown":
+        lines = ["# What-If Scenarios", ""]
+        for scenario in scenarios:
+            lines.append(f"- `{scenario.scenario_id}`: {scenario.description}")
+        typer.echo("\n".join(lines))
+        return
+    _emit([scenario.model_dump(mode="json") for scenario in scenarios], format=format)
+
+
+@app.command("explore")
+def explore_command(
+    source: str = typer.Option("enron", help="What-if source (currently: enron)"),
+    rosetta_dir: Path = typer.Option(
+        ..., help="Directory holding Rosetta parquet files"
+    ),
+    scenario: str | None = typer.Option(None, help="Supported scenario id"),
+    prompt: str | None = typer.Option(None, help="Plain-English question"),
+    date_from: str | None = typer.Option(None, help="Optional ISO start timestamp"),
+    date_to: str | None = typer.Option(None, help="Optional ISO end timestamp"),
+    custodian: list[str] | None = typer.Option(None, help="Optional custodian filters"),
+    max_events: int | None = typer.Option(None, help="Optional event cap"),
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """Run deterministic what-if analysis over the source history."""
+
+    if scenario is None and prompt is None:
+        world = load_world(
+            source=source,
+            rosetta_dir=rosetta_dir,
+            time_window=_time_window(date_from, date_to),
+            custodian_filter=custodian or [],
+            max_events=max_events,
+        )
+        payload = (
+            render_world_summary(world)
+            if format == "markdown"
+            else world.summary.model_dump(mode="json")
+        )
+        _emit(payload, format=format)
+        return
+
+    world = load_world(
+        source=source,
+        rosetta_dir=rosetta_dir,
+        time_window=_time_window(date_from, date_to),
+        custodian_filter=custodian or [],
+        max_events=max_events,
+    )
+    result = run_whatif(world, scenario=scenario, prompt=prompt)
+    payload = (
+        render_result(result)
+        if format == "markdown"
+        else result.model_dump(mode="json")
+    )
+    _emit(payload, format=format)
+
+
+@app.command("open-episode")
+def open_episode_command(
+    source: str = typer.Option("enron", help="What-if source (currently: enron)"),
+    rosetta_dir: Path = typer.Option(
+        ..., help="Directory holding Rosetta parquet files"
+    ),
+    root: Path = typer.Option(..., help="Workspace root for the replayable episode"),
+    thread_id: str = typer.Option(..., help="Thread to materialize"),
+    event_id: str | None = typer.Option(None, help="Optional branch event override"),
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """Build a strict historical workspace from one thread and save its future baseline."""
+
+    world = load_world(source=source, rosetta_dir=rosetta_dir)
+    materialization = materialize_episode(
+        world,
+        root=root,
+        thread_id=thread_id,
+        event_id=event_id,
+    )
+    payload = (
+        render_episode(materialization)
+        if format == "markdown"
+        else materialization.model_dump(mode="json")
+    )
+    _emit(payload, format=format)
+
+
+@app.command("replay")
+def replay_command(
+    root: Path = typer.Option(
+        ..., help="Workspace root from `vei whatif open-episode`"
+    ),
+    tick_ms: int = typer.Option(
+        0,
+        help="Optional logical time to advance after scheduling the baseline future",
+    ),
+    seed: int = typer.Option(42042, help="Deterministic replay seed"),
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """Schedule the saved historical future into the world sim and optionally advance time."""
+
+    summary = replay_episode_baseline(root, tick_ms=tick_ms, seed=seed)
+    payload = (
+        render_replay(summary)
+        if format == "markdown"
+        else summary.model_dump(mode="json")
+    )
+    _emit(payload, format=format)
+
+
+@app.command("experiment")
+def experiment_command(
+    source: str = typer.Option("enron", help="What-if source (currently: enron)"),
+    rosetta_dir: Path = typer.Option(
+        ..., help="Directory holding Rosetta parquet files"
+    ),
+    artifacts_root: Path = typer.Option(
+        Path("_vei_out/whatif_experiments"),
+        help="Directory where experiment artifacts are written",
+    ),
+    label: str = typer.Option(..., help="Human-friendly label for this experiment"),
+    counterfactual_prompt: str = typer.Option(
+        ..., help="Counterfactual intervention prompt"
+    ),
+    selection_scenario: str | None = typer.Option(
+        None,
+        help="Optional supported scenario used to pick the candidate thread",
+    ),
+    selection_prompt: str | None = typer.Option(
+        None,
+        help="Optional plain-English question used to pick the candidate thread",
+    ),
+    thread_id: str | None = typer.Option(
+        None,
+        help="Optional explicit thread override",
+    ),
+    mode: str = typer.Option(
+        "both",
+        help="Experiment mode: llm | e_jepa_proxy | both",
+    ),
+    provider: str = typer.Option("openai", help="LLM provider for the actor path"),
+    model: str = typer.Option("gpt-5", help="LLM model for the actor path"),
+    seed: int = typer.Option(42042, help="Deterministic seed"),
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """Run a full what-if experiment and write result artifacts."""
+
+    normalized_mode = mode.strip().lower()
+    if normalized_mode not in {"llm", "e_jepa_proxy", "both"}:
+        raise typer.BadParameter("mode must be one of: llm, e_jepa_proxy, both")
+    world = load_world(source=source, rosetta_dir=rosetta_dir)
+    result = run_counterfactual_experiment(
+        world,
+        artifacts_root=artifacts_root,
+        label=label,
+        counterfactual_prompt=counterfactual_prompt,
+        selection_scenario=selection_scenario,
+        selection_prompt=selection_prompt,
+        thread_id=thread_id,
+        mode=normalized_mode,
+        provider=provider,
+        model=model,
+        seed=seed,
+    )
+    payload = (
+        render_experiment(result)
+        if format == "markdown"
+        else result.model_dump(mode="json")
+    )
+    _emit(payload, format=format)
+
+
+@app.command("show-result")
+def show_result_command(
+    root: Path = typer.Option(..., help="Experiment artifact root"),
+    format: str = typer.Option("json", help="Output format: json | markdown"),
+) -> None:
+    """Load a saved what-if experiment result from disk."""
+
+    result = load_experiment_result(root)
+    payload = (
+        render_experiment(result)
+        if format == "markdown"
+        else result.model_dump(mode="json")
+    )
+    _emit(payload, format=format)
+
+
+def _time_window(
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[str, str] | None:
+    if not date_from and not date_to:
+        return None
+    if not date_from or not date_to:
+        raise typer.BadParameter("Provide both --date-from and --date-to")
+    return (date_from, date_to)

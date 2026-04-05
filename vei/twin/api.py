@@ -12,11 +12,13 @@ from vei.blueprint.models import (
     BlueprintAsset,
     BlueprintCapabilityGraphsAsset,
     BlueprintCommGraphAsset,
+    BlueprintEnvironmentAsset,
     BlueprintDocumentAsset,
     BlueprintDocGraphAsset,
     BlueprintIdentityGraphAsset,
     BlueprintIdentityUserAsset,
     BlueprintMailMessageAsset,
+    BlueprintMailThreadAsset,
     BlueprintSlackMessageAsset,
     BlueprintTicketAsset,
     BlueprintWorkGraphAsset,
@@ -52,6 +54,8 @@ from .models import (
 
 TWIN_MANIFEST_FILE = "twin_manifest.json"
 _MODEL_T = TypeVar("_MODEL_T", bound=BaseModel)
+_GRAPH_SURFACE_NAMES = {"mail", "calendar", "identity"}
+_JIRA_SURFACE_NAMES = {"tickets", "approvals"}
 
 
 def build_customer_twin(
@@ -156,18 +160,13 @@ def build_customer_twin(
         blueprint_asset_path=str(asset_path.relative_to(workspace_root)),
         gateway=TwinGatewayConfig(
             auth_token=gateway_token or secrets.token_urlsafe(18),
-            surfaces=_default_gateway_surfaces(),
+            surfaces=_default_gateway_surfaces(resolved_mold.included_surfaces),
             ui_command=(
                 "python -m vei.cli.vei ui serve "
                 f"--root {workspace_root} --host 127.0.0.1 --port 3011"
             ),
         ),
-        summary=(
-            f"{resolved_name} is now packaged as a customer-shaped twin with a "
-            f"{resolved_mold.archetype.replace('_', ' ')} operating model and "
-            "compatibility routes for Slack, Jira, Outlook-style mail/calendar, "
-            "and Salesforce-style CRM."
-        ),
+        summary=_bundle_summary(resolved_name, resolved_mold),
         metadata={
             "preview": preview_workspace_scenario(workspace_root),
             "source_providers": [item.provider for item in resolved_snapshot.sources],
@@ -230,6 +229,8 @@ def build_customer_twin_asset(
         organization_name=resolved_name,
         organization_domain=resolved_domain,
     )
+    if _snapshot_uses_mail_archive(snapshot):
+        _prefer_archive_capture(base_asset, captured_asset)
     _rewrite_placeholder_domains(
         base_asset,
         resolved_domain,
@@ -464,6 +465,55 @@ def _merge_environment(
     return env
 
 
+def _environment_from_graphs(
+    graphs: BlueprintCapabilityGraphsAsset,
+) -> BlueprintEnvironmentAsset:
+    comm_graph = graphs.comm_graph
+    doc_graph = graphs.doc_graph
+    work_graph = graphs.work_graph
+    identity_graph = graphs.identity_graph
+    revenue_graph = graphs.revenue_graph
+    return BlueprintEnvironmentAsset(
+        organization_name=graphs.organization_name,
+        organization_domain=graphs.organization_domain,
+        timezone=graphs.timezone,
+        scenario_brief=graphs.scenario_brief,
+        slack_initial_message=(
+            comm_graph.slack_initial_message if comm_graph is not None else None
+        ),
+        slack_channels=(
+            list(comm_graph.slack_channels) if comm_graph is not None else []
+        ),
+        mail_threads=(list(comm_graph.mail_threads) if comm_graph is not None else []),
+        documents=list(doc_graph.documents) if doc_graph is not None else [],
+        tickets=list(work_graph.tickets) if work_graph is not None else [],
+        identity_users=list(identity_graph.users) if identity_graph is not None else [],
+        identity_groups=(
+            list(identity_graph.groups) if identity_graph is not None else []
+        ),
+        identity_applications=(
+            list(identity_graph.applications) if identity_graph is not None else []
+        ),
+        service_requests=(
+            list(work_graph.service_requests) if work_graph is not None else []
+        ),
+        google_drive_shares=(
+            list(doc_graph.drive_shares) if doc_graph is not None else []
+        ),
+        hris_employees=(
+            list(identity_graph.hris_employees) if identity_graph is not None else []
+        ),
+        crm_companies=(
+            list(revenue_graph.companies) if revenue_graph is not None else []
+        ),
+        crm_contacts=(
+            list(revenue_graph.contacts) if revenue_graph is not None else []
+        ),
+        crm_deals=list(revenue_graph.deals) if revenue_graph is not None else [],
+        metadata=dict(graphs.metadata),
+    )
+
+
 def _merge_capability_graphs(
     base: BlueprintCapabilityGraphsAsset | None,
     captured: BlueprintCapabilityGraphsAsset | None,
@@ -633,6 +683,50 @@ def _merge_models(
     return list(merged.values())
 
 
+def _snapshot_uses_mail_archive(snapshot: ContextSnapshot) -> bool:
+    return any(source.provider == "mail_archive" for source in snapshot.sources)
+
+
+def _prefer_archive_capture(
+    asset: BlueprintAsset,
+    captured_asset: BlueprintAsset,
+) -> None:
+    if asset.capability_graphs is None or captured_asset.capability_graphs is None:
+        return
+    captured_graphs = captured_asset.capability_graphs
+    target_graphs = asset.capability_graphs
+
+    if captured_graphs.comm_graph is not None:
+        if target_graphs.comm_graph is None:
+            target_graphs.comm_graph = captured_graphs.comm_graph.model_copy(deep=True)
+        else:
+            target_graphs.comm_graph.mail_threads = list(
+                captured_graphs.comm_graph.mail_threads
+            )
+            target_graphs.comm_graph.metadata = {
+                **dict(target_graphs.comm_graph.metadata),
+                **dict(captured_graphs.comm_graph.metadata),
+            }
+    if captured_graphs.identity_graph is not None:
+        if target_graphs.identity_graph is None:
+            target_graphs.identity_graph = captured_graphs.identity_graph.model_copy(
+                deep=True
+            )
+        else:
+            target_graphs.identity_graph.users = list(
+                captured_graphs.identity_graph.users
+            )
+            target_graphs.identity_graph.groups = list(
+                captured_graphs.identity_graph.groups
+            )
+            target_graphs.identity_graph.applications = list(
+                captured_graphs.identity_graph.applications
+            )
+            target_graphs.identity_graph.hris_employees = list(
+                captured_graphs.identity_graph.hris_employees
+            )
+
+
 def _rewrite_placeholder_domains(
     asset: BlueprintAsset,
     organization_domain: str,
@@ -726,30 +820,72 @@ def _apply_surface_filter(
 ) -> None:
     if not included_surfaces:
         return
+    if asset.environment is None and asset.capability_graphs is not None:
+        asset.environment = _environment_from_graphs(asset.capability_graphs)
     keep = {item.strip().lower() for item in included_surfaces}
-    graphs = asset.capability_graphs
-    if graphs is None:
-        return
-    if "slack" not in keep and graphs.comm_graph is not None:
-        graphs.comm_graph.slack_channels = []
-    if "mail" not in keep and graphs.comm_graph is not None:
-        graphs.comm_graph.mail_threads = []
-    if "docs" not in keep:
-        graphs.doc_graph = None
-    if "tickets" not in keep and "approvals" not in keep:
-        graphs.work_graph = None
-    if "identity" not in keep:
-        graphs.identity_graph = None
-    if "crm" not in keep:
-        graphs.revenue_graph = None
-        if asset.environment is not None:
+    if asset.environment is not None:
+        if "slack" not in keep:
+            asset.environment.slack_initial_message = None
+            asset.environment.slack_channels = []
+            asset.environment.metadata = {
+                **dict(asset.environment.metadata),
+                "strict_empty_slack": True,
+            }
+        if "mail" not in keep:
+            asset.environment.mail_threads = []
+            asset.environment.metadata = {
+                **dict(asset.environment.metadata),
+                "mail_archive_view": False,
+            }
+        elif asset.environment.mail_threads and _uses_mail_archive(asset):
+            mailbox = _primary_mailbox(asset.environment.mail_threads)
+            asset.environment.metadata = {
+                **dict(asset.environment.metadata),
+                "mail_archive_view": True,
+                "mail_archive_mailbox": mailbox,
+            }
+        else:
+            asset.environment.metadata = {
+                **dict(asset.environment.metadata),
+                "mail_archive_view": False,
+            }
+        if "docs" not in keep:
+            asset.environment.documents = []
+            asset.environment.google_drive_shares = []
+        if "tickets" not in keep and "approvals" not in keep:
+            asset.environment.tickets = []
+            asset.environment.service_requests = []
+        if "identity" not in keep:
+            asset.environment.identity_users = []
+            asset.environment.identity_groups = []
+            asset.environment.identity_applications = []
+            asset.environment.hris_employees = []
+        if "crm" not in keep:
             asset.environment.crm_companies = []
             asset.environment.crm_contacts = []
             asset.environment.crm_deals = []
-    if "vertical" not in keep:
-        graphs.property_graph = None
-        graphs.campaign_graph = None
-        graphs.inventory_graph = None
+    graphs = asset.capability_graphs
+    if graphs is not None:
+        if "slack" not in keep and graphs.comm_graph is not None:
+            graphs.comm_graph.slack_channels = []
+        if "mail" not in keep and graphs.comm_graph is not None:
+            graphs.comm_graph.mail_threads = []
+        if "docs" not in keep:
+            graphs.doc_graph = None
+        if "tickets" not in keep and "approvals" not in keep:
+            graphs.work_graph = None
+        if "identity" not in keep:
+            graphs.identity_graph = None
+        if "crm" not in keep:
+            graphs.revenue_graph = None
+        if "vertical" not in keep:
+            graphs.property_graph = None
+            graphs.campaign_graph = None
+            graphs.inventory_graph = None
+    asset.requested_facades = _filter_requested_facades(
+        asset.requested_facades,
+        keep,
+    )
 
 
 def _mask_external_contacts(asset: BlueprintAsset, organization_domain: str) -> None:
@@ -1066,29 +1202,135 @@ def _internal_placeholder_domains(asset: BlueprintAsset) -> set[str]:
     return {value for value in domains if value}
 
 
-def _default_gateway_surfaces() -> list[CompatibilitySurfaceSpec]:
-    return [
-        CompatibilitySurfaceSpec(
-            name="slack",
-            title="Slack",
-            base_path="/slack/api",
-        ),
-        CompatibilitySurfaceSpec(
-            name="jira",
-            title="Jira",
-            base_path="/jira/rest/api/3",
-        ),
-        CompatibilitySurfaceSpec(
-            name="graph",
-            title="Microsoft Graph",
-            base_path="/graph/v1.0",
-        ),
-        CompatibilitySurfaceSpec(
-            name="salesforce",
-            title="Salesforce",
-            base_path="/salesforce/services/data/v60.0",
-        ),
-    ]
+def _default_gateway_surfaces(
+    included_surfaces: Sequence[str] | None = None,
+) -> list[CompatibilitySurfaceSpec]:
+    if not included_surfaces:
+        return [
+            CompatibilitySurfaceSpec(
+                name="slack",
+                title="Slack",
+                base_path="/slack/api",
+            ),
+            CompatibilitySurfaceSpec(
+                name="jira",
+                title="Jira",
+                base_path="/jira/rest/api/3",
+            ),
+            CompatibilitySurfaceSpec(
+                name="graph",
+                title="Microsoft Graph",
+                base_path="/graph/v1.0",
+            ),
+            CompatibilitySurfaceSpec(
+                name="salesforce",
+                title="Salesforce",
+                base_path="/salesforce/services/data/v60.0",
+            ),
+        ]
+
+    keep = {item.strip().lower() for item in included_surfaces if item}
+    surfaces: list[CompatibilitySurfaceSpec] = []
+    if "slack" in keep:
+        surfaces.append(
+            CompatibilitySurfaceSpec(
+                name="slack",
+                title="Slack",
+                base_path="/slack/api",
+            )
+        )
+    if keep & _JIRA_SURFACE_NAMES:
+        surfaces.append(
+            CompatibilitySurfaceSpec(
+                name="jira",
+                title="Jira",
+                base_path="/jira/rest/api/3",
+            )
+        )
+    if keep & _GRAPH_SURFACE_NAMES:
+        surfaces.append(
+            CompatibilitySurfaceSpec(
+                name="graph",
+                title="Microsoft Graph",
+                base_path="/graph/v1.0",
+            )
+        )
+    if "crm" in keep:
+        surfaces.append(
+            CompatibilitySurfaceSpec(
+                name="salesforce",
+                title="Salesforce",
+                base_path="/salesforce/services/data/v60.0",
+            )
+        )
+    return surfaces
+
+
+def _filter_requested_facades(
+    facades: Sequence[str],
+    included_surfaces: set[str],
+) -> list[str]:
+    if not facades:
+        return []
+    allowed = set()
+    if "slack" in included_surfaces:
+        allowed.add("slack")
+    if "mail" in included_surfaces:
+        allowed.add("mail")
+    if "docs" in included_surfaces:
+        allowed.add("docs")
+    if "tickets" in included_surfaces:
+        allowed.update({"tickets", "jira", "servicedesk"})
+    if "approvals" in included_surfaces:
+        allowed.update({"servicedesk", "jira"})
+    if "identity" in included_surfaces:
+        allowed.update({"identity", "google_admin"})
+    if "calendar" in included_surfaces:
+        allowed.add("calendar")
+    if "crm" in included_surfaces:
+        allowed.add("salesforce")
+    if "vertical" in included_surfaces:
+        return list(facades)
+    return [item for item in facades if item in allowed]
+
+
+def _primary_mailbox(threads: Sequence[BlueprintMailThreadAsset]) -> str:
+    counts: dict[str, int] = {}
+    for thread in threads:
+        for message in thread.messages:
+            recipient = message.to_address.strip().lower()
+            if not recipient:
+                continue
+            counts[recipient] = counts.get(recipient, 0) + 1
+    if not counts:
+        return "me@example"
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _uses_mail_archive(asset: BlueprintAsset) -> bool:
+    metadata = dict(asset.metadata or {})
+    customer_twin = metadata.get("customer_twin", {})
+    if not isinstance(customer_twin, dict):
+        return False
+    providers = customer_twin.get("source_providers", [])
+    if not isinstance(providers, list):
+        return False
+    return "mail_archive" in providers
+
+
+def _bundle_summary(name: str, mold: ContextMoldConfig) -> str:
+    surfaces = _default_gateway_surfaces(mold.included_surfaces)
+    if not surfaces:
+        return (
+            f"{name} is now packaged as a customer-shaped twin with a "
+            f"{mold.archetype.replace('_', ' ')} operating model."
+        )
+    labels = ", ".join(item.title for item in surfaces)
+    return (
+        f"{name} is now packaged as a customer-shaped twin with a "
+        f"{mold.archetype.replace('_', ' ')} operating model and compatibility "
+        f"routes for {labels}."
+    )
 
 
 def _slug(value: str) -> str:

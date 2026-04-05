@@ -282,6 +282,10 @@ def test_customer_twin_asset_applies_mold_filters_masks_and_expansion() -> None:
         user.email.endswith("@acme.ai")
         for user in asset.capability_graphs.identity_graph.users
     )
+    assert asset.environment is not None
+    assert asset.environment.documents == []
+    assert asset.environment.tickets == []
+    assert asset.environment.service_requests == []
 
 
 def test_twin_api_helper_functions_cover_io_and_matrix_round_trip(
@@ -319,6 +323,10 @@ def test_twin_api_helper_functions_cover_io_and_matrix_round_trip(
         "graph",
         "salesforce",
     ]
+    assert [item.name for item in _default_gateway_surfaces(["mail", "identity"])] == [
+        "graph"
+    ]
+    assert [item.name for item in _default_gateway_surfaces(["tickets"])] == ["jira"]
 
     with pytest.raises(ValueError, match="provide either snapshot or provider_configs"):
         build_customer_twin(
@@ -342,6 +350,68 @@ def test_twin_api_helper_functions_cover_io_and_matrix_round_trip(
     assert matrix.template.organization_name == "Acme Cloud"
     assert len(matrix.variants) == 1
     assert loaded.variants[0].variant_id == matrix.variants[0].variant_id
+
+
+def test_customer_twin_archive_mail_mode_stays_mail_only(tmp_path: Path) -> None:
+    snapshot = ContextSnapshot(
+        organization_name="Enron Corporation",
+        organization_domain="enron.com",
+        captured_at="2001-05-01T10:00:00+00:00",
+        sources=[
+            ContextSourceResult(
+                provider="mail_archive",
+                captured_at="2001-05-01T10:00:00+00:00",
+                status="ok",
+                data={
+                    "threads": [
+                        {
+                            "thread_id": "thr-enron-001",
+                            "subject": "Trading review",
+                            "category": "historical",
+                            "messages": [
+                                {
+                                    "from": "vince.kaminski@enron.com",
+                                    "to": "sara.shackleton@enron.com",
+                                    "subject": "Trading review",
+                                    "body_text": "Historical excerpt",
+                                    "time_ms": 0,
+                                }
+                            ],
+                        }
+                    ],
+                    "actors": [
+                        {
+                            "actor_id": "vince.kaminski@enron.com",
+                            "email": "vince.kaminski@enron.com",
+                            "display_name": "Vince Kaminski",
+                        }
+                    ],
+                },
+            )
+        ],
+    )
+
+    asset = build_customer_twin_asset(
+        snapshot,
+        organization_name="Enron Corporation",
+        organization_domain="enron.com",
+        mold=ContextMoldConfig(
+            archetype="b2b_saas",
+            included_surfaces=["mail", "identity"],
+            named_team_expansion="minimal",
+            synthetic_expansion_strength="light",
+        ),
+    )
+
+    assert asset.environment is not None
+    assert asset.environment.slack_channels == []
+    assert asset.environment.metadata["strict_empty_slack"] is True
+    assert asset.environment.metadata["mail_archive_view"] is True
+    assert (
+        asset.environment.metadata["mail_archive_mailbox"]
+        == "sara.shackleton@enron.com"
+    )
+    assert set(asset.requested_facades) == {"mail", "identity"}
 
 
 def test_twin_api_merge_and_expansion_helpers_cover_remaining_paths() -> None:

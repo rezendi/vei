@@ -50,6 +50,7 @@ The governance feed shows what VEI allowed, held, and blocked, with the reason a
 ![VEI governor activity log](docs/assets/governor-demo/service-ops-governor-activity-log.png)
 
 Need the live-orchestrator proof point too? Read the [Paperclip Control Room Report](docs/PAPERCLIP_CONTROL_ROOM_REPORT.md).
+Need the historical replay flow? Read the [Historical What-If guide](docs/WHATIF.md).
 
 ## How It Works
 
@@ -231,6 +232,37 @@ vei eval suite --artifacts-root _vei_out/suite --run-id nightly_suite
 vei eval benchmark --runner llm --model gpt-5 --frontier \
   --scenario-set reasoning --artifacts-root _vei_out/frontier_eval
 ```
+
+### Historical what-if replay
+
+```bash
+# Explore a whole historical corpus
+vei whatif explore \
+  --rosetta-dir /path/to/rosetta \
+  --scenario compliance_gateway \
+  --format markdown
+
+# Materialize one replayable thread into a strict mail-only workspace
+vei whatif open-episode \
+  --rosetta-dir /path/to/rosetta \
+  --root _vei_out/whatif/enron_case \
+  --thread-id thr_1234
+
+# Replay the saved historical future
+vei whatif replay --root _vei_out/whatif/enron_case --tick-ms 600000
+
+# Run the full counterfactual experiment and save artifacts
+vei whatif experiment \
+  --rosetta-dir /path/to/rosetta \
+  --artifacts-root _vei_out/whatif_experiments \
+  --label early_legal_quarantine \
+  --selection-scenario compliance_gateway \
+  --counterfactual-prompt "Loop in compliance, pause forwarding, and keep this internal."
+```
+
+This flow is designed for archive-backed mail worlds such as the Enron Rosetta tables. VEI first answers broad “what would this have touched?” questions over the full history, then turns one selected thread into a replayable mail-first workspace. The replay stays honest to the source data: no fake Slack history is invented, and email bodies are based on the available historical excerpts rather than claiming full originals.
+
+The experiment command writes a bundle with JSON and Markdown summaries plus per-path outputs under `_vei_out/whatif_experiments`. The LLM path generates bounded follow-up emails on the selected thread. The forecast path is an explicit E-JEPA-style proxy forecaster today, not a trained checkpoint-backed model.
 
 ## Use It As A Library
 

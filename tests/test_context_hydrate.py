@@ -139,3 +139,63 @@ def test_hydrate_skips_errored_sources() -> None:
     asset = hydrate_blueprint(snapshot)
     assert asset.capability_graphs.comm_graph is None
     assert "slack" not in asset.requested_facades
+
+
+def test_hydrate_supports_mail_archive_threads() -> None:
+    snapshot = ContextSnapshot(
+        organization_name="Enron Corporation",
+        organization_domain="enron.com",
+        captured_at="2001-05-01T10:00:00+00:00",
+        sources=[
+            ContextSourceResult(
+                provider="mail_archive",
+                captured_at="2001-05-01T10:00:00+00:00",
+                status="ok",
+                data={
+                    "threads": [
+                        {
+                            "thread_id": "thr-enron-001",
+                            "subject": "Trading review",
+                            "category": "historical",
+                            "messages": [
+                                {
+                                    "from": "vince.kaminski@enron.com",
+                                    "to": "sara.shackleton@enron.com",
+                                    "subject": "Trading review",
+                                    "body_text": "Historical excerpt",
+                                    "time_ms": 0,
+                                }
+                            ],
+                        }
+                    ],
+                    "actors": [
+                        {
+                            "actor_id": "vince.kaminski@enron.com",
+                            "email": "vince.kaminski@enron.com",
+                            "display_name": "Vince Kaminski",
+                        },
+                        {
+                            "actor_id": "sara.shackleton@enron.com",
+                            "email": "sara.shackleton@enron.com",
+                            "display_name": "Sara Shackleton",
+                        },
+                    ],
+                },
+            )
+        ],
+    )
+
+    asset = hydrate_blueprint(snapshot)
+
+    assert asset.capability_graphs is not None
+    assert asset.capability_graphs.comm_graph is not None
+    assert (
+        asset.capability_graphs.comm_graph.mail_threads[0].thread_id == "thr-enron-001"
+    )
+    assert asset.capability_graphs.identity_graph is not None
+    assert {user.email for user in asset.capability_graphs.identity_graph.users} == {
+        "vince.kaminski@enron.com",
+        "sara.shackleton@enron.com",
+    }
+    assert "mail" in asset.requested_facades
+    assert "identity" in asset.requested_facades
