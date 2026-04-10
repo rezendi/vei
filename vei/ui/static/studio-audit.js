@@ -9,6 +9,11 @@ let auditActiveItem = null;
 let auditPairwise = {};  // key: "left|right" -> preferred_candidate_id
 let auditPairwiseRationale = {};  // key: "left|right" -> rationale string
 let auditPairwiseConfidence = {};  // key: "left|right" -> confidence float
+let auditFinalOrder = [];
+let auditFinalOrderTouched = false;
+let auditReviewerId = "";
+let auditOverallConfidence = "0.7";
+let auditNotes = "";
 let auditRevealData = null;
 
 async function loadAuditQueue() {
@@ -27,6 +32,11 @@ function _resetPairwiseState() {
   auditPairwise = {};
   auditPairwiseRationale = {};
   auditPairwiseConfidence = {};
+  auditFinalOrder = [];
+  auditFinalOrderTouched = false;
+  auditReviewerId = "";
+  auditOverallConfidence = "0.7";
+  auditNotes = "";
 }
 
 function _candidatePairs(candidates) {
@@ -47,6 +57,39 @@ function _aggregatePairwiseRank(candidates, pairwise) {
   }
   return [...candidates].sort(
     (a, b) => (wins[b.candidate_id] || 0) - (wins[a.candidate_id] || 0)
+  );
+}
+
+function _suggestedFinalOrder(candidates) {
+  return _aggregatePairwiseRank(candidates, auditPairwise).map(
+    (candidate) => candidate.candidate_id
+  );
+}
+
+function _syncFinalOrder(candidates) {
+  const candidateIds = candidates.map((candidate) => candidate.candidate_id);
+  const suggestedOrder = _suggestedFinalOrder(candidates);
+  if (!auditFinalOrderTouched || auditFinalOrder.length !== candidateIds.length) {
+    auditFinalOrder = suggestedOrder;
+    return auditFinalOrder;
+  }
+
+  const normalized = auditFinalOrder.filter((candidateId) =>
+    candidateIds.includes(candidateId)
+  );
+  while (normalized.length < candidateIds.length) {
+    normalized.push("");
+  }
+  auditFinalOrder = normalized.slice(0, candidateIds.length);
+  return auditFinalOrder;
+}
+
+function _hasValidFinalOrder(candidates) {
+  const candidateIds = candidates.map((candidate) => candidate.candidate_id);
+  return (
+    auditFinalOrder.length === candidateIds.length
+    && auditFinalOrder.every((candidateId) => candidateIds.includes(candidateId))
+    && new Set(auditFinalOrder).size === candidateIds.length
   );
 }
 
@@ -131,6 +174,10 @@ function renderAuditStudio() {
   const allPairsAnswered = pairs.every(
     ([left, right]) => auditPairwise[`${left.candidate_id}|${right.candidate_id}`]
   );
+  if (allPairsAnswered) {
+    _syncFinalOrder(candidates);
+  }
+  const finalOrderValid = allPairsAnswered && _hasValidFinalOrder(candidates);
 
   workspaceNode.innerHTML = `
     <div class="audit-dossier">
@@ -173,30 +220,63 @@ function renderAuditStudio() {
                      value="${escapeHtml(auditPairwiseRationale[key] || "")}"
                      placeholder="Brief reason for your choice" />
             </label>
+            <label class="audit-confidence-field">
+              <span>Confidence (0-1)</span>
+              <input type="number" class="audit-confidence-input"
+                     data-pair-key="${escapeHtml(key)}"
+                     min="0" max="1" step="0.05"
+                     value="${escapeHtml(auditPairwiseConfidence[key] ?? "")}"
+                     placeholder="0.70" />
+            </label>
           </div>
         `;
         })
         .join("")}
     </div>
+    ${allPairsAnswered ? `
+      <div class="audit-final-order">
+        <h3>Final ranking</h3>
+        <p class="metric-detail">Review the final ordering before you submit. You can adjust it directly if your pairwise choices left a tie.</p>
+        <div class="audit-final-order-list">
+          ${candidates
+            .map((candidate, index) => `
+              <label class="audit-final-order-row">
+                <span>Rank ${index + 1}</span>
+                <select class="audit-final-order-select" data-final-rank="${index}">
+                  ${candidates
+                    .map((option) => `
+                      <option value="${escapeHtml(option.candidate_id)}" ${auditFinalOrder[index] === option.candidate_id ? "selected" : ""}>
+                        ${escapeHtml(option.label)}
+                      </option>
+                    `)
+                    .join("")}
+                </select>
+              </label>
+            `)
+            .join("")}
+        </div>
+      </div>
+    ` : ""}
     <div class="audit-submit-area">
       <label class="whatif-field">
         <span>Your name / ID (optional)</span>
-        <input type="text" id="audit-reviewer-id" value="" placeholder="reviewer" />
+        <input type="text" id="audit-reviewer-id" value="${escapeHtml(auditReviewerId)}" placeholder="reviewer" />
       </label>
       <label class="whatif-field">
         <span>Overall confidence (0-1)</span>
-        <input type="number" id="audit-confidence" min="0" max="1" step="0.05" value="0.7" />
+        <input type="number" id="audit-confidence" min="0" max="1" step="0.05" value="${escapeHtml(auditOverallConfidence)}" />
       </label>
       <label class="whatif-field whatif-field-wide">
         <span>Notes (optional)</span>
-        <input type="text" id="audit-notes" value="" placeholder="Any additional notes" />
+        <input type="text" id="audit-notes" value="${escapeHtml(auditNotes)}" placeholder="Any additional notes" />
       </label>
       <div class="whatif-actions">
-        <button type="button" id="audit-submit-btn" ${allPairsAnswered ? "" : "disabled"}>
+        <button type="button" id="audit-submit-btn" ${finalOrderValid ? "" : "disabled"}>
           Submit ranking
         </button>
       </div>
-      ${!allPairsAnswered ? `<p class="metric-detail">Complete all pairwise comparisons to submit.</p>` : ""}
+      ${!allPairsAnswered ? `<p class="metric-detail">Complete all pairwise comparisons to unlock the final ranking.</p>` : ""}
+      ${allPairsAnswered && !finalOrderValid ? `<p class="metric-detail">Choose each candidate once in the final ranking.</p>` : ""}
     </div>
   `;
 
@@ -218,9 +298,38 @@ function renderAuditStudio() {
     });
   });
 
+  workspaceNode.querySelectorAll(".audit-confidence-input").forEach((input) => {
+    input.addEventListener("input", () => {
+      const key = input.getAttribute("data-pair-key");
+      const value = input.value.trim();
+      auditPairwiseConfidence[key] = value === "" ? "" : Number(value);
+    });
+  });
+
+  workspaceNode.querySelectorAll(".audit-final-order-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      const rank = Number(select.getAttribute("data-final-rank"));
+      const nextOrder = [...auditFinalOrder];
+      nextOrder[rank] = select.value;
+      auditFinalOrder = nextOrder;
+      auditFinalOrderTouched = true;
+      renderAuditStudio();
+    });
+  });
+
+  document.getElementById("audit-reviewer-id")?.addEventListener("input", (event) => {
+    auditReviewerId = event.target.value;
+  });
+  document.getElementById("audit-confidence")?.addEventListener("input", (event) => {
+    auditOverallConfidence = event.target.value;
+  });
+  document.getElementById("audit-notes")?.addEventListener("input", (event) => {
+    auditNotes = event.target.value;
+  });
+
   // Wire up submit
   const submitBtn = document.getElementById("audit-submit-btn");
-  if (submitBtn && allPairsAnswered) {
+  if (submitBtn && finalOrderValid) {
     submitBtn.addEventListener("click", () => submitAudit());
   }
 
@@ -232,29 +341,38 @@ async function submitAudit() {
   if (!item) return;
 
   const candidates = item.candidates || [];
+  if (!_hasValidFinalOrder(candidates)) {
+    auditRevealData = { error: "Choose each candidate once in the final ranking." };
+    renderAuditStudio();
+    return;
+  }
   const pairs = _candidatePairs(candidates);
 
   const pairwiseComparisons = pairs.map(([left, right]) => {
     const key = `${left.candidate_id}|${right.candidate_id}`;
+    const pairwiseConfidence = auditPairwiseConfidence[key];
     return {
       left_candidate_id: left.candidate_id,
       right_candidate_id: right.candidate_id,
       preferred_candidate_id: auditPairwise[key] || "",
-      confidence: auditPairwiseConfidence[key] ?? null,
+      confidence:
+        pairwiseConfidence === "" || pairwiseConfidence === undefined
+          ? null
+          : Number(pairwiseConfidence),
       evidence_references: [],
       rationale: auditPairwiseRationale[key] || "",
     };
   });
 
-  const ranked = _aggregatePairwiseRank(candidates, auditPairwise);
-  const orderedIds = ranked.map((c) => c.candidate_id);
+  const orderedIds = [...auditFinalOrder];
 
-  const reviewerId =
-    document.getElementById("audit-reviewer-id")?.value?.trim() || "";
+  const reviewerId = auditReviewerId.trim();
+  const confidenceValue = auditOverallConfidence.trim();
   const confidence =
-    parseFloat(document.getElementById("audit-confidence")?.value) || null;
-  const notes =
-    document.getElementById("audit-notes")?.value?.trim() || "";
+    confidenceValue === "" || !Number.isFinite(Number(confidenceValue))
+      ? null
+      : Number(confidenceValue);
+  const notes = auditNotes.trim();
 
   const submitBtn = document.getElementById("audit-submit-btn");
   if (submitBtn) {
@@ -327,8 +445,10 @@ function _renderReveal(revealNode) {
     const humanPairwise = submitted.pairwise_comparisons || [];
     const humanPairMap = {};
     for (const comp of humanPairwise) {
-      humanPairMap[`${comp.left_candidate_id}|${comp.right_candidate_id}`] =
-        comp.preferred_candidate_id;
+      const pairKey = [comp.left_candidate_id, comp.right_candidate_id]
+        .sort()
+        .join("|");
+      humanPairMap[pairKey] = comp.preferred_candidate_id;
     }
 
     comparisonHtml = `
@@ -336,7 +456,9 @@ function _renderReveal(revealNode) {
         <h3>Pairwise comparison</h3>
         ${judgePairwise
           .map((jp) => {
-            const key = `${jp.left_candidate_id}|${jp.right_candidate_id}`;
+            const key = [jp.left_candidate_id, jp.right_candidate_id]
+              .sort()
+              .join("|");
             const humanPick = humanPairMap[key] || "";
             const judgePick = jp.preferred_candidate_id || "";
             const agree = humanPick === judgePick;
