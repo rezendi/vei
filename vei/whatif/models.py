@@ -768,6 +768,10 @@ class WhatIfAuditRecord(BaseModel):
     objective_pack_id: WhatIfBusinessObjectivePackId
     reviewer_id: str = ""
     ordered_candidate_ids: list[str] = Field(default_factory=list)
+    pairwise_comparisons: list[WhatIfJudgedPairwiseComparison] = Field(
+        default_factory=list
+    )
+    confidence: float | None = None
     status: Literal["pending", "completed"] = "pending"
     agreement_with_judge: bool | None = None
     notes: str = ""

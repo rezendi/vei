@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 from re import sub
 from typing import Any
@@ -10,13 +12,19 @@ from fastapi.responses import JSONResponse
 from vei.whatif import (
     default_forecast_backend,
     list_objective_packs,
+    load_branch_point_benchmark_build_result,
+    load_branch_point_benchmark_judge_result,
     load_world,
     materialize_episode,
     run_counterfactual_experiment,
     run_ranked_counterfactual_experiment,
     search_events,
 )
-from vei.whatif.models import WhatIfCandidateIntervention
+from vei.whatif.models import (
+    WhatIfAuditRecord,
+    WhatIfCandidateIntervention,
+    WhatIfJudgedPairwiseComparison,
+)
 from vei.verticals import (
     load_workspace_exports_preview,
     load_workspace_presentation,
@@ -25,6 +33,7 @@ from vei.verticals import (
 from vei.workspace.api import show_workspace
 
 from ._api_models import (
+    AuditSubmitRequest,
     GovernorAgentUpdateRequest,
     GovernorApprovalResolveRequest,
     GovernorSituationActivateRequest,
@@ -527,3 +536,169 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
         except ValueError:
             return JSONResponse({})
         return JSONResponse(payload.model_dump(mode="json"))
+
+    # ------------------------------------------------------------------
+    # Audit routes — human review of LLM judge benchmark rankings
+    # ------------------------------------------------------------------
+
+    def _resolve_benchmark_root() -> Path:
+        env_root = os.environ.get("VEI_BENCHMARK_ROOT", "").strip()
+        if env_root:
+            candidate = Path(env_root).expanduser().resolve()
+        else:
+            candidate = root
+        if not (candidate / "judge_result.json").exists():
+            raise HTTPException(
+                status_code=404,
+                detail="No judge_result.json found. Run `vei whatif benchmark judge` first.",
+            )
+        return candidate
+
+    def _completed_audit_path(benchmark_root: Path) -> Path:
+        return benchmark_root / "completed_audit_records.json"
+
+    def _load_completed_audits(benchmark_root: Path) -> list[WhatIfAuditRecord]:
+        path = _completed_audit_path(benchmark_root)
+        if not path.exists():
+            return []
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return [WhatIfAuditRecord.model_validate(item) for item in payload]
+
+    def _save_completed_audits(
+        benchmark_root: Path,
+        records: list[WhatIfAuditRecord],
+    ) -> None:
+        path = _completed_audit_path(benchmark_root)
+        path.write_text(
+            json.dumps(
+                [record.model_dump(mode="json") for record in records],
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+    @app.get("/api/workspace/whatif/audit")
+    def api_audit_queue() -> JSONResponse:
+        benchmark_root = _resolve_benchmark_root()
+        judge_result = load_branch_point_benchmark_judge_result(benchmark_root)
+        build = load_branch_point_benchmark_build_result(benchmark_root)
+        completed = _load_completed_audits(benchmark_root)
+        completed_keys = {
+            (record.case_id, record.objective_pack_id) for record in completed
+        }
+        case_by_id = {case.case_id: case for case in build.cases}
+        items = []
+        for audit in judge_result.audit_queue:
+            key = (audit.case_id, audit.objective_pack_id)
+            case = case_by_id.get(audit.case_id)
+            if case is None:
+                continue
+            # Read the dossier text for this case+objective
+            dossier_path = case.objective_dossier_paths.get(audit.objective_pack_id)
+            dossier_text = ""
+            if dossier_path and Path(dossier_path).exists():
+                dossier_text = Path(dossier_path).read_text(encoding="utf-8")
+            # Find the judge's judgment for reveal after submission
+            judge_ranking = None
+            for judgment in judge_result.judgments:
+                if (
+                    judgment.case_id == audit.case_id
+                    and judgment.objective_pack_id == audit.objective_pack_id
+                ):
+                    judge_ranking = judgment
+                    break
+            items.append(
+                {
+                    "case_id": audit.case_id,
+                    "objective_pack_id": audit.objective_pack_id,
+                    "status": "completed" if key in completed_keys else "pending",
+                    "case_title": case.title,
+                    "case_summary": case.summary,
+                    "dossier_text": dossier_text,
+                    "candidates": [
+                        {
+                            "candidate_id": c.candidate_id,
+                            "label": c.label,
+                            "prompt": c.prompt,
+                        }
+                        for c in case.candidates
+                    ],
+                    "judge_confidence": (
+                        judge_ranking.confidence if judge_ranking else None
+                    ),
+                    "judge_uncertainty_flag": (
+                        judge_ranking.uncertainty_flag if judge_ranking else False
+                    ),
+                }
+            )
+        return JSONResponse({"items": items, "total": len(items)})
+
+    @app.post("/api/workspace/whatif/audit/{case_id}/{objective_pack_id}")
+    def api_audit_submit(
+        case_id: str,
+        objective_pack_id: str,
+        request: AuditSubmitRequest,
+    ) -> JSONResponse:
+        benchmark_root = _resolve_benchmark_root()
+        judge_result = load_branch_point_benchmark_judge_result(benchmark_root)
+
+        # Find the judge's ranking for agreement check and reveal
+        judge_ranking = None
+        for judgment in judge_result.judgments:
+            if (
+                judgment.case_id == case_id
+                and judgment.objective_pack_id == objective_pack_id
+            ):
+                judge_ranking = judgment
+                break
+
+        agreement = None
+        if judge_ranking is not None:
+            agreement = list(request.ordered_candidate_ids) == list(
+                judge_ranking.ordered_candidate_ids
+            )
+
+        record = WhatIfAuditRecord(
+            case_id=case_id,
+            objective_pack_id=objective_pack_id,
+            reviewer_id=request.reviewer_id,
+            ordered_candidate_ids=request.ordered_candidate_ids,
+            pairwise_comparisons=[
+                WhatIfJudgedPairwiseComparison.model_validate(
+                    comp.model_dump(mode="json")
+                )
+                for comp in request.pairwise_comparisons
+            ],
+            confidence=request.confidence,
+            status="completed",
+            agreement_with_judge=agreement,
+            notes=request.notes,
+        )
+
+        # Append to completed audits file
+        completed = _load_completed_audits(benchmark_root)
+        # Replace existing record for same case+objective if present
+        completed = [
+            r
+            for r in completed
+            if not (r.case_id == case_id and r.objective_pack_id == objective_pack_id)
+        ]
+        completed.append(record)
+        _save_completed_audits(benchmark_root, completed)
+
+        # Build reveal payload with judge's comparisons
+        reveal: dict[str, Any] = {
+            "submitted": record.model_dump(mode="json"),
+            "agreement_with_judge": agreement,
+        }
+        if judge_ranking is not None:
+            reveal["judge_ranking"] = {
+                "ordered_candidate_ids": judge_ranking.ordered_candidate_ids,
+                "pairwise_comparisons": [
+                    comp.model_dump(mode="json")
+                    for comp in judge_ranking.pairwise_comparisons
+                ],
+                "confidence": judge_ranking.confidence,
+                "notes": judge_ranking.notes,
+            }
+        return JSONResponse(reveal)
