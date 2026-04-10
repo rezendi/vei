@@ -13,6 +13,7 @@ from vei.whatif import load_episode_manifest
 from vei.whatif.models import (
     WhatIfEventReference,
     WhatIfExperimentMode,
+    WhatIfJudgedPairwiseComparison,
     WhatIfObjectivePackId,
 )
 from vei.twin import load_customer_twin
@@ -152,6 +153,14 @@ class WhatIfRankRequest(BaseModel):
     ejepa_batch_size: int = 64
     ejepa_force_retrain: bool = False
     ejepa_device: str | None = None
+
+
+class AuditSubmitRequest(BaseModel):
+    reviewer_id: str = ""
+    ordered_candidate_ids: list[str]
+    pairwise_comparisons: list[WhatIfJudgedPairwiseComparison] = []
+    confidence: float | None = None
+    notes: str = ""
 
 
 class WorkspaceHistoricalSummary(BaseModel):
