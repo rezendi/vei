@@ -5286,6 +5286,69 @@ details.secondary-disclosure summary:focus-visible {
   background: var(--surface);
 }
 
+.audit-confidence-field {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 160px;
+  font-size: 0.8rem;
+}
+
+.audit-confidence-field span {
+  color: var(--ink-soft);
+}
+
+.audit-confidence-field input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--surface);
+}
+
+.audit-final-order {
+  margin-top: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(8, 12, 22, 0.5);
+}
+
+.audit-final-order h3 {
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.audit-final-order-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.audit-final-order-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.82rem;
+}
+
+.audit-final-order-row span {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.audit-final-order-select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: var(--surface);
+  color: inherit;
+}
+
 .audit-submit-area {
   margin-top: 20px;
   display: grid;

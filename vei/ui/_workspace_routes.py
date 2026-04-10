@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
 from re import sub
 from typing import Any
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -30,7 +32,6 @@ from vei.verticals import (
     load_workspace_presentation,
     load_workspace_story_manifest,
 )
-from vei.workspace.api import show_workspace
 
 from ._api_models import (
     AuditSubmitRequest,
@@ -48,6 +49,7 @@ from ._api_models import (
     load_workspace_workforce_payload,
     resolve_whatif_source_path,
 )
+from ._root_mode import load_ui_workspace_summary
 
 
 def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
@@ -78,9 +80,18 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
         cleaned = sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
         return cleaned or "whatif"
 
+    def _iso_now() -> str:
+        return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
     @app.get("/api/workspace")
     def api_workspace() -> JSONResponse:
-        return JSONResponse(show_workspace(root).model_dump(mode="json"))
+        payload = load_ui_workspace_summary(root)
+        if payload is None:
+            raise HTTPException(
+                status_code=404,
+                detail="workspace root is not configured",
+            )
+        return JSONResponse(payload.model_dump(mode="json"))
 
     @app.get("/api/workspace/historical")
     def api_workspace_historical() -> JSONResponse:
@@ -579,12 +590,19 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
 
     @app.get("/api/workspace/whatif/audit")
     def api_audit_queue() -> JSONResponse:
-        benchmark_root = _resolve_benchmark_root()
+        try:
+            benchmark_root = _resolve_benchmark_root()
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return JSONResponse({"items": [], "total": 0})
+            raise
         judge_result = load_branch_point_benchmark_judge_result(benchmark_root)
         build = load_branch_point_benchmark_build_result(benchmark_root)
         completed = _load_completed_audits(benchmark_root)
         completed_keys = {
-            (record.case_id, record.objective_pack_id) for record in completed
+            (record.case_id, record.objective_pack_id)
+            for record in completed
+            if record.status == "completed"
         }
         case_by_id = {case.case_id: case for case in build.cases}
         items = []
@@ -640,7 +658,22 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
         request: AuditSubmitRequest,
     ) -> JSONResponse:
         benchmark_root = _resolve_benchmark_root()
+        build = load_branch_point_benchmark_build_result(benchmark_root)
         judge_result = load_branch_point_benchmark_judge_result(benchmark_root)
+        case_by_id = {case.case_id: case for case in build.cases}
+        case = case_by_id.get(case_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="benchmark case not found")
+        candidate_ids = [candidate.candidate_id for candidate in case.candidates]
+        candidate_id_set = set(candidate_ids)
+        if (
+            len(request.ordered_candidate_ids) != len(candidate_ids)
+            or set(request.ordered_candidate_ids) != candidate_id_set
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="ordered_candidate_ids must contain each candidate exactly once",
+            )
 
         # Find the judge's ranking for agreement check and reveal
         judge_ranking = None
@@ -651,16 +684,58 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
             ):
                 judge_ranking = judgment
                 break
+        if judge_ranking is None:
+            raise HTTPException(
+                status_code=404,
+                detail="judge ranking not found for case/objective",
+            )
+
+        expected_pairs = {
+            tuple(sorted((left_id, right_id)))
+            for index, left_id in enumerate(candidate_ids)
+            for right_id in candidate_ids[index + 1 :]
+        }
+        seen_pairs: set[tuple[str, str]] = set()
+        for comparison in request.pairwise_comparisons:
+            pair_key = tuple(
+                sorted((comparison.left_candidate_id, comparison.right_candidate_id))
+            )
+            if pair_key in seen_pairs:
+                raise HTTPException(
+                    status_code=400,
+                    detail="pairwise_comparisons contains duplicate pairs",
+                )
+            seen_pairs.add(pair_key)
+            pair_ids = {
+                comparison.left_candidate_id,
+                comparison.right_candidate_id,
+            }
+            if not pair_ids.issubset(candidate_id_set):
+                raise HTTPException(
+                    status_code=400,
+                    detail="pairwise_comparisons contains unknown candidate ids",
+                )
+            if comparison.preferred_candidate_id not in pair_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail="preferred_candidate_id must match one side of the pair",
+                )
+        if seen_pairs != expected_pairs:
+            raise HTTPException(
+                status_code=400,
+                detail="pairwise_comparisons must cover every candidate pair once",
+            )
 
         agreement = None
-        if judge_ranking is not None:
-            agreement = list(request.ordered_candidate_ids) == list(
-                judge_ranking.ordered_candidate_ids
-            )
+        agreement = list(request.ordered_candidate_ids) == list(
+            judge_ranking.ordered_candidate_ids
+        )
 
         record = WhatIfAuditRecord(
             case_id=case_id,
             objective_pack_id=objective_pack_id,
+            submission_id=uuid4().hex,
+            submitted_at=_iso_now(),
             reviewer_id=request.reviewer_id,
             ordered_candidate_ids=request.ordered_candidate_ids,
             pairwise_comparisons=[
@@ -677,12 +752,6 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
 
         # Append to completed audits file
         completed = _load_completed_audits(benchmark_root)
-        # Replace existing record for same case+objective if present
-        completed = [
-            r
-            for r in completed
-            if not (r.case_id == case_id and r.objective_pack_id == objective_pack_id)
-        ]
         completed.append(record)
         _save_completed_audits(benchmark_root, completed)
 

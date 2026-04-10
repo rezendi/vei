@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from vei.whatif import load_episode_manifest
 from vei.whatif.models import (
@@ -158,8 +158,10 @@ class WhatIfRankRequest(BaseModel):
 class AuditSubmitRequest(BaseModel):
     reviewer_id: str = ""
     ordered_candidate_ids: list[str]
-    pairwise_comparisons: list[WhatIfJudgedPairwiseComparison] = []
-    confidence: float | None = None
+    pairwise_comparisons: list[WhatIfJudgedPairwiseComparison] = Field(
+        default_factory=list
+    )
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     notes: str = ""
 
 

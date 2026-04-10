@@ -103,7 +103,7 @@ The auditor performs pairwise comparisons over the candidate set (same shape as 
 
 - per-pair preference with brief rationale
 - per-pair confidence
-- a final candidate ordering
+- a reviewed final candidate ordering
 - overall confidence and optional notes
 
 **Phase 2: Reveal and comparison**
@@ -188,8 +188,9 @@ For one (case, objective) pair:
 1. Displays the full dossier (same text the LLM judge saw)
 2. Presents pairwise comparison cards for each candidate pair
 3. The auditor picks a preferred candidate per pair, optionally adds rationale and confidence
-4. Submitting produces the final ordering and writes to `completed_audit_records.json`
-5. After submission, reveals the judge's comparisons with agree/disagree highlights
+4. The auditor reviews the final ordering before submit
+5. Submitting appends a completed record to `completed_audit_records.json`
+6. After submission, reveals the judge's comparisons with agree/disagree highlights
 
 ### CLI
 
