@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .models import (
+    WhatIfBusinessStateAssessment,
+    WhatIfBusinessStateChange,
     WhatIfBenchmarkBuildResult,
     WhatIfBenchmarkEvalResult,
     WhatIfBenchmarkJudgeResult,
@@ -10,6 +12,7 @@ from .models import (
     WhatIfEventSearchResult,
     WhatIfExperimentResult,
     WhatIfForecastResult,
+    WhatIfCaseContext,
     WhatIfLLMReplayResult,
     WhatIfPackRunResult,
     WhatIfPublicContext,
@@ -50,12 +53,77 @@ def _public_context_lines(
     return ["", *lines]
 
 
+def _business_state_assessment_lines(
+    assessment: WhatIfBusinessStateAssessment | None,
+    *,
+    heading: str,
+    max_items: int = 3,
+) -> list[str]:
+    if assessment is None:
+        return []
+    lines = ["", f"## {heading}", f"- Summary: {assessment.summary}"]
+    for implication in assessment.implications[: max(1, max_items)]:
+        lines.append(f"- {implication}")
+    return lines
+
+
+def _case_context_lines(
+    context: WhatIfCaseContext | None,
+    *,
+    max_history: int = 3,
+    max_records: int = 3,
+) -> list[str]:
+    if context is None:
+        return []
+    if not context.related_history and not context.records:
+        return []
+    lines = [
+        "",
+        "## Case Context",
+        f"- Case id: {context.case_id}",
+        f"- Related activity: {len(context.related_history)}",
+        f"- Linked records: {len(context.records)}",
+    ]
+    for event in context.related_history[-max(1, max_history) :]:
+        lines.append(
+            f"- [{event.surface}] {event.timestamp[:10]} {event.actor_id}: {event.subject or event.thread_id}"
+        )
+    for record in context.records[: max(1, max_records)]:
+        lines.append(
+            f"- [{record.surface or record.provider}] {record.label}: {record.summary}"
+        )
+    return lines
+
+
+def _business_state_change_lines(
+    change: WhatIfBusinessStateChange | None,
+    *,
+    heading: str = "Business State Change",
+    max_items: int = 4,
+) -> list[str]:
+    if change is None:
+        return []
+    lines = [
+        "",
+        f"## {heading}",
+        f"- Summary: {change.summary}",
+        f"- Confidence: {change.confidence}",
+        f"- Net effect score: {change.net_effect_score}",
+    ]
+    for impact in change.impacts[: max(1, max_items)]:
+        lines.append(f"- {impact.summary}")
+    for consequence in change.consequence_estimates[:3]:
+        lines.append(f"- {consequence.summary}")
+    return lines
+
+
 def render_world_summary(world: WhatIfWorld) -> str:
     lines = [
         f"# {world.source.title()} What-If Source",
         "",
         f"- Events: {world.summary.event_count}",
         f"- Threads: {world.summary.thread_count}",
+        f"- Cases: {len(world.cases)}",
         f"- Actors: {world.summary.actor_count}",
         f"- Custodians: {world.summary.custodian_count}",
     ]
@@ -150,6 +218,8 @@ def render_episode(materialization: WhatIfEpisodeMaterialization) -> str:
         "",
         f"- Workspace: {materialization.workspace_root}",
         f"- Thread: `{materialization.thread_id}`",
+        f"- Case: `{materialization.case_id or materialization.thread_id}`",
+        f"- Surface: {materialization.surface}",
         f"- Branch event: `{materialization.branch_event_id}`",
         f"- Branch actor: `{materialization.branch_event.actor_id}`",
         f"- Branch type: {materialization.branch_event.event_type}",
@@ -158,6 +228,13 @@ def render_episode(materialization: WhatIfEpisodeMaterialization) -> str:
         f"- Forecast risk score: {materialization.forecast.risk_score}",
     ]
     lines.extend(_public_context_lines(materialization.public_context))
+    lines.extend(_case_context_lines(materialization.case_context))
+    lines.extend(
+        _business_state_assessment_lines(
+            materialization.historical_business_state,
+            heading="Recorded Business State",
+        )
+    )
     if materialization.baseline_future_preview:
         lines.extend(["", "## Baseline Future Preview"])
         for event in materialization.baseline_future_preview[:3]:
@@ -171,12 +248,18 @@ def render_replay(summary: WhatIfReplaySummary) -> str:
     lines = [
         "# What-If Replay",
         "",
+        f"- Surface: {summary.surface}",
         f"- Scheduled future events: {summary.scheduled_event_count}",
         f"- Delivered after tick: {summary.delivered_event_count}",
         f"- Current time: {summary.current_time_ms} ms",
         f"- Inbox count: {summary.inbox_count}",
+        f"- Visible items: {summary.visible_item_count}",
         f"- Forecast risk score: {summary.forecast.risk_score}",
     ]
+    if summary.top_items:
+        lines.extend(["", "## Visible Items"])
+        for item in summary.top_items:
+            lines.append(f"- {item}")
     if summary.top_subjects:
         lines.extend(["", "## Top Subjects"])
         for subject in summary.top_subjects:
@@ -198,8 +281,8 @@ def render_llm_result(result: WhatIfLLMReplayResult) -> str:
         f"- Provider: {result.provider}",
         f"- Model: {result.model}",
         f"- Summary: {result.summary}",
-        f"- Generated messages: {len(result.messages)}",
-        f"- Delivered messages: {result.delivered_event_count}",
+        f"- Generated actions: {len(result.messages)}",
+        f"- Delivered actions: {result.delivered_event_count}",
         f"- Inbox count: {result.inbox_count}",
     ]
     if result.notes:
@@ -207,10 +290,10 @@ def render_llm_result(result: WhatIfLLMReplayResult) -> str:
         for note in result.notes:
             lines.append(f"- {note}")
     if result.messages:
-        lines.extend(["", "## Messages"])
+        lines.extend(["", "## Actions"])
         for message in result.messages:
             lines.append(
-                f"- `{message.actor_id}` -> `{message.to}` after {message.delay_ms} ms: "
+                f"- `{message.surface}` `{message.actor_id}` -> `{message.to}` after {message.delay_ms} ms: "
                 f"{message.subject}"
             )
     return "\n".join(lines)
@@ -236,6 +319,7 @@ def render_forecast_result(result: WhatIfForecastResult) -> str:
         lines.extend(["", "## Notes"])
         for note in result.notes:
             lines.append(f"- {note}")
+    lines.extend(_business_state_change_lines(result.business_state_change))
     return "\n".join(lines)
 
 
@@ -306,6 +390,9 @@ def render_experiment(result: WhatIfExperimentResult) -> str:
                 f"- Escalation delta: {result.forecast_result.delta.escalation_delta}",
             ]
         )
+        lines.extend(
+            _business_state_change_lines(result.forecast_result.business_state_change)
+        )
     lines.extend(
         [
             "",
@@ -342,6 +429,11 @@ def render_ranked_experiment(result: WhatIfRankedExperimentResult) -> str:
                 f"- Rank {candidate.rank}: {candidate.intervention.label}",
                 f"  Score {candidate.outcome_score.overall_score} across {candidate.rollout_count} rollouts",
                 f"  {candidate.reason}",
+                (
+                    f"  Business state: {candidate.business_state_change.summary}"
+                    if candidate.business_state_change is not None
+                    else "  Business state: not available"
+                ),
                 (
                     f"  Signals: exposure={candidate.average_outcome_signals.exposure_risk}, "
                     f"delay={candidate.average_outcome_signals.delay_risk}, "

@@ -19,10 +19,11 @@ from .benchmark_runtime import (
 )
 from ..score_frontier import run_llm_judge_prompt
 from .corpus import (
-    ENRON_DOMAIN,
     event_by_id,
     event_reference,
+    external_recipient_count,
     hydrate_event_snippets,
+    recipient_scope,
 )
 from .interventions import intervention_tags
 from .models import (
@@ -338,7 +339,10 @@ def build_branch_point_benchmark(
         timeline = events_by_thread.get(thread.thread_id, [])
         if len(timeline) < 2:
             continue
-        branch_event = _choose_branch_event(timeline)
+        branch_event = _choose_branch_event(
+            timeline,
+            organization_domain=world.summary.organization_domain,
+        )
         history_events, future_events = _split_timeline(
             timeline=timeline,
             branch_event_id=branch_event.event_id,
@@ -350,12 +354,17 @@ def build_branch_point_benchmark(
             thread_id=thread.thread_id,
             branch_event=branch_event,
             history_events=history_events,
-            action_schema=_action_schema_from_event(branch_event),
+            organization_domain=world.summary.organization_domain,
+            action_schema=_action_schema_from_event(
+                branch_event,
+                organization_domain=world.summary.organization_domain,
+            ),
             notes=["Observed historical branch row."],
         )
         targets = summarize_observed_targets(
             branch_event=branch_event,
             future_events=future_events,
+            organization_domain=world.summary.organization_domain,
         )
         evidence = summarize_observed_evidence(
             branch_event=branch_event,
@@ -755,10 +764,17 @@ def summarize_observed_targets(
     *,
     branch_event: WhatIfEvent,
     future_events: Sequence[WhatIfEvent],
+    organization_domain: str,
 ) -> WhatIfObservedOutcomeTargets:
     if not future_events:
         return WhatIfObservedOutcomeTargets()
-    external_send_count = sum(_event_external_count(event) for event in future_events)
+    external_send_count = sum(
+        _event_external_count(
+            event,
+            organization_domain=organization_domain,
+        )
+        for event in future_events
+    )
     delays = [
         max(0, event.timestamp_ms - branch_event.timestamp_ms)
         for event in future_events
@@ -1038,6 +1054,7 @@ def _resolve_benchmark_case_specs(
         return _resolved_cases_from_seed_pack(
             _BENCHMARK_CASE_PACKS[heldout_pack_id],
             world=world,
+            organization_domain=world.summary.organization_domain,
         )
     return _resolved_cases_from_research_pack(
         _resolve_case_threads(get_research_pack(heldout_pack_id), world=world)
@@ -1048,13 +1065,17 @@ def _resolved_cases_from_seed_pack(
     seeds: Sequence[_BenchmarkCaseSeed],
     *,
     world: WhatIfWorld,
+    organization_domain: str,
 ) -> list[_ResolvedBenchmarkCaseSpec]:
     resolved: list[_ResolvedBenchmarkCaseSpec] = []
     for seed in seeds:
         event = event_by_id(world.events, seed.event_id)
         if event is None:
             raise ValueError(f"benchmark case event not found: {seed.event_id}")
-        historical_action = _action_schema_from_event(event)
+        historical_action = _action_schema_from_event(
+            event,
+            organization_domain=organization_domain,
+        )
         resolved.append(
             _ResolvedBenchmarkCaseSpec(
                 case_id=seed.case_id,
@@ -1703,7 +1724,11 @@ def _group_events_by_thread(
     return grouped
 
 
-def _choose_branch_event(timeline: Sequence[WhatIfEvent]) -> WhatIfEvent:
+def _choose_branch_event(
+    timeline: Sequence[WhatIfEvent],
+    *,
+    organization_domain: str,
+) -> WhatIfEvent:
     for index, event in enumerate(timeline[:-1], start=0):
         if index == 0:
             continue
@@ -1713,7 +1738,11 @@ def _choose_branch_event(timeline: Sequence[WhatIfEvent]) -> WhatIfEvent:
             or event.flags.is_escalation
             or event.flags.consult_legal_specialist
             or event.flags.consult_trading_specialist
-            or _event_external_count(event) > 0
+            or _event_external_count(
+                event,
+                organization_domain=organization_domain,
+            )
+            > 0
         ):
             return event
     return timeline[max(0, (len(timeline) // 2) - 1)]
@@ -1782,12 +1811,16 @@ def _build_benchmark_cases(
             timeline=timeline,
             branch_event_id=branch_event.event_id,
         )
-        historical_action = _action_schema_from_event(branch_event)
+        historical_action = _action_schema_from_event(
+            branch_event,
+            organization_domain=world.summary.organization_domain,
+        )
         base_contract = _build_pre_branch_contract(
             case_id=case.case_id,
             thread_id=case.thread_id or "",
             branch_event=branch_event,
             history_events=history_events,
+            organization_domain=world.summary.organization_domain,
             action_schema=historical_action,
             notes=["Held-out branch-point base contract."],
         )
@@ -1970,6 +2003,7 @@ def _build_pre_branch_contract(
     thread_id: str,
     branch_event: WhatIfEvent,
     history_events: Sequence[WhatIfEvent],
+    organization_domain: str,
     action_schema: WhatIfActionSchema,
     notes: Sequence[str],
 ) -> WhatIfPreBranchContract:
@@ -1993,7 +2027,13 @@ def _build_pre_branch_contract(
         ),
         "history_event_count": float(len(history_events)),
         "history_external_count": float(
-            sum(_event_external_count(event) for event in history_events)
+            sum(
+                _event_external_count(
+                    event,
+                    organization_domain=organization_domain,
+                )
+                for event in history_events
+            )
         ),
         "history_attachment_count": float(
             sum(1 for event in history_events if event.flags.has_attachment_reference)
@@ -2026,7 +2066,11 @@ def _build_pre_branch_contract(
                 1
                 for event in history_events
                 if event.flags.has_attachment_reference
-                and _event_external_count(event) > 0
+                and _event_external_count(
+                    event,
+                    organization_domain=organization_domain,
+                )
+                > 0
             )
         ),
         "history_executive_mention_count": float(
@@ -2061,8 +2105,14 @@ def _build_pre_branch_contract(
                 actor_id=event.actor_id,
                 subject=event.subject,
                 delay_ms=max(0, event.timestamp_ms - history_events[0].timestamp_ms),
-                recipient_scope=_event_scope(event),
-                external_recipient_count=_event_external_count(event),
+                recipient_scope=_event_scope(
+                    event,
+                    organization_domain=organization_domain,
+                ),
+                external_recipient_count=_event_external_count(
+                    event,
+                    organization_domain=organization_domain,
+                ),
                 cc_recipient_count=int(event.flags.cc_count),
                 attachment_flag=event.flags.has_attachment_reference,
                 escalation_flag=event.flags.is_escalation
@@ -2090,12 +2140,22 @@ def _build_pre_branch_contract(
     )
 
 
-def _action_schema_from_event(event: WhatIfEvent) -> WhatIfActionSchema:
+def _action_schema_from_event(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> WhatIfActionSchema:
     text = " ".join([event.subject, event.snippet, event.target_id]).lower()
     return WhatIfActionSchema(
         event_type=event.event_type,
-        recipient_scope=_event_scope(event),
-        external_recipient_count=_event_external_count(event),
+        recipient_scope=_event_scope(
+            event,
+            organization_domain=organization_domain,
+        ),
+        external_recipient_count=_event_external_count(
+            event,
+            organization_domain=organization_domain,
+        ),
         attachment_policy="present" if event.flags.has_attachment_reference else "none",
         hold_required=False,
         legal_review_required=event.flags.consult_legal_specialist,
@@ -2107,14 +2167,25 @@ def _action_schema_from_event(event: WhatIfEvent) -> WhatIfActionSchema:
         owner_clarity="single_owner" if event.target_id else "unclear",
         reassurance_style=_reassurance_style_for_text(text),
         review_path=_review_path_from_text(text, event.flags.consult_legal_specialist),
-        coordination_breadth=_coordination_breadth_for_event(event),
-        outside_sharing_posture=_outside_sharing_posture_for_event(event),
+        coordination_breadth=_coordination_breadth_for_event(
+            event,
+            organization_domain=organization_domain,
+        ),
+        outside_sharing_posture=_outside_sharing_posture_for_event(
+            event,
+            organization_domain=organization_domain,
+        ),
         decision_posture=_decision_posture_for_text(
             text,
             hold_required=False,
             escalated=event.flags.is_escalation or event.event_type == "escalation",
         ),
-        action_tags=sorted(_historical_branch_tags(event)),
+        action_tags=sorted(
+            _historical_branch_tags(
+                event,
+                organization_domain=organization_domain,
+            )
+        ),
     )
 
 
@@ -2558,7 +2629,11 @@ def _kendall_tau(
     return (hits - discordant) / total
 
 
-def _historical_branch_tags(event: WhatIfEvent) -> set[str]:
+def _historical_branch_tags(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> set[str]:
     tags: set[str] = set()
     if event.flags.consult_legal_specialist:
         tags.add("legal")
@@ -2566,7 +2641,7 @@ def _historical_branch_tags(event: WhatIfEvent) -> set[str]:
         tags.add("trading")
     if event.flags.has_attachment_reference:
         tags.add("attachment_present")
-    if _event_external_count(event) == 0:
+    if _event_external_count(event, organization_domain=organization_domain) == 0:
         tags.add("internal_only")
     if event.flags.is_forward:
         tags.add("forward")
@@ -2575,7 +2650,11 @@ def _historical_branch_tags(event: WhatIfEvent) -> set[str]:
     return tags
 
 
-def _event_scope(event: WhatIfEvent) -> str:
+def _event_scope(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> str:
     recipients = [
         item.strip().lower() for item in event.flags.to_recipients if item.strip()
     ]
@@ -2583,21 +2662,26 @@ def _event_scope(event: WhatIfEvent) -> str:
         recipients.append(event.target_id.strip().lower())
     if not recipients:
         return "unknown"
-    external = [item for item in recipients if not item.endswith(f"@{ENRON_DOMAIN}")]
-    if not external:
-        return "internal"
-    if len(external) == len(recipients):
-        return "external"
-    return "mixed"
+    return recipient_scope(
+        recipients,
+        organization_domain=organization_domain,
+    )
 
 
-def _event_external_count(event: WhatIfEvent) -> int:
+def _event_external_count(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> int:
     recipients = [
         item.strip().lower() for item in event.flags.to_recipients if item.strip()
     ]
     if event.target_id:
         recipients.append(event.target_id.strip().lower())
-    return sum(1 for item in recipients if not item.endswith(f"@{ENRON_DOMAIN}"))
+    return external_recipient_count(
+        recipients,
+        organization_domain=organization_domain,
+    )
 
 
 def _event_reassurance_count(event: WhatIfEvent) -> int:
@@ -2691,9 +2775,16 @@ def _review_path_for_prompt(text: str, tags: set[str]) -> str:
     return "business_owner"
 
 
-def _coordination_breadth_for_event(event: WhatIfEvent) -> str:
+def _coordination_breadth_for_event(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> str:
     recipient_total = (
-        _event_external_count(event)
+        _event_external_count(
+            event,
+            organization_domain=organization_domain,
+        )
         + len(event.flags.to_recipients)
         + len(event.flags.cc_recipients)
     )
@@ -2716,8 +2807,15 @@ def _coordination_breadth_for_prompt(text: str, tags: set[str]) -> str:
     return "targeted"
 
 
-def _outside_sharing_posture_for_event(event: WhatIfEvent) -> str:
-    external_count = _event_external_count(event)
+def _outside_sharing_posture_for_event(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> str:
+    external_count = _event_external_count(
+        event,
+        organization_domain=organization_domain,
+    )
     if external_count == 0:
         return "internal_only"
     if not event.flags.has_attachment_reference:

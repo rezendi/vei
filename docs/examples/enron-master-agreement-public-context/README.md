@@ -20,6 +20,18 @@ Open `http://127.0.0.1:3055`.
 - Public-company slice at that date: 2 financial checkpoints and 0 public-news events
 - Bounded LLM path: keep the draft inside Enron, ask Gerald Nemec for legal review, and hold the outside send
 - JEPA forecast: same 84-event horizon, risk from `1.000` to `0.983`, outside-send delta `-29`
+- Business-state readout: the saved forecast now translates those proxy shifts into decision language such as outside spread risk, handling burden, execution delay, and commercial position
+- Repo-owned comparison: three candidate moves are ranked in `whatif_business_state_comparison.*` using the same saved branch workspace and proxy forecast path
+
+## What It Shows
+
+VEI starts from the real September 27, 2000 outside send, keeps only the public-company facts that were already known on that date, and then compares alternate moves against the recorded future. The saved single-run result keeps the same 84-event horizon, predicts 29 fewer outside sends, and nudges the risk score from `1.000` to `0.983`.
+
+![Predicted business change](../../assets/enron-whatif/enron-predicted-business-change.png)
+
+The saved ranked comparison turns that into a choice. `Hold for internal review` comes out best at `0.351`, `Send a narrow status note` is still positive at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
+
+![Ranked business comparison](../../assets/enron-whatif/enron-ranked-comparison.png)
 
 ## Files
 
@@ -28,6 +40,14 @@ Open `http://127.0.0.1:3055`.
 - `whatif_experiment_result.json`: saved combined result for the example bundle
 - `whatif_llm_result.json`: bounded message-path result
 - `whatif_ejepa_result.json`: JEPA forecast result
+- `whatif_business_state_comparison.md`: three-way comparison in business language for the saved branch scene
+- `whatif_business_state_comparison.json`: structured version of that comparison
+
+## Refresh
+
+```bash
+python scripts/build_enron_business_state_example.py
+```
 
 ## Constraint
 

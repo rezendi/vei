@@ -1,6 +1,6 @@
 # Historical What-Ifs
 
-VEI now supports a mail-first historical what-if workflow for archive-backed datasets such as the Enron Rosetta event tables.
+VEI now supports a company-history historical what-if workflow for archive-backed datasets such as the Enron Rosetta event tables and normalized multi-source context snapshots.
 
 The flow has four steps:
 
@@ -29,17 +29,17 @@ This keeps the whole-history pass deterministic and cheap while still giving us 
 
 ## What gets materialized
 
-When VEI opens a historical episode, it builds a mail-first workspace from the selected thread:
+When VEI opens a historical episode, it builds a workspace from the selected surface:
 
-- messages before the selected event become the initial mail state
-- the selected event and later historical messages become scheduled replay events
-- observed thread participants become identity records
+- earlier records on that surface become the initial historical state
+- the selected event and later historical records become scheduled replay events
+- observed participants become identity records
 - policy-relevant annotations stay attached for analysis and scoring
 
 The important constraint is honesty:
 
-- VEI does **not** invent Slack history for archive-backed email episodes
-- VEI keeps historical body excerpts labeled as excerpts when the source data is truncated
+- VEI keeps mail as mail, chat as chat, and tickets as tickets
+- VEI keeps historical excerpts labeled as excerpts when the source data is truncated
 - unsupported surfaces stay disabled instead of being faked
 
 ## Compare paths
@@ -47,8 +47,10 @@ The important constraint is honesty:
 There are two compare paths today:
 
 - **LLM actor continuation**
-  - bounded email-only continuation on the affected thread
-  - limited to the known thread participants and allowed recipients
+  - bounded continuation on the affected thread or ticket
+- supports mail, Slack or Teams-style chat, and Jira-style ticket comments
+- derives shared case ids across those surfaces and attaches linked docs or CRM records when the bundle includes them
+  - limited to the known thread participants and allowed targets
   - defaults to `gpt-5-mini` so the interactive run completes quickly and predictably
   - useful for “what would someone have said or done next?”
 - **E-JEPA forecast**
@@ -56,6 +58,8 @@ There are two compare paths today:
   - trained on a deterministic local slice of related threads around the chosen branch point, so the forecast stays tied to the exact decision you are changing
   - falls back to the proxy forecast only when that runtime is missing or errors
   - useful for “how much would this likely reduce exposure, escalation, or follow-up volume?”
+
+On top of the forecast path, VEI now builds a shared business-state readout. That layer translates the forecast into decision language such as outside spread risk, internal handling load, execution delay, commercial position, and approval or escalation pressure. The saved workspace and the saved forecast bundle both carry that readout.
 
 ## CLI
 
@@ -114,6 +118,45 @@ This makes it easy to inspect the result in Studio later, compare runs, or hand 
 
 For Enron, VEI also ships a packaged public-company context fixture under `vei/whatif/fixtures/enron_public_context`. Refresh it with `python scripts/prepare_enron_public_context.py`. The current fixture carries 7 dated financial checkpoints and 7 dated public news events from 7 archived public source files, spanning December 31, 1998 through December 2, 2001. VEI slices that fixture to the active Enron email window and then to the chosen branch date before it is shown in Studio, written into the saved episode manifest, added to the LLM counterfactual prompt, or attached to benchmark dossiers.
 
+The same path now works for a new company history bundle. Put the normalized historical source in `context_snapshot.json`, `company_history_bundle.json`, or `mail_archive.json`. Multi-source snapshots can now branch from mail, Slack or Teams-style chat, and Jira-style ticket history through the same typed what-if path. VEI derives a shared case id from that history, shows earlier cross-surface case activity in the branch scene, and carries that linked operational history plus linked document or CRM records into the saved workspace when the bundle includes them. Put a sidecar `whatif_public_context.json` in the same folder when you want dated public facts in the branch scene, the prompt, and the saved run. Put a research-pack JSON file anywhere on disk when you want a reusable set of held-out branch cases for `vei whatif pack run` or `vei whatif benchmark build`.
+
+## New company onboarding
+
+Bring a new company into the what-if system with three files:
+
+- `context_snapshot.json`, `company_history_bundle.json`, or `mail_archive.json` for the normalized company history
+- `whatif_public_context.json` beside that archive when you want dated public-company context
+- `research_pack.json` when you want reusable pack runs or held-out benchmark cases
+
+The normalized company history is the event layer. Put real time-ordered activity there for mail, chat, tickets, and any other surface that can branch or replay. Put state-only sources such as documents or CRM records there too when you want them to show up as linked case context around the branch.
+
+The public-context sidecar is optional. If it is missing, VEI still opens the branch scene, runs the replay, and scores the counterfactual. If the sidecar is present but broken, VEI keeps loading the world and shows an empty public-context slice instead of failing the run.
+
+The history bundle still needs at least one healthy event surface. VEI ignores raw providers that captured with `status: "error"` when it decides whether a bundle is usable for branching and replay.
+
+```bash
+# Run a branch experiment on a generic company history bundle
+vei whatif experiment \
+  --source-dir /path/to/newco/context_snapshot.json \
+  --artifacts-root _vei_out/whatif_experiments \
+  --label newco_internal_review \
+  --event-id msg_123 \
+  --forecast-backend e_jepa \
+  --counterfactual-prompt "Keep the draft inside NewCo, route it through legal review, and hold the outside send until the clean version is ready."
+
+# Run a reusable case pack from a JSON file
+vei whatif pack run \
+  --source-dir /path/to/newco/context_snapshot.json \
+  --label newco_pack_run \
+  --pack-id /path/to/newco/research_pack.json
+
+# Build a held-out benchmark from the same file-backed case pack
+vei whatif benchmark build \
+  --source-dir /path/to/newco/context_snapshot.json \
+  --label newco_benchmark \
+  --heldout-pack-id /path/to/newco/research_pack.json
+```
+
 ## Current Studio flow
 
 The current combined Enron setup has two repo-owned inputs:
@@ -133,6 +176,14 @@ The public-company panel is its own dated slice. Earlier branches only show the 
 
 ![Enron public company context panel](assets/enron-whatif/enron-public-context.png)
 
+The repo-owned `Master Agreement` example also carries the saved result panels for the same branch point. The single saved counterfactual keeps the same 84-event horizon, predicts 29 fewer outside sends, and translates that into plain business effects.
+
+![Enron predicted business change](assets/enron-whatif/enron-predicted-business-change.png)
+
+The saved ranked comparison then turns that into a real decision view for the same moment: hold for internal review ranks first, a narrow status note ranks second, and a fast-turnaround push loses the containment gain.
+
+![Enron ranked business comparison](assets/enron-whatif/enron-ranked-comparison.png)
+
 ## Live Enron display in Studio
 
 Use the repo-owned saved Enron example directly when you want the screen to show Enron itself from a fresh clone.
@@ -151,6 +202,8 @@ The committed example bundle also carries:
 - `whatif_experiment_overview.md`
 - `whatif_llm_result.json`
 - `whatif_ejepa_result.json`
+- `whatif_business_state_comparison.md`
+- `whatif_business_state_comparison.json`
 
 Those files live under `docs/examples/enron-master-agreement-public-context/` beside the saved workspace. The branch date is September 27, 2000, so the saved scene shows 2 financial checkpoints and 0 public-news items. Use the real Rosetta archive when you want whole-history Enron search or a new run from the full corpus.
 

@@ -8,6 +8,8 @@ import pyarrow.parquet as pq
 import pytest
 from typer.testing import CliRunner
 
+from vei.blueprint.models import BlueprintAsset
+from vei.context.models import ContextSnapshot
 from vei.cli.vei import app as cli_app
 from vei.data.models import VEIDataset
 from vei.llm.providers import PlanResult, PlanUsage
@@ -267,6 +269,140 @@ def _write_mail_archive_fixture(root: Path) -> Path:
     return archive_path
 
 
+def _write_company_history_fixture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    snapshot_path = root / "context_snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "organization_name": "Py Corp",
+                "organization_domain": "pycorp.example.com",
+                "captured_at": "2026-03-01T10:15:00Z",
+                "sources": [
+                    {
+                        "provider": "slack",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"channels": 1, "messages": 3, "users": 2},
+                        "data": {
+                            "channels": [
+                                {
+                                    "channel": "#deal-desk",
+                                    "channel_id": "C001",
+                                    "unread": 0,
+                                    "messages": [
+                                        {
+                                            "ts": "2026-03-01T09:00:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "Need a clean internal review thread for LEGAL-7 before we update Redwood.",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:05:00Z",
+                                            "user": "legal@pycorp.example.com",
+                                            "text": "Hold LEGAL-7 internally until legal signs off.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:10:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "I will send Redwood a short LEGAL-7 status note after that review.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                    ],
+                                }
+                            ],
+                            "users": [
+                                {
+                                    "id": "U001",
+                                    "name": "emma",
+                                    "real_name": "Emma Rowan",
+                                    "email": "emma@pycorp.example.com",
+                                },
+                                {
+                                    "id": "U002",
+                                    "name": "legal",
+                                    "real_name": "Legal Team",
+                                    "email": "legal@pycorp.example.com",
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        "provider": "jira",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"issues": 1, "projects": 1},
+                        "data": {
+                            "issues": [
+                                {
+                                    "ticket_id": "LEGAL-7",
+                                    "title": "LEGAL-7 pricing addendum review",
+                                    "status": "in_progress",
+                                    "assignee": "emma@pycorp.example.com",
+                                    "description": "Check LEGAL-7 pricing addendum before any outside update.",
+                                    "updated": "2026-03-01T10:00:00Z",
+                                    "comments": [
+                                        {
+                                            "id": "c1",
+                                            "author": "legal@pycorp.example.com",
+                                            "body": "Need one more LEGAL-7 markup pass before we send anything outside.",
+                                            "created": "2026-03-01T09:02:00Z",
+                                        },
+                                        {
+                                            "id": "c2",
+                                            "author": "emma@pycorp.example.com",
+                                            "body": "Holding the LEGAL-7 response until the markup is done.",
+                                            "created": "2026-03-01T09:06:00Z",
+                                        },
+                                    ],
+                                }
+                            ],
+                            "projects": [{"key": "LEGAL", "name": "Legal"}],
+                        },
+                    },
+                    {
+                        "provider": "google",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"documents": 1},
+                        "data": {
+                            "documents": [
+                                {
+                                    "doc_id": "DOC-LEGAL-7",
+                                    "title": "LEGAL-7 markup tracker",
+                                    "mime_type": "application/vnd.google-apps.document",
+                                    "body": "Markup notes for LEGAL-7 pricing addendum review.",
+                                }
+                            ]
+                        },
+                    },
+                    {
+                        "provider": "salesforce",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"deals": 1},
+                        "data": {
+                            "deals": [
+                                {
+                                    "id": "DEAL-LEGAL-7",
+                                    "name": "LEGAL-7 Redwood renewal",
+                                    "stage": "legal_review",
+                                    "owner": "emma@pycorp.example.com",
+                                    "amount": 240000,
+                                }
+                            ]
+                        },
+                    },
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return snapshot_path
+
+
 def _make_llm_replay_result(
     *,
     prompt: str,
@@ -400,6 +536,62 @@ def _make_research_pack() -> WhatIfResearchPack:
     )
 
 
+def _make_generic_research_pack() -> WhatIfResearchPack:
+    return WhatIfResearchPack(
+        pack_id="pycorp_fixture_pack",
+        title="Py Corp Fixture Pack",
+        summary="Small fixture pack for a generic mail archive company.",
+        objective_pack_ids=[
+            "contain_exposure",
+            "reduce_delay",
+            "protect_relationship",
+        ],
+        rollout_seeds=[42042],
+        cases=[
+            WhatIfResearchCase(
+                case_id="pycorp_external_hold",
+                title="Py Corp External Hold",
+                event_id="py-msg-002",
+                thread_id="py-legal-001",
+                summary="A held-out external send from a generic mail archive.",
+                candidates=[
+                    WhatIfResearchCandidate(
+                        candidate_id="internal_hold",
+                        label="Internal hold",
+                        prompt=(
+                            "Keep this internal, hold the send, and ask legal to review "
+                            "before anything leaves Py Corp."
+                        ),
+                        expected_hypotheses={
+                            "contain_exposure": "best_expected",
+                            "reduce_delay": "worst_expected",
+                            "protect_relationship": "middle_expected",
+                        },
+                    ),
+                    WhatIfResearchCandidate(
+                        candidate_id="status_note",
+                        label="Status note",
+                        prompt=(
+                            "Send a short status note outside, promise a clean draft "
+                            "later, and keep the attachment inside."
+                        ),
+                        expected_hypotheses={
+                            "contain_exposure": "middle_expected",
+                            "reduce_delay": "best_expected",
+                            "protect_relationship": "best_expected",
+                        },
+                    ),
+                ],
+            )
+        ],
+    )
+
+
+def _write_research_pack_file(path: Path, pack: WhatIfResearchPack) -> Path:
+    path.write_text(pack.model_dump_json(indent=2), encoding="utf-8")
+    return path
+
+
 def test_load_world_and_run_compliance_whatif(tmp_path: Path) -> None:
     rosetta_dir = tmp_path / "rosetta"
     _write_rosetta_fixture(rosetta_dir)
@@ -486,6 +678,145 @@ def test_load_mail_archive_world_and_materialize_episode(
     assert bundle.organization_domain == "pycorp.example.com"
     assert replay.scheduled_event_count == 2
     assert replay.delivered_event_count == 2
+
+
+def test_load_company_history_world_materialize_slack_branch_and_replay(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = _write_company_history_fixture(tmp_path / "company_history")
+    world = load_world(source="auto", source_dir=snapshot_path)
+
+    slack_thread = next(thread for thread in world.threads if thread.surface == "slack")
+    search_result = search_events(world, query="legal signs off", limit=5)
+    workspace_root = tmp_path / "company_history_episode"
+    materialization = materialize_episode(
+        world,
+        root=workspace_root,
+        thread_id=slack_thread.thread_id,
+    )
+    manifest = load_episode_manifest(workspace_root)
+    bundle = load_customer_twin(workspace_root)
+    replay = replay_episode_baseline(workspace_root, tick_ms=400_000)
+    dataset = VEIDataset.model_validate_json(
+        materialization.baseline_dataset_path.read_text(encoding="utf-8")
+    )
+
+    assert world.source == "company_history"
+    assert {thread.surface for thread in world.threads} >= {"slack", "tickets"}
+    assert search_result.match_count >= 1
+    assert materialization.surface == "slack"
+    assert manifest.source == "company_history"
+    assert manifest.surface == "slack"
+    assert manifest.history_preview[0].surface == "slack"
+    assert (workspace_root / "whatif_company_history.json").exists()
+    assert bundle.organization_name == "Py Corp"
+    assert replay.surface == "slack"
+    assert replay.visible_item_count >= 2
+    assert dataset.events[0].channel == "slack"
+
+
+def test_load_company_history_world_materialize_ticket_branch_and_replay(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = _write_company_history_fixture(tmp_path / "company_history_tickets")
+    world = load_world(source="company_history", source_dir=snapshot_path)
+
+    ticket_thread = next(
+        thread for thread in world.threads if thread.surface == "tickets"
+    )
+    workspace_root = tmp_path / "company_history_ticket_episode"
+    materialization = materialize_episode(
+        world,
+        root=workspace_root,
+        thread_id=ticket_thread.thread_id,
+    )
+    replay = replay_episode_baseline(workspace_root, tick_ms=400_000)
+    dataset = VEIDataset.model_validate_json(
+        materialization.baseline_dataset_path.read_text(encoding="utf-8")
+    )
+
+    assert materialization.surface == "tickets"
+    assert replay.surface == "tickets"
+    assert replay.visible_item_count >= 1
+    assert dataset.events[0].channel == "tickets"
+
+
+def test_company_history_case_context_links_related_surfaces_and_records(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = _write_company_history_fixture(tmp_path / "company_history_case")
+    world = load_world(source="company_history", source_dir=snapshot_path)
+
+    slack_thread = next(thread for thread in world.threads if thread.surface == "slack")
+    workspace_root = tmp_path / "company_history_case_episode"
+    materialization = materialize_episode(
+        world,
+        root=workspace_root,
+        thread_id=slack_thread.thread_id,
+    )
+    manifest = load_episode_manifest(workspace_root)
+    bundle = load_customer_twin(workspace_root)
+    snapshot = ContextSnapshot.model_validate_json(
+        materialization.context_snapshot_path.read_text(encoding="utf-8")
+    )
+    asset = BlueprintAsset.model_validate_json(
+        (workspace_root / bundle.blueprint_asset_path).read_text(encoding="utf-8")
+    )
+
+    assert any(case.case_id == "case:LEGAL-7" for case in world.cases)
+    assert materialization.case_id == "case:LEGAL-7"
+    assert manifest.case_context is not None
+    assert len(manifest.case_context.related_history) >= 1
+    assert {record.surface for record in manifest.case_context.records} >= {
+        "docs",
+        "crm",
+    }
+    assert {source.provider for source in snapshot.sources} >= {
+        "jira",
+        "slack",
+        "google",
+        "salesforce",
+    }
+    assert asset.capability_graphs is not None
+    assert asset.capability_graphs.work_graph is not None
+    assert {
+        ticket.ticket_id for ticket in asset.capability_graphs.work_graph.tickets
+    } >= {"LEGAL-7"}
+    assert "jira" in asset.requested_facades
+    assert "docs" in asset.requested_facades
+    assert "crm" in asset.requested_facades
+
+
+def test_load_company_history_world_rejects_errored_event_sources(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = tmp_path / "broken_company_history.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "organization_name": "Broken Corp",
+                "organization_domain": "broken.example.com",
+                "captured_at": "2026-03-01T10:15:00Z",
+                "sources": [
+                    {
+                        "provider": "slack",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "error",
+                        "error": "rate limited",
+                        "record_counts": {},
+                        "data": {},
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="could not detect historical source"):
+        load_world(source="auto", source_dir=snapshot_path)
+    with pytest.raises(ValueError, match="supported sources"):
+        load_world(source="company_history", source_dir=snapshot_path)
 
 
 def test_load_mail_archive_world_prefers_sender_domain_for_company_inference(
@@ -755,6 +1086,56 @@ def test_vei_whatif_cli_rejects_enron_research_pack_for_generic_archive(
     assert "requires an Enron historical source" in result.output
 
 
+def test_vei_whatif_cli_accepts_file_backed_research_pack_for_generic_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_cli_pack")
+    pack_path = _write_research_pack_file(
+        tmp_path / "pycorp_research_pack.json",
+        _make_generic_research_pack(),
+    )
+    runner = CliRunner()
+
+    def fake_run_research_pack(*_args: object, **kwargs: object):
+        research_pack = kwargs["research_pack"]
+        assert isinstance(research_pack, WhatIfResearchPack)
+        assert research_pack.pack_id == "pycorp_fixture_pack"
+        return type(
+            "PackRunStub",
+            (),
+            {
+                "model_dump": lambda self, mode="json": {
+                    "pack": {"pack_id": research_pack.pack_id}
+                }
+            },
+        )()
+
+    monkeypatch.setattr(
+        "vei.cli.vei_whatif.run_research_pack",
+        fake_run_research_pack,
+    )
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "whatif",
+            "pack",
+            "run",
+            "--source-dir",
+            str(archive_path),
+            "--label",
+            "generic-pack",
+            "--pack-id",
+            str(pack_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["pack"]["pack_id"] == "pycorp_fixture_pack"
+
+
 def test_vei_whatif_cli_rejects_enron_benchmark_for_generic_archive(
     tmp_path: Path,
 ) -> None:
@@ -776,6 +1157,71 @@ def test_vei_whatif_cli_rejects_enron_benchmark_for_generic_archive(
 
     assert result.exit_code != 0
     assert "requires an Enron historical source" in result.output
+
+
+def test_vei_whatif_cli_builds_file_backed_benchmark_for_generic_archive(
+    tmp_path: Path,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_cli_benchmark")
+    pack_path = _write_research_pack_file(
+        tmp_path / "pycorp_research_pack.json",
+        _make_generic_research_pack(),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli_app,
+        [
+            "whatif",
+            "benchmark",
+            "build",
+            "--source-dir",
+            str(archive_path),
+            "--label",
+            "generic-benchmark",
+            "--heldout-pack-id",
+            str(pack_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["cases"][0]["case_id"] == "pycorp_external_hold"
+
+
+def test_branch_point_benchmark_build_uses_world_domain_for_generic_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_benchmark")
+    world = load_world(source="mail_archive", source_dir=archive_path)
+    pack = _make_generic_research_pack()
+
+    monkeypatch.setattr(
+        "vei.whatif.benchmark.get_research_pack",
+        lambda _pack_id: pack,
+    )
+
+    result = build_branch_point_benchmark(
+        world,
+        artifacts_root=tmp_path / "generic_benchmark_artifacts",
+        label="pycorp_benchmark",
+        heldout_pack_id="pycorp_fixture_pack",
+    )
+
+    heldout_rows = [
+        json.loads(line)
+        for line in Path(result.dataset.split_paths["heldout"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    contract = heldout_rows[0]["contract"]
+
+    assert contract["action_schema"]["recipient_scope"] == "internal"
+    assert contract["action_schema"]["external_recipient_count"] == 0
+    assert contract["sequence_steps"][0]["recipient_scope"] == "internal"
+    assert contract["sequence_steps"][0]["external_recipient_count"] == 0
 
 
 def test_search_events_finds_exact_branch_points(tmp_path: Path) -> None:
@@ -1048,9 +1494,12 @@ def test_llm_and_forecast_counterfactual_paths_write_artifacts(
     assert len(llm_result.messages) == 2
     assert forecast_result.status == "ok"
     assert forecast_result.predicted.risk_score < forecast_result.baseline.risk_score
+    assert forecast_result.business_state_change is not None
+    assert forecast_result.business_state_change.summary
     assert experiment.llm_result is not None
     assert experiment.llm_result.status == "ok"
     assert experiment.forecast_result is not None
+    assert experiment.forecast_result.business_state_change is not None
     assert experiment.artifacts.result_json_path.exists()
     assert experiment.artifacts.overview_markdown_path.exists()
     assert experiment.artifacts.llm_json_path is not None
@@ -1318,6 +1767,96 @@ def test_counterfactual_experiment_can_use_ejepa_backend(
     assert experiment.artifacts.forecast_json_path.name == "whatif_ejepa_result.json"
 
 
+def test_counterfactual_experiment_can_use_ejepa_backend_for_generic_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_ejepa")
+    world = load_world(source="mail_archive", source_dir=archive_path)
+
+    async def fake_plan_once_with_usage(**_: object) -> PlanResult:
+        return PlanResult(
+            plan={
+                "tool": "emit_counterfactual",
+                "args": {
+                    "summary": "Hold the outside send and keep the draft inside Py Corp.",
+                    "messages": [
+                        {
+                            "actor_id": "emma@pycorp.example.com",
+                            "to": "legal@pycorp.example.com",
+                            "subject": "Re: Pricing addendum",
+                            "body_text": "Keep this internal until legal clears it.",
+                            "delay_ms": 1000,
+                        }
+                    ],
+                },
+            },
+            usage=PlanUsage(provider="openai", model="gpt-5"),
+        )
+
+    captured: dict[str, str] = {}
+
+    def fake_run_ejepa_counterfactual(
+        *_: object, **kwargs: object
+    ) -> WhatIfForecastResult:
+        captured["source"] = str(kwargs["source"])
+        captured["source_dir"] = str(kwargs["source_dir"])
+        return WhatIfForecastResult(
+            status="ok",
+            backend="e_jepa",
+            prompt="Keep this internal.",
+            summary="Generic E-JEPA forecast completed.",
+            baseline=WhatIfForecast(
+                backend="historical",
+                future_event_count=1,
+                future_external_event_count=1,
+                risk_score=0.5,
+            ),
+            predicted=WhatIfForecast(
+                backend="e_jepa",
+                future_event_count=1,
+                future_external_event_count=0,
+                risk_score=0.2,
+            ),
+            delta=WhatIfForecastDelta(
+                risk_score_delta=-0.3,
+                external_event_delta=-1,
+            ),
+            branch_event=WhatIfEventReference(
+                event_id="py-msg-002",
+                timestamp="2026-03-01T09:05:00Z",
+                actor_id="legal@pycorp.example.com",
+                event_type="reply",
+                thread_id="py-legal-001",
+                subject="Re: Pricing addendum",
+            ),
+        )
+
+    monkeypatch.setattr(
+        "vei.whatif.api.providers.plan_once_with_usage",
+        fake_plan_once_with_usage,
+    )
+    monkeypatch.setattr(
+        "vei.whatif.api.run_ejepa_counterfactual",
+        fake_run_ejepa_counterfactual,
+    )
+
+    experiment = run_counterfactual_experiment(
+        world,
+        artifacts_root=tmp_path / "generic_artifacts",
+        label="pycorp_ejepa_hold",
+        counterfactual_prompt="Keep this internal.",
+        event_id="py-msg-002",
+        mode="both",
+        forecast_backend="e_jepa",
+    )
+
+    assert captured["source"] == "mail_archive"
+    assert Path(captured["source_dir"]) == archive_path.resolve()
+    assert experiment.forecast_result is not None
+    assert experiment.forecast_result.backend == "e_jepa"
+
+
 def test_run_ranked_counterfactual_experiment_writes_artifacts_and_keeps_shadow_mode(
     tmp_path: Path,
     monkeypatch,
@@ -1412,6 +1951,7 @@ def test_run_ranked_counterfactual_experiment_writes_artifacts_and_keeps_shadow_
     assert result.candidates[0].reason.startswith("Best for contain exposure")
     assert result.candidates[0].shadow is not None
     assert result.candidates[0].shadow.backend == "e_jepa_proxy"
+    assert result.candidates[0].business_state_change is not None
     assert (
         result.candidates[0].shadow.outcome_score.overall_score
         < result.candidates[1].shadow.outcome_score.overall_score
@@ -1423,6 +1963,92 @@ def test_run_ranked_counterfactual_experiment_writes_artifacts_and_keeps_shadow_
     assert loaded.candidates[0].shadow.outcome_score.objective_pack_id == (
         "contain_exposure"
     )
+
+
+def test_run_ranked_counterfactual_experiment_can_use_ejepa_shadow_for_generic_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_ranked")
+    world = load_world(source="mail_archive", source_dir=archive_path)
+
+    def fake_run_llm_counterfactual(
+        *_: object,
+        prompt: str,
+        provider: str = "openai",
+        model: str = "gpt-5",
+        seed: int = 42042,
+    ) -> WhatIfLLMReplayResult:
+        assert provider == "openai"
+        assert model == default_model_for_provider("openai")
+        if "internal" in prompt.lower():
+            return _make_llm_replay_result(
+                prompt=prompt,
+                to="legal@pycorp.example.com",
+                subject="Re: Pricing addendum",
+                body_text="Keep this internal until legal signs off.",
+                delay_ms=1000 + (seed % 3) * 100,
+                summary="The draft stays inside Py Corp.",
+            )
+        return _make_llm_replay_result(
+            prompt=prompt,
+            to="partner@redwoodcapital.com",
+            subject="Pricing addendum",
+            body_text="Sending the draft outside now.",
+            delay_ms=8000 + (seed % 3) * 100,
+            summary="The draft leaves Py Corp immediately.",
+        )
+
+    captured_sources: list[str] = []
+
+    def fake_run_ejepa_counterfactual(
+        *_: object,
+        prompt: str,
+        **kwargs: object,
+    ) -> WhatIfForecastResult:
+        captured_sources.append(str(kwargs["source"]))
+        if "internal" in prompt.lower():
+            return _make_forecast_result(
+                prompt=prompt,
+                risk_score=0.2,
+                future_event_count=2,
+                future_external_event_count=0,
+                summary="Generic E-JEPA prefers the internal hold.",
+            ).model_copy(update={"backend": "e_jepa"})
+        return _make_forecast_result(
+            prompt=prompt,
+            risk_score=0.8,
+            future_event_count=2,
+            future_external_event_count=1,
+            summary="Generic E-JEPA expects the draft to leave the company.",
+        ).model_copy(update={"backend": "e_jepa"})
+
+    monkeypatch.setattr(
+        "vei.whatif.api.run_llm_counterfactual",
+        fake_run_llm_counterfactual,
+    )
+    monkeypatch.setattr(
+        "vei.whatif.api.run_ejepa_counterfactual",
+        fake_run_ejepa_counterfactual,
+    )
+
+    result = run_ranked_counterfactual_experiment(
+        world,
+        artifacts_root=tmp_path / "ranked_generic_artifacts",
+        label="pycorp_ranked",
+        objective_pack_id="contain_exposure",
+        candidate_interventions=[
+            "Keep this internal and pause.",
+            "Send the draft now.",
+        ],
+        event_id="py-msg-002",
+        rollout_count=1,
+        shadow_forecast_backend="e_jepa",
+    )
+
+    assert captured_sources == ["mail_archive", "mail_archive"]
+    assert all(candidate.shadow is not None for candidate in result.candidates)
+    assert all(candidate.shadow.backend == "e_jepa" for candidate in result.candidates)
 
 
 def test_vei_whatif_cli_rank_and_show_ranked_result(
@@ -1532,6 +2158,18 @@ def test_research_pack_registry_exposes_built_in_enron_pack() -> None:
     assert len(built_in.rollout_seeds) == 8
     assert len(built_in.cases) == 6
     assert built_in.cases[0].event_id == "enron_bcda1b925800af8c"
+
+
+def test_research_pack_registry_loads_file_backed_pack(tmp_path: Path) -> None:
+    pack_path = _write_research_pack_file(
+        tmp_path / "pycorp_research_pack.json",
+        _make_generic_research_pack(),
+    )
+
+    pack = get_research_pack(str(pack_path))
+
+    assert pack.pack_id == "pycorp_fixture_pack"
+    assert pack.cases[0].event_id == "py-msg-002"
 
 
 def test_run_research_pack_writes_artifacts_and_scores_all_backends(
@@ -1770,6 +2408,126 @@ def test_run_research_pack_writes_artifacts_and_scores_all_backends(
     scoreboard = result.artifacts.overview_markdown_path.read_text(encoding="utf-8")
     assert "Fixture Pack" in scoreboard
     assert "Hypothesis pass rate: 1.000 (3/3)" in scoreboard
+
+
+def test_run_research_pack_uses_world_domain_for_generic_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    archive_path = _write_mail_archive_fixture(tmp_path / "mail_archive_research")
+    world = load_world(source="mail_archive", source_dir=archive_path)
+    pack = _make_generic_research_pack()
+
+    def fake_run_llm_counterfactual(
+        *_: object,
+        prompt: str,
+        provider: str = "openai",
+        model: str = "gpt-5",
+        seed: int = 42042,
+    ) -> WhatIfLLMReplayResult:
+        assert provider == "openai"
+        assert model == "gpt-5-mini"
+        if "internal" in prompt.lower():
+            return _make_llm_replay_result(
+                prompt=prompt,
+                to="legal@pycorp.example.com",
+                subject="Re: Pricing addendum",
+                body_text="Keep this internal until legal signs off.",
+                delay_ms=1_000 + (seed % 2) * 100,
+                summary="The draft stays inside Py Corp.",
+            )
+        return _make_llm_replay_result(
+            prompt=prompt,
+            to="partner@redwoodcapital.com",
+            subject="Pricing addendum",
+            body_text="Sending a short status note outside.",
+            delay_ms=2_000 + (seed % 2) * 100,
+            summary="A short outside status note goes out.",
+        )
+
+    def fake_run_ejepa_proxy_counterfactual(
+        *_: object,
+        prompt: str,
+    ) -> WhatIfForecastResult:
+        if "internal" in prompt.lower():
+            return _make_forecast_result(
+                prompt=prompt,
+                risk_score=0.2,
+                future_event_count=2,
+                future_external_event_count=0,
+                summary="Proxy forecast prefers the internal hold.",
+            )
+        return _make_forecast_result(
+            prompt=prompt,
+            risk_score=0.5,
+            future_event_count=1,
+            future_external_event_count=1,
+            summary="Proxy forecast allows one outside status note.",
+        )
+
+    def fake_run_ejepa_counterfactual(
+        *_: object,
+        prompt: str,
+        **__: object,
+    ) -> WhatIfForecastResult:
+        if "internal" in prompt.lower():
+            return _make_forecast_result(
+                prompt=prompt,
+                risk_score=0.18,
+                future_event_count=2,
+                future_external_event_count=0,
+                summary="Generic E-JEPA prefers the internal hold.",
+            ).model_copy(update={"backend": "e_jepa"})
+        return _make_forecast_result(
+            prompt=prompt,
+            risk_score=0.48,
+            future_event_count=1,
+            future_external_event_count=1,
+            summary="Generic E-JEPA accepts one outside status note.",
+        ).model_copy(update={"backend": "e_jepa"})
+
+    monkeypatch.setattr(
+        "vei.whatif.research.run_llm_counterfactual",
+        fake_run_llm_counterfactual,
+    )
+    monkeypatch.setattr(
+        "vei.whatif.research.run_ejepa_proxy_counterfactual",
+        fake_run_ejepa_proxy_counterfactual,
+    )
+    monkeypatch.setattr(
+        "vei.whatif.research.run_ejepa_counterfactual",
+        fake_run_ejepa_counterfactual,
+    )
+
+    result = run_research_pack(
+        world,
+        artifacts_root=tmp_path / "generic_research_artifacts",
+        label="pycorp_fixture_pack_run",
+        research_pack=pack,
+        provider="openai",
+        model="gpt-5-mini",
+    )
+
+    contract_path = (
+        result.artifacts.root
+        / "cases"
+        / "pycorp_external_hold"
+        / "candidates"
+        / "internal_hold_contract.json"
+    )
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    generated_steps = [
+        step for step in contract["sequence_steps"] if step["phase"] == "generated"
+    ]
+    branch_external = next(
+        feature["value"]
+        for feature in contract["summary_features"]
+        if feature["name"] == "branch_external_count"
+    )
+
+    assert generated_steps[0]["recipient_scope"] == "internal"
+    assert generated_steps[0]["external_recipient_count"] == 0
+    assert branch_external == 0.0
 
 
 def test_run_research_pack_reuses_completed_case_results(

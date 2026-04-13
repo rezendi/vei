@@ -124,7 +124,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `TwinRuntime` — FastAPI runtime behind `vei.twin.gateway`, with helper, route, and runtime internals separated for the compatibility layer
   - Governor decision pipeline: registration, agent mode, allowed surface, policy profile, connector safety, rate limit, then execution
   - Surface and policy denials, approval-required holds, unsupported live writes, and rate limits are recorded in the run timeline and exposed through provider-shaped responses
-  - archive-backed historical episodes can build strict mail-and-identity twins without inventing Slack or other unsupported surfaces
+  - archive-backed historical episodes can now rebuild strict surface-matched twins for mail, chat, and ticket branches without flattening everything into mail
 - `vei.twin` launch layer
   - `TwinLaunchManifest` / `TwinLaunchRuntime` / `TwinLaunchStatus` — internal launch and handoff models used by the governed twin lifecycle
   - writes launch manifest, handoff guide, and runtime state for Studio + gateway orchestration
@@ -140,13 +140,14 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `branch_workspace_mission_run(..., snapshot_id=...)` — fork a playable mission from any historical snapshot, rewinding move history to that point
   - `get_service_ops_policy_bundle()` / `replay_service_ops_with_policy_delta()` — service-ops-only what-if replay over four named policy knobs from the initial snapshot
 - `vei.whatif`
-  - `load_world()` — build a typed historical world from an archive-backed source such as Enron Rosetta
+  - `load_world()` — build a typed historical world from Enron Rosetta, a mail archive, or a normalized multi-source company history bundle
+  - shared case linking — groups related activity across mail, chat, and ticket surfaces, then carries that pre-branch cross-surface history plus linked docs and CRM records into the branch workspace when the normalized bundle includes them
   - packaged Enron public-context loader and slicer — attaches dated financial and public-news facts that fit the email window and branch date
   - `search_events()` — find exact branch points by actor, participant, thread, event type, or subject text before materializing a replay workspace
   - `run_whatif()` — deterministic whole-history policy analysis over the imported event corpus
-  - `materialize_episode()` — turn one selected historical event into a strict mail-first replay workspace that branches just before that event
+  - `materialize_episode()` — turn one selected historical event into a strict replay workspace on the matching surface and branch just before that event
   - `replay_episode_baseline()` — schedule the saved historical future into the world kernel for comparison
-  - `run_llm_counterfactual()` — bounded LLM email continuation on the selected thread after divergence
+  - `run_llm_counterfactual()` — bounded LLM continuation on the selected mail thread, chat thread, or ticket after divergence
   - `run_ejepa_counterfactual()` — real local JEPA-backed forecast over the branch point when the sibling runtime is available, using a deterministic local training slice around that branch point
   - `run_ejepa_proxy_counterfactual()` — proxy fallback for KPI/risk deltas when the JEPA runtime is unavailable or errors
   - `run_counterfactual_experiment()` — one-command orchestration for selection, episode materialization, baseline replay, continuation, and artifact writing

@@ -199,3 +199,87 @@ def test_hydrate_supports_mail_archive_threads() -> None:
     }
     assert "mail" in asset.requested_facades
     assert "identity" in asset.requested_facades
+
+
+def test_hydrate_merges_crm_and_salesforce_revenue_sources() -> None:
+    snapshot = ContextSnapshot(
+        organization_name="Revenue Corp",
+        organization_domain="revenue.example.com",
+        captured_at="2024-03-10T00:00:00+00:00",
+        sources=[
+            ContextSourceResult(
+                provider="crm",
+                captured_at="2024-03-10T00:00:00+00:00",
+                status="ok",
+                data={
+                    "companies": [
+                        {
+                            "id": "COMP-1",
+                            "name": "Revenue Corp",
+                            "domain": "revenue.example.com",
+                        }
+                    ]
+                },
+            ),
+            ContextSourceResult(
+                provider="salesforce",
+                captured_at="2024-03-10T00:00:00+00:00",
+                status="ok",
+                data={
+                    "deals": [
+                        {
+                            "id": "DEAL-1",
+                            "name": "Renewal",
+                            "amount": 125000,
+                            "stage": "legal_review",
+                            "owner": "owner@revenue.example.com",
+                        }
+                    ]
+                },
+            ),
+        ],
+    )
+
+    asset = hydrate_blueprint(snapshot)
+
+    assert asset.capability_graphs is not None
+    assert asset.capability_graphs.revenue_graph is not None
+    assert len(asset.capability_graphs.revenue_graph.companies) == 1
+    assert len(asset.capability_graphs.revenue_graph.deals) == 1
+    assert asset.capability_graphs.revenue_graph.deals[0].id == "DEAL-1"
+    assert asset.capability_graphs.revenue_graph.metadata["source_providers"] == [
+        "crm",
+        "salesforce",
+    ]
+
+
+def test_hydrate_parses_formatted_crm_amounts() -> None:
+    snapshot = ContextSnapshot(
+        organization_name="Revenue Corp",
+        organization_domain="revenue.example.com",
+        captured_at="2024-03-10T00:00:00+00:00",
+        sources=[
+            ContextSourceResult(
+                provider="crm",
+                captured_at="2024-03-10T00:00:00+00:00",
+                status="ok",
+                data={
+                    "deals": [
+                        {
+                            "id": "DEAL-2",
+                            "name": "Expansion",
+                            "amount": "$10,000",
+                            "stage": "proposal",
+                            "owner": "owner@revenue.example.com",
+                        }
+                    ]
+                },
+            )
+        ],
+    )
+
+    asset = hydrate_blueprint(snapshot)
+
+    assert asset.capability_graphs is not None
+    assert asset.capability_graphs.revenue_graph is not None
+    assert asset.capability_graphs.revenue_graph.deals[0].amount == 10000.0
