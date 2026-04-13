@@ -18,7 +18,12 @@ from .api import (
     run_ejepa_proxy_counterfactual,
     run_llm_counterfactual,
 )
-from .corpus import ENRON_DOMAIN, event_by_id, hydrate_event_snippets
+from .corpus import (
+    event_by_id,
+    external_recipient_count,
+    hydrate_event_snippets,
+    recipient_scope,
+)
 from .interventions import intervention_tags
 from .models import (
     WhatIfBackendBranchContract,
@@ -102,10 +107,15 @@ def list_research_packs() -> list[WhatIfResearchPack]:
 
 
 def get_research_pack(pack_id: str) -> WhatIfResearchPack:
-    normalized = pack_id.strip().lower()
-    if normalized not in _RESEARCH_PACKS:
+    candidate = pack_id.strip()
+    normalized = candidate.lower()
+    if normalized in _RESEARCH_PACKS:
+        return _RESEARCH_PACKS[normalized].model_copy(deep=True)
+
+    path = Path(candidate).expanduser().resolve()
+    if not path.exists():
         raise KeyError(f"unknown research pack: {pack_id}")
-    return _RESEARCH_PACKS[normalized].model_copy(deep=True)
+    return WhatIfResearchPack.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def load_research_pack_run_result(root: str | Path) -> WhatIfPackRunResult:
@@ -193,6 +203,7 @@ def run_research_pack(
         historical_outcome = _summarize_historical_future(
             branch_event=materialization.branch_event,
             future_events=future_events,
+            organization_domain=world.summary.organization_domain,
         )
         candidate_executions = [
             _execute_candidate(
@@ -347,6 +358,7 @@ def _build_research_dataset(
         historical_outcome = _summarize_historical_future(
             branch_event=branch_event,
             future_events=future_events,
+            organization_domain=world.summary.organization_domain,
         )
         forecast = forecast_episode(future_events)
         contract = _build_branch_contract(
@@ -354,10 +366,14 @@ def _build_research_dataset(
             intervention_label="historical_branch",
             branch_event=branch_event,
             history_events=history_events,
+            organization_domain=world.summary.organization_domain,
             baseline_forecast=forecast,
             average_rollout_signals=historical_outcome,
             historical_outcome_signals=historical_outcome,
-            prompt_tags=_historical_branch_tags(branch_event),
+            prompt_tags=_historical_branch_tags(
+                branch_event,
+                organization_domain=world.summary.organization_domain,
+            ),
             generated_messages=[],
             notes=["Historical calibration row built from the actual future."],
         )
@@ -485,6 +501,7 @@ def _execute_candidate(
         intervention_label=candidate.label,
         branch_event=materialization.branch_event,
         history_events=history_events,
+        organization_domain=world.summary.organization_domain,
         baseline_forecast=baseline.forecast,
         average_rollout_signals=average_signals,
         historical_outcome_signals=historical_outcome,
@@ -759,6 +776,7 @@ def _score_backend(
         forecast = run_ejepa_counterfactual(
             workspace_root,
             prompt=prompt,
+            source=world.source,
             source_dir=world.rosetta_dir,
             thread_id=thread_id,
             branch_event_id=branch_event_id,
@@ -990,6 +1008,7 @@ def _build_branch_contract(
     intervention_label: str,
     branch_event,
     history_events: Sequence[WhatIfEvent],
+    organization_domain: str,
     baseline_forecast: WhatIfForecast,
     average_rollout_signals: WhatIfOutcomeSignals,
     historical_outcome_signals: WhatIfOutcomeSignals,
@@ -1000,6 +1019,7 @@ def _build_branch_contract(
     summary_features = _summary_features(
         branch_event=branch_event,
         history_events=history_events,
+        organization_domain=organization_domain,
         baseline_forecast=baseline_forecast,
         average_rollout_signals=average_rollout_signals,
         historical_outcome_signals=historical_outcome_signals,
@@ -1008,6 +1028,7 @@ def _build_branch_contract(
     sequence_steps = _build_sequence_steps(
         history_events=history_events,
         branch_event=branch_event,
+        organization_domain=organization_domain,
         generated_messages=generated_messages,
     )
     treatment_trace = _build_treatment_trace(
@@ -1033,6 +1054,7 @@ def _summary_features(
     *,
     branch_event,
     history_events: Sequence[WhatIfEvent],
+    organization_domain: str,
     baseline_forecast: WhatIfForecast,
     average_rollout_signals: WhatIfOutcomeSignals,
     historical_outcome_signals: WhatIfOutcomeSignals,
@@ -1046,7 +1068,13 @@ def _summary_features(
         )
         if actor_id
     }
-    history_external = sum(_event_external_count(event) for event in history_events)
+    history_external = sum(
+        _event_external_count(
+            event,
+            organization_domain=organization_domain,
+        )
+        for event in history_events
+    )
     history_attachment = sum(
         1 for event in history_events if event.flags.has_attachment_reference
     )
@@ -1071,7 +1099,12 @@ def _summary_features(
         "history_legal_count": float(history_legal),
         "history_trading_count": float(history_trading),
         "participant_count": float(len(participants)),
-        "branch_external_count": float(_reference_external_count(branch_event)),
+        "branch_external_count": float(
+            _reference_external_count(
+                branch_event,
+                organization_domain=organization_domain,
+            )
+        ),
         "branch_attachment_flag": (
             1.0 if _reference_attachment_flag(branch_event) else 0.0
         ),
@@ -1114,6 +1147,7 @@ def _build_sequence_steps(
     *,
     history_events: Sequence[WhatIfEvent],
     branch_event,
+    organization_domain: str,
     generated_messages,
 ) -> list[WhatIfSequenceStep]:
     steps: list[WhatIfSequenceStep] = []
@@ -1126,8 +1160,14 @@ def _build_sequence_steps(
                 actor_id=event.actor_id,
                 subject=event.subject,
                 delay_ms=max(0, event.timestamp_ms - history_events[0].timestamp_ms),
-                recipient_scope=_event_scope(event),
-                external_recipient_count=_event_external_count(event),
+                recipient_scope=_event_scope(
+                    event,
+                    organization_domain=organization_domain,
+                ),
+                external_recipient_count=_event_external_count(
+                    event,
+                    organization_domain=organization_domain,
+                ),
                 attachment_flag=event.flags.has_attachment_reference,
                 escalation_flag=event.flags.is_escalation
                 or event.event_type == "escalation",
@@ -1142,14 +1182,24 @@ def _build_sequence_steps(
             actor_id=branch_event.actor_id,
             subject=branch_event.subject,
             delay_ms=0,
-            recipient_scope=_reference_scope(branch_event),
-            external_recipient_count=_reference_external_count(branch_event),
+            recipient_scope=_reference_scope(
+                branch_event,
+                organization_domain=organization_domain,
+            ),
+            external_recipient_count=_reference_external_count(
+                branch_event,
+                organization_domain=organization_domain,
+            ),
             attachment_flag=_reference_attachment_flag(branch_event),
             escalation_flag=_reference_escalation_flag(branch_event),
             approval_flag=branch_event.event_type == "approval",
         )
     )
     for message in list(generated_messages)[:3]:
+        generated_scope = _recipient_scope(
+            message.to,
+            organization_domain=organization_domain,
+        )
         steps.append(
             WhatIfSequenceStep(
                 step_index=len(steps) + 1,
@@ -1158,10 +1208,8 @@ def _build_sequence_steps(
                 actor_id=message.actor_id,
                 subject=message.subject,
                 delay_ms=message.delay_ms,
-                recipient_scope=_recipient_scope(message.to),
-                external_recipient_count=(
-                    0 if message.to.lower().endswith(f"@{ENRON_DOMAIN}") else 1
-                ),
+                recipient_scope=generated_scope,
+                external_recipient_count=0 if generated_scope == "internal" else 1,
                 attachment_flag="attach" in message.body_text.lower()
                 or "draft" in message.body_text.lower(),
                 escalation_flag="urgent" in message.body_text.lower()
@@ -1212,6 +1260,7 @@ def _summarize_historical_future(
     *,
     branch_event,
     future_events: Sequence[WhatIfEvent],
+    organization_domain: str,
 ) -> WhatIfOutcomeSignals:
     if not future_events:
         return WhatIfOutcomeSignals(
@@ -1221,7 +1270,13 @@ def _summarize_historical_future(
             internal_only=True,
         )
     future_count = len(future_events)
-    outside_count = sum(_event_external_count(event) for event in future_events)
+    outside_count = sum(
+        _event_external_count(
+            event,
+            organization_domain=organization_domain,
+        )
+        for event in future_events
+    )
     escalation_count = sum(
         1
         for event in future_events
@@ -1523,7 +1578,11 @@ def _research_intervention_tags(prompt: str) -> set[str]:
     return tags
 
 
-def _historical_branch_tags(event: WhatIfEvent) -> set[str]:
+def _historical_branch_tags(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> set[str]:
     tags: set[str] = set()
     if event.flags.consult_legal_specialist:
         tags.add("legal")
@@ -1535,7 +1594,7 @@ def _historical_branch_tags(event: WhatIfEvent) -> set[str]:
         tags.add("forward_present")
     if event.flags.is_escalation or event.event_type == "escalation":
         tags.add("escalation_present")
-    if _event_external_count(event) > 0:
+    if _event_external_count(event, organization_domain=organization_domain) > 0:
         tags.add("external_present")
     return tags
 
@@ -1604,17 +1663,27 @@ def _distance_confidence(distance: float) -> float:
     return round(_clamp(1.0 / (1.0 + distance)), 3)
 
 
-def _event_external_count(event: WhatIfEvent) -> int:
+def _event_external_count(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> int:
     recipients = list(event.flags.to_recipients) + list(event.flags.cc_recipients)
-    return sum(
-        1
-        for recipient in recipients
-        if recipient and not recipient.lower().endswith(f"@{ENRON_DOMAIN}")
+    return external_recipient_count(
+        recipients,
+        organization_domain=organization_domain,
     )
 
 
-def _event_scope(event: WhatIfEvent) -> str:
-    external = _event_external_count(event)
+def _event_scope(
+    event: WhatIfEvent,
+    *,
+    organization_domain: str,
+) -> str:
+    external = _event_external_count(
+        event,
+        organization_domain=organization_domain,
+    )
     recipient_count = len(event.flags.to_recipients) + len(event.flags.cc_recipients)
     if recipient_count == 0:
         return "unknown"
@@ -1625,17 +1694,27 @@ def _event_scope(event: WhatIfEvent) -> str:
     return "mixed"
 
 
-def _reference_external_count(event) -> int:
+def _reference_external_count(
+    event,
+    *,
+    organization_domain: str,
+) -> int:
     recipients = _reference_recipients(event)
-    return sum(
-        1
-        for recipient in recipients
-        if recipient and not recipient.lower().endswith(f"@{ENRON_DOMAIN}")
+    return external_recipient_count(
+        recipients,
+        organization_domain=organization_domain,
     )
 
 
-def _reference_scope(event) -> str:
-    external = _reference_external_count(event)
+def _reference_scope(
+    event,
+    *,
+    organization_domain: str,
+) -> str:
+    external = _reference_external_count(
+        event,
+        organization_domain=organization_domain,
+    )
     recipient_count = len(_reference_recipients(event))
     if recipient_count == 0:
         return "unknown"
@@ -1674,12 +1753,17 @@ def _reference_forward_flag(event) -> bool:
     return bool(getattr(event, "is_forward", False))
 
 
-def _recipient_scope(recipient: str) -> str:
+def _recipient_scope(
+    recipient: str,
+    *,
+    organization_domain: str,
+) -> str:
     if not recipient:
         return "unknown"
-    if recipient.lower().endswith(f"@{ENRON_DOMAIN}"):
-        return "internal"
-    return "external"
+    return recipient_scope(
+        [recipient],
+        organization_domain=organization_domain,
+    )
 
 
 def _reference_timestamp_ms(event) -> int:

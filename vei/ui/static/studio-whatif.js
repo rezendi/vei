@@ -47,6 +47,9 @@ function whatIfSourceId() {
 
 function whatIfSourceLabel() {
   const source = whatIfSourceId();
+  if (source === "company_history") {
+    return "Company history bundle";
+  }
   if (source === "mail_archive") {
     return "Historical mail archive";
   }
@@ -148,6 +151,183 @@ function renderWhatIfPublicContext(context) {
           }
         </div>
       </div>
+    </div>
+  `;
+}
+
+function renderWhatIfCaseContext(caseContext) {
+  if (!caseContext || typeof caseContext !== "object") {
+    return "";
+  }
+  const relatedHistory = Array.isArray(caseContext.related_history)
+    ? caseContext.related_history
+    : [];
+  const records = Array.isArray(caseContext.records) ? caseContext.records : [];
+  if (!caseContext.case_id && !relatedHistory.length && !records.length) {
+    return "";
+  }
+  return `
+    <div class="whatif-scene-panel">
+      <div class="whatif-thread-head">
+        <div>
+          <p class="eyebrow">Case Context</p>
+          <strong>${escapeHtml(caseContext.title || caseContext.case_id || "Linked workstream context")}</strong>
+        </div>
+        <div class="whatif-chip-row">
+          <span class="whatif-chip">${escapeHtml(relatedHistory.length)} related events</span>
+          <span class="whatif-chip">${escapeHtml(records.length)} linked records</span>
+        </div>
+      </div>
+      <div class="whatif-public-grid">
+        <div class="whatif-public-list">
+          <strong>Related activity</strong>
+          ${
+            relatedHistory.length
+              ? relatedHistory
+                  .map(
+                    (item) => `
+                      <div class="whatif-public-item">
+                        <span class="whatif-result-meta">${escapeHtml((item.timestamp || "").slice(0, 10))} · ${escapeHtml(item.surface || "")}</span>
+                        <strong>${escapeHtml(item.subject || item.thread_id || item.event_id || "Related event")}</strong>
+                        <span class="whatif-result-caption">${escapeHtml(item.actor_id || "")}</span>
+                      </div>
+                    `,
+                  )
+                  .join("")
+              : `<div class="whatif-empty">No earlier cross-surface case activity was captured for this branch.</div>`
+          }
+        </div>
+        <div class="whatif-public-list">
+          <strong>Linked records</strong>
+          ${
+            records.length
+              ? records
+                  .map(
+                    (item) => `
+                      <div class="whatif-public-item">
+                        <span class="whatif-result-meta">${escapeHtml(item.surface || item.provider || "")}</span>
+                        <strong>${escapeHtml(item.label || item.record_id || "Linked record")}</strong>
+                        <span class="whatif-result-caption">${escapeHtml(item.summary || "")}</span>
+                      </div>
+                    `,
+                  )
+                  .join("")
+              : `<div class="whatif-empty">No linked document or CRM records matched this case in the saved bundle.</div>`
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWhatIfBusinessAssessment(assessment) {
+  if (!assessment || typeof assessment !== "object") {
+    return "";
+  }
+  const indicators = Array.isArray(assessment.indicators) ? assessment.indicators : [];
+  const implications = Array.isArray(assessment.implications)
+    ? assessment.implications
+    : [];
+  if (!assessment.summary && !indicators.length && !implications.length) {
+    return "";
+  }
+  return `
+    <div class="whatif-scene-panel">
+      <div class="whatif-thread-head">
+        <div>
+          <p class="eyebrow">Recorded Business State</p>
+          <strong>${escapeHtml(assessment.summary || "Business effects from the recorded path")}</strong>
+        </div>
+        <div class="whatif-chip-row">
+          <span class="whatif-chip">${escapeHtml((assessment.confidence || "medium").replace("_", " "))} confidence</span>
+        </div>
+      </div>
+      <div class="whatif-business-grid">
+        ${indicators
+          .slice(0, 4)
+          .map(
+            (indicator) => `
+              <div class="whatif-business-item">
+                <span class="whatif-result-meta">${escapeHtml(String(indicator.level || "medium").replace("_", " "))}</span>
+                <strong>${escapeHtml(indicator.label || indicator.state_id || "Business state")}</strong>
+                <span class="whatif-result-caption">${escapeHtml(indicator.summary || "")}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      ${
+        implications.length
+          ? `
+            <div class="whatif-business-list">
+              ${implications
+                .slice(0, 3)
+                .map((item) => `<span class="whatif-result-caption">${escapeHtml(item)}</span>`)
+                .join("")}
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderWhatIfBusinessChange(change, { title = "Predicted Business Change" } = {}) {
+  if (!change || typeof change !== "object") {
+    return "";
+  }
+  const impacts = Array.isArray(change.impacts) ? change.impacts : [];
+  const consequences = Array.isArray(change.consequence_estimates)
+    ? change.consequence_estimates
+    : [];
+  if (!change.summary && !impacts.length && !consequences.length) {
+    return "";
+  }
+  return `
+    <div class="whatif-scene-panel">
+      <div class="whatif-thread-head">
+        <div>
+          <p class="eyebrow">${escapeHtml(title)}</p>
+          <strong>${escapeHtml(change.summary || "Business effect estimate")}</strong>
+        </div>
+        <div class="whatif-chip-row">
+          <span class="whatif-chip">${escapeHtml((change.confidence || "medium").replace("_", " "))} confidence</span>
+          <span class="whatif-chip">Net ${escapeHtml(change.net_effect_score ?? "n/a")}</span>
+        </div>
+      </div>
+      <div class="whatif-business-grid">
+        ${impacts
+          .slice(0, 4)
+          .map(
+            (impact) => `
+              <div class="whatif-business-item">
+                <span class="whatif-result-meta">${escapeHtml(impact.effect || "flat")} · ${escapeHtml(impact.magnitude || "flat")}</span>
+                <strong>${escapeHtml(impact.label || impact.state_id || "Business state")}</strong>
+                <span class="whatif-result-caption">${escapeHtml(impact.summary || "")}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      ${
+        consequences.length
+          ? `
+            <div class="whatif-business-list">
+              ${consequences
+                .slice(0, 4)
+                .map(
+                  (item) => `
+                    <div class="whatif-business-item">
+                      <strong>${escapeHtml(item.label || item.consequence_id || "Consequence")}</strong>
+                      <span class="whatif-result-caption">${escapeHtml(item.summary || "")}</span>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          `
+          : ""
+      }
     </div>
   `;
 }
@@ -345,7 +525,7 @@ function renderWhatIfScene(scene) {
         </div>
         <div class="whatif-chip-row">
           <span class="whatif-chip">${escapeHtml(scene.organization_name || "Company")}</span>
-          <span class="whatif-chip">${escapeHtml(scene.history_message_count || 0)} prior messages</span>
+          <span class="whatif-chip">${escapeHtml(scene.history_message_count || 0)} prior items</span>
           <span class="whatif-chip">${escapeHtml(scene.future_event_count || 0)} recorded future events</span>
         </div>
       </div>
@@ -369,6 +549,8 @@ function renderWhatIfScene(scene) {
       </div>
       </div>
       ${renderWhatIfPublicContext(scene.public_context)}
+      ${renderWhatIfCaseContext(scene.case_context)}
+      ${renderWhatIfBusinessAssessment(scene.historical_business_state)}
       <div class="whatif-scene-panel whatif-thread-panel">
         <div class="whatif-thread-head">
           <div>
@@ -468,7 +650,7 @@ function renderWhatIfStudio() {
     statusNode.innerHTML = `
       <div class="whatif-empty">
         <strong>Historical archive not configured for this workspace.</strong>
-        <span>Set <code>VEI_WHATIF_SOURCE_DIR</code> to a mail archive or context snapshot, or set <code>VEI_WHATIF_ROSETTA_DIR</code> for the Enron Rosetta source.</span>
+        <span>Set <code>VEI_WHATIF_SOURCE_DIR</code> to a company history bundle, mail archive, or context snapshot, or set <code>VEI_WHATIF_ROSETTA_DIR</code> for the Enron Rosetta source.</span>
       </div>
     `;
     resultsNode.innerHTML = "";
@@ -674,6 +856,7 @@ function renderWhatIfStudio() {
                 <strong>${escapeHtml(chosenCandidate.intervention?.label || chosenLabel)}</strong>
                 <span>Rank ${escapeHtml(chosenCandidate.rank || "n/a")} of ${escapeHtml(candidates.length || 0)}</span>
                 <span>Score ${escapeHtml(chosenCandidate.outcome_score?.overall_score ?? "n/a")} for ${escapeHtml(objective.title || "this objective")}</span>
+                <span>${escapeHtml(chosenCandidate.business_state_change?.summary || "")}</span>
               </div>
             `
             : ""
@@ -714,6 +897,7 @@ function renderWhatIfStudio() {
                 <span>${escapeHtml(candidate.reason || "")}</span>
                 <span>Score ${escapeHtml(score)} across ${escapeHtml(candidate.rollout_count || 0)} rollouts</span>
                 <span>Exposure ${escapeHtml(candidate.average_outcome_signals?.exposure_risk ?? "n/a")} · Delay ${escapeHtml(candidate.average_outcome_signals?.delay_risk ?? "n/a")} · Relationship ${escapeHtml(candidate.average_outcome_signals?.relationship_protection ?? "n/a")}</span>
+                ${renderWhatIfBusinessChange(candidate.business_state_change, { title: "Forecasted business change" })}
                 ${
                   shadowScore != null
                     ? `<span>Shadow ${escapeHtml(candidate.shadow?.backend || "forecast")} ${escapeHtml(shadowScore)}</span>`
@@ -774,11 +958,12 @@ function renderWhatIfStudio() {
         <span>${escapeHtml(forecast?.summary || "No forecast for this run.")}</span>
         <span>Risk ${escapeHtml(forecast?.baseline?.risk_score ?? "n/a")} -> ${escapeHtml(forecast?.predicted?.risk_score ?? "n/a")}</span>
       </div>
-    </div>
-    <div class="whatif-artifacts">
-      <span><strong>Saved result</strong> ${escapeHtml(experiment.artifacts?.result_json_path || "")}</span>
-      <span><strong>Saved summary</strong> ${escapeHtml(experiment.artifacts?.overview_markdown_path || "")}</span>
-    </div>
+      </div>
+      ${renderWhatIfBusinessChange(forecast?.business_state_change, { title: "Predicted Business Change" })}
+      <div class="whatif-artifacts">
+        <span><strong>Saved result</strong> ${escapeHtml(experiment.artifacts?.result_json_path || "")}</span>
+        <span><strong>Saved summary</strong> ${escapeHtml(experiment.artifacts?.overview_markdown_path || "")}</span>
+      </div>
   `;
 }
 

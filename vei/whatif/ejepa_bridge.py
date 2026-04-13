@@ -7,11 +7,17 @@ from pathlib import Path
 from typing import Any
 
 from vei.whatif.corpus import (
-    ENRON_DOMAIN,
+    detect_whatif_source,
     event_by_id,
     event_reference,
+    external_recipient_count as shared_external_recipient_count,
     has_external_recipients,
+    internal_recipient_count as shared_internal_recipient_count,
+    is_internal_recipient as shared_is_internal_recipient,
+    load_company_history_world,
+    load_mail_archive_world,
     load_enron_world,
+    recipient_scope as shared_recipient_scope,
     thread_events,
 )
 from vei.whatif.interventions import intervention_tags
@@ -59,7 +65,14 @@ def main() -> None:
 def _run_forecast(payload: dict[str, Any]) -> WhatIfForecastResult:
     cache_root = Path(str(payload["cache_root"])).expanduser().resolve()
     cache_root.mkdir(parents=True, exist_ok=True)
-    rosetta_dir = Path(str(payload["rosetta_dir"])).expanduser().resolve()
+    source_dir = (
+        Path(str(payload.get("source_dir", payload.get("rosetta_dir", ""))))
+        .expanduser()
+        .resolve()
+    )
+    source = str(payload.get("source", "") or "").strip().lower()
+    if not source:
+        source = detect_whatif_source(source_dir)
     thread_id = str(payload["thread_id"])
     branch_event_id = str(payload["branch_event_id"])
     prompt = str(payload["prompt"])
@@ -69,14 +82,14 @@ def _run_forecast(payload: dict[str, Any]) -> WhatIfForecastResult:
     batch_size = int(payload.get("batch_size", 64))
     force_retrain = bool(payload.get("force_retrain", False))
 
-    world = load_enron_world(rosetta_dir=rosetta_dir)
+    world = _load_world(source=source, source_dir=source_dir)
     timeline = thread_events(world.events, thread_id)
     if not timeline:
         return WhatIfForecastResult(
             status="error",
             backend="e_jepa",
             prompt=prompt,
-            summary="The selected thread was not found in the Enron world.",
+            summary="The selected thread was not found in the historical world.",
             error=f"missing thread: {thread_id}",
         )
     branch_event = event_by_id(timeline, branch_event_id)
@@ -111,6 +124,7 @@ def _run_forecast(payload: dict[str, Any]) -> WhatIfForecastResult:
         branch_event_id=branch_event_id,
         prompt=prompt,
         llm_messages=llm_messages if isinstance(llm_messages, list) else [],
+        organization_domain=world.summary.organization_domain,
         device=device,
     )
     if evaluation:
@@ -222,7 +236,7 @@ def _ensure_training_bundle(
                 "meta__subject",
             ],
             notes={
-                "source": "enron_rosetta",
+                "source": world.summary.source,
                 "event_count": world.summary.event_count,
                 "thread_count": world.summary.thread_count,
             },
@@ -333,6 +347,7 @@ def _build_training_rows(
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     allowed_thread_ids = set(training_thread_ids)
+    organization_domain = str(world.summary.organization_domain or "").strip().lower()
     for thread in world.threads:
         if thread.thread_id not in allowed_thread_ids:
             continue
@@ -405,7 +420,10 @@ def _build_training_rows(
                     "last_scope": last_scope,
                     "action_actor_id": event.actor_id or "__unknown__",
                     "action_event_type": event.event_type or "__unknown__",
-                    "action_scope": _recipient_scope(event.flags.to_recipients),
+                    "action_scope": _recipient_scope(
+                        event.flags.to_recipients,
+                        organization_domain=organization_domain,
+                    ),
                     "action_review_path": _review_path(
                         consult_legal=event.flags.consult_legal_specialist,
                         consult_trading=event.flags.consult_trading_specialist,
@@ -422,10 +440,16 @@ def _build_training_rows(
                         event.flags.is_escalation or event.event_type == "escalation"
                     ),
                     "action_external_recipient_count": float(
-                        _external_recipient_count(event.flags.to_recipients)
+                        _external_recipient_count(
+                            event.flags.to_recipients,
+                            organization_domain=organization_domain,
+                        )
                     ),
                     "action_internal_recipient_count": float(
-                        _internal_recipient_count(event.flags.to_recipients)
+                        _internal_recipient_count(
+                            event.flags.to_recipients,
+                            organization_domain=organization_domain,
+                        )
                     ),
                     "action_consult_legal": float(event.flags.consult_legal_specialist),
                     "action_consult_trading": float(
@@ -437,7 +461,10 @@ def _build_training_rows(
             _update_counters(counters, event)
             last_event_type = event.event_type or "__unknown__"
             last_actor_id = event.actor_id or "__unknown__"
-            last_scope = _recipient_scope(event.flags.to_recipients)
+            last_scope = _recipient_scope(
+                event.flags.to_recipients,
+                organization_domain=organization_domain,
+            )
             last_to_count = current_to_count
             last_cc_count = current_cc_count
             last_bcc_count = current_bcc_count
@@ -467,6 +494,7 @@ def _forecast_thread(
     branch_event_id: str,
     prompt: str,
     llm_messages: list[dict[str, Any]],
+    organization_domain: str,
     device: str,
 ) -> WhatIfForecastResult:
     import pandas as pd
@@ -519,6 +547,7 @@ def _forecast_thread(
         branch_row.iloc[0].copy(),
         prompt=prompt,
         tags=prompt_tags,
+        organization_domain=organization_domain,
     )
     remaining_future_rows = (
         thread_frame.iloc[branch_index + 1 :].copy().reset_index(drop=True)
@@ -528,6 +557,7 @@ def _forecast_thread(
         prompt=prompt,
         tags=prompt_tags,
         llm_messages=llm_messages,
+        organization_domain=organization_domain,
     )
 
     context_start = max(0, branch_index - schema.context_length + 1)
@@ -635,6 +665,7 @@ def _candidate_future_rows(
     prompt: str,
     tags: set[str],
     llm_messages: list[dict[str, Any]],
+    organization_domain: str,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     llm_offset = 0
@@ -647,11 +678,19 @@ def _candidate_future_rows(
                     message=llm_messages[llm_offset],
                     prompt=prompt,
                     tags=tags,
+                    organization_domain=organization_domain,
                 )
             )
             llm_offset += 1
             continue
-        rows.append(_candidate_row_from_prompt(base_row, prompt=prompt, tags=tags))
+        rows.append(
+            _candidate_row_from_prompt(
+                base_row,
+                prompt=prompt,
+                tags=tags,
+                organization_domain=organization_domain,
+            )
+        )
     while llm_offset < len(llm_messages):
         rows.append(
             _candidate_row_from_message(
@@ -659,6 +698,7 @@ def _candidate_future_rows(
                 message=llm_messages[llm_offset],
                 prompt=prompt,
                 tags=tags,
+                organization_domain=organization_domain,
             )
         )
         llm_offset += 1
@@ -671,6 +711,7 @@ def _candidate_row_from_message(
     message: dict[str, Any],
     prompt: str,
     tags: set[str],
+    organization_domain: str,
 ) -> dict[str, Any]:
     row = _coerce_row(base_row)
     recipient = str(message.get("to", "")).strip()
@@ -681,7 +722,7 @@ def _candidate_row_from_message(
         local_tags.update({"legal", "compliance"})
     if "trading" in body_text:
         local_tags.add("trading")
-    if not recipient or recipient.lower().endswith(f"@{ENRON_DOMAIN}"):
+    if _is_internal_recipient(recipient, organization_domain=organization_domain):
         local_tags.add("external_removed")
     if "attachment" in body_text or "strip" in body_text:
         local_tags.add("attachment_removed")
@@ -691,7 +732,10 @@ def _candidate_row_from_message(
         message.get("actor_id", row.get("action_actor_id", "__unknown__"))
     )
     row["action_event_type"] = "reply" if subject.startswith("re:") else "message"
-    row["action_scope"] = _recipient_scope([recipient] if recipient else [])
+    row["action_scope"] = _recipient_scope(
+        [recipient] if recipient else [],
+        organization_domain=organization_domain,
+    )
     row["action_review_path"] = _review_path(
         consult_legal="legal" in local_tags or "compliance" in local_tags,
         consult_trading="trading" in local_tags,
@@ -708,10 +752,14 @@ def _candidate_row_from_message(
     row["action_is_reply"] = 1.0 if subject.startswith("re:") else 0.0
     row["action_is_escalation"] = 1.0 if "escalate" in body_text else 0.0
     row["action_external_recipient_count"] = float(
-        0 if not recipient or recipient.lower().endswith(f"@{ENRON_DOMAIN}") else 1
+        0
+        if _is_internal_recipient(recipient, organization_domain=organization_domain)
+        else 1
     )
     row["action_internal_recipient_count"] = float(
-        1 if recipient and recipient.lower().endswith(f"@{ENRON_DOMAIN}") else 0
+        1
+        if _is_internal_recipient(recipient, organization_domain=organization_domain)
+        else 0
     )
     row["action_consult_legal"] = float(
         "legal" in local_tags or "compliance" in local_tags
@@ -728,6 +776,7 @@ def _candidate_row_from_prompt(
     *,
     prompt: str,
     tags: set[str],
+    organization_domain: str,
 ) -> dict[str, Any]:
     row = _coerce_row(base_row)
     row["action_review_path"] = _review_path(
@@ -741,7 +790,7 @@ def _candidate_row_from_prompt(
         row["action_scope"] = "internal"
         row["action_external_recipient_count"] = 0.0
         row["action_internal_recipient_count"] = max(
-            1.0,
+            1.0 if organization_domain else 0.0,
             float(row.get("action_internal_recipient_count", 0.0) or 0.0),
         )
     if "attachment_removed" in tags:
@@ -992,37 +1041,48 @@ def _review_path(*, consult_legal: bool, consult_trading: bool) -> str:
     return "none"
 
 
-def _recipient_scope(recipients: Sequence[str]) -> str:
-    if not recipients:
-        return "none"
-    external = any(
-        recipient and not recipient.lower().endswith(f"@{ENRON_DOMAIN}")
-        for recipient in recipients
-    )
-    internal = any(
-        recipient and recipient.lower().endswith(f"@{ENRON_DOMAIN}")
-        for recipient in recipients
-    )
-    if internal and external:
-        return "mixed"
-    if external:
-        return "external"
-    return "internal"
-
-
-def _external_recipient_count(recipients: Sequence[str]) -> int:
-    return sum(
-        1
-        for recipient in recipients
-        if recipient and not recipient.lower().endswith(f"@{ENRON_DOMAIN}")
+def _recipient_scope(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str,
+) -> str:
+    return shared_recipient_scope(
+        recipients,
+        organization_domain=organization_domain,
+        empty_value="none",
     )
 
 
-def _internal_recipient_count(recipients: Sequence[str]) -> int:
-    return sum(
-        1
-        for recipient in recipients
-        if recipient and recipient.lower().endswith(f"@{ENRON_DOMAIN}")
+def _external_recipient_count(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str,
+) -> int:
+    return shared_external_recipient_count(
+        recipients,
+        organization_domain=organization_domain,
+    )
+
+
+def _internal_recipient_count(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str,
+) -> int:
+    return shared_internal_recipient_count(
+        recipients,
+        organization_domain=organization_domain,
+    )
+
+
+def _is_internal_recipient(
+    recipient: str,
+    *,
+    organization_domain: str,
+) -> bool:
+    return shared_is_internal_recipient(
+        recipient,
+        organization_domain=organization_domain,
     )
 
 
@@ -1060,6 +1120,15 @@ def _coerce_row(base_row: Any) -> dict[str, Any]:
     payload.setdefault("action_consult_legal", 0.0)
     payload.setdefault("action_consult_trading", 0.0)
     return payload
+
+
+def _load_world(*, source: str, source_dir: Path):
+    normalized_source = source.strip().lower()
+    if normalized_source == "enron":
+        return load_enron_world(rosetta_dir=source_dir)
+    if normalized_source == "company_history":
+        return load_company_history_world(source_dir=source_dir)
+    return load_mail_archive_world(source_dir=source_dir)
 
 
 def _delta_as_count(predicted: float, current: float) -> int:

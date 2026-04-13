@@ -304,6 +304,68 @@
         }
       ],
       "public_news_events": []
+    },
+    "historical_business_state": {
+      "method": "historical_v1",
+      "confidence": "medium",
+      "summary": "Recorded business state centers on outside spread risk and commercial position.",
+      "snapshot": {
+        "exposure": 0.94,
+        "trust": 0.356,
+        "coordination_load": 0.423,
+        "execution_delay": 0.559,
+        "deal_position": 0.307,
+        "governance_pressure": 0.119
+      },
+      "indicators": [
+        {
+          "state_id": "exposure",
+          "label": "Outside spread risk",
+          "value": 0.94,
+          "level": "very_high",
+          "summary": "Outside spread risk is high in the recorded path."
+        },
+        {
+          "state_id": "deal_position",
+          "label": "Commercial position",
+          "value": 0.307,
+          "level": "low",
+          "summary": "Commercial position looks fragile in the recorded path."
+        },
+        {
+          "state_id": "trust",
+          "label": "Relationship stability",
+          "value": 0.356,
+          "level": "low",
+          "summary": "Relationship stability looks fragile in the recorded path."
+        },
+        {
+          "state_id": "execution_delay",
+          "label": "Execution delay",
+          "value": 0.559,
+          "level": "medium",
+          "summary": "Execution delay is moderate in the recorded path."
+        },
+        {
+          "state_id": "coordination_load",
+          "label": "Internal handling load",
+          "value": 0.423,
+          "level": "medium",
+          "summary": "Internal handling load is moderate in the recorded path."
+        },
+        {
+          "state_id": "governance_pressure",
+          "label": "Approval and escalation pressure",
+          "value": 0.119,
+          "level": "very_low",
+          "summary": "Approval and escalation pressure stays limited in the recorded path."
+        }
+      ],
+      "implications": [
+        "Outside spread risk is high in the recorded path.",
+        "Commercial position looks fragile in the recorded path.",
+        "Relationship stability looks fragile in the recorded path."
+      ]
     }
   },
   "baseline": {
@@ -461,7 +523,7 @@
       {
         "actor_id": "debra.perlingiere@enron.com",
         "to": "gerald.nemec@enron.com",
-        "subject": "Master Agreement (Internal draft \u2014 DO NOT SEND)",
+        "subject": "Master Agreement (Internal draft — DO NOT SEND)",
         "body_text": "Attached is the draft Master Firm Purchase/Sale Agreement prepared for Cargill. Please review internally. Gerald, please lead the legal review; Sara, please review credit provisions. Do NOT send this outside Enron (to Cargill or any third party) until we have a clean, approved version. Please return comments by end of next week so I can circulate a redline.",
         "delay_ms": 1000,
         "rationale": "Keeps the draft inside Enron and formally loops in legal and credit reviewers while explicitly instructing to hold external transmission."
@@ -469,7 +531,7 @@
       {
         "actor_id": "gerald.nemec@enron.com",
         "to": "debra.perlingiere@enron.com",
-        "subject": "Re: Master Agreement (Internal draft \u2014 DO NOT SEND)",
+        "subject": "Re: Master Agreement (Internal draft — DO NOT SEND)",
         "body_text": "Thanks, Debra. I'll review for legal issues and return marked-up comments by Thursday. Initial flags: tighten indemnity/limitation language, clarify force majeure and termination triggers, and confirm any credit carve-outs with Sara. I will not clear any external sending until I sign off on the final clean copy.",
         "delay_ms": 1800000,
         "rationale": "Legal acknowledges review, identifies key clauses to address, and reiterates the hold on external distribution pending legal sign-off."
@@ -477,7 +539,7 @@
       {
         "actor_id": "debra.perlingiere@enron.com",
         "to": "marie.heard@enron.com",
-        "subject": "Re: Master Agreement \u2014 internal status",
+        "subject": "Re: Master Agreement — internal status",
         "body_text": "Quick update: Holding the draft internally pending Gerald's legal review and Sara's credit input. I will circulate a clean, approved version for final sign-off before any outreach to Cargill.",
         "delay_ms": 3600000,
         "rationale": "Notifies internal stakeholders that external send is on hold and outlines next steps for internal approval."
@@ -495,9 +557,9 @@
     "delivered_event_count": 3,
     "inbox_count": 5,
     "top_subjects": [
-      "Re: Master Agreement \u2014 internal status",
-      "Re: Master Agreement (Internal draft \u2014 DO NOT SEND)",
-      "Master Agreement (Internal draft \u2014 DO NOT SEND)",
+      "Re: Master Agreement — internal status",
+      "Re: Master Agreement (Internal draft — DO NOT SEND)",
+      "Master Agreement (Internal draft — DO NOT SEND)",
       "Master Agreement",
       "Master Agreement"
     ],
@@ -602,6 +664,121 @@
       "attachment_event_count": 0.0,
       "reply_event_count": 2.0,
       "current_risk_score": 1.0
+    },
+    "business_state_change": {
+      "method": "e_jepa_business_state_v1",
+      "confidence": "high",
+      "summary": "Moderately lower outside spread risk.",
+      "baseline": {
+        "exposure": 0.94,
+        "trust": 0.356,
+        "coordination_load": 0.423,
+        "execution_delay": 0.559,
+        "deal_position": 0.307,
+        "governance_pressure": 0.119
+      },
+      "predicted": {
+        "exposure": 0.845,
+        "trust": 0.402,
+        "coordination_load": 0.406,
+        "execution_delay": 0.548,
+        "deal_position": 0.355,
+        "governance_pressure": 0.133
+      },
+      "impacts": [
+        {
+          "state_id": "exposure",
+          "label": "Outside spread risk",
+          "baseline_value": 0.94,
+          "predicted_value": 0.845,
+          "delta": -0.095,
+          "effect": "better",
+          "magnitude": "moderate",
+          "summary": "Moderately lower outside spread risk."
+        },
+        {
+          "state_id": "deal_position",
+          "label": "Commercial position",
+          "baseline_value": 0.307,
+          "predicted_value": 0.355,
+          "delta": 0.048,
+          "effect": "better",
+          "magnitude": "slight",
+          "summary": "Slightly stronger commercial position."
+        },
+        {
+          "state_id": "trust",
+          "label": "Relationship stability",
+          "baseline_value": 0.356,
+          "predicted_value": 0.402,
+          "delta": 0.046,
+          "effect": "better",
+          "magnitude": "slight",
+          "summary": "Slightly stronger relationship stability."
+        },
+        {
+          "state_id": "coordination_load",
+          "label": "Internal handling load",
+          "baseline_value": 0.423,
+          "predicted_value": 0.406,
+          "delta": -0.017,
+          "effect": "flat",
+          "magnitude": "flat",
+          "summary": "Internal handling load stays close to the historical path."
+        },
+        {
+          "state_id": "governance_pressure",
+          "label": "Approval and escalation pressure",
+          "baseline_value": 0.119,
+          "predicted_value": 0.133,
+          "delta": 0.014,
+          "effect": "flat",
+          "magnitude": "flat",
+          "summary": "Approval and escalation pressure stays close to the historical path."
+        },
+        {
+          "state_id": "execution_delay",
+          "label": "Execution delay",
+          "baseline_value": 0.559,
+          "predicted_value": 0.548,
+          "delta": -0.011,
+          "effect": "flat",
+          "magnitude": "flat",
+          "summary": "Execution delay stays close to the historical path."
+        }
+      ],
+      "consequence_estimates": [
+        {
+          "consequence_id": "containment",
+          "label": "Containment",
+          "effect": "better",
+          "magnitude": "moderate",
+          "summary": "The thread looks safer to contain."
+        },
+        {
+          "consequence_id": "review_burden",
+          "label": "Handling burden",
+          "effect": "flat",
+          "magnitude": "flat",
+          "summary": "Handling burden stays close to the historical path."
+        },
+        {
+          "consequence_id": "execution_path",
+          "label": "Execution path",
+          "effect": "flat",
+          "magnitude": "flat",
+          "summary": "Execution pace stays close to the historical path."
+        },
+        {
+          "consequence_id": "commercial_position",
+          "label": "Commercial footing",
+          "effect": "better",
+          "magnitude": "slight",
+          "summary": "Commercial footing looks stronger."
+        }
+      ],
+      "tradeoffs": [],
+      "net_effect_score": 0.05
     },
     "artifacts": {
       "cache_root": "not-included-in-repo-example",

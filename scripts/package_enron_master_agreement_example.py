@@ -6,6 +6,20 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from vei.whatif.artifacts import render_experiment_overview
+from vei.whatif.business_state import (
+    assess_historical_business_state,
+    describe_forecast_business_change,
+)
+from vei.whatif.models import (
+    WhatIfEpisodeManifest,
+    WhatIfExperimentResult,
+    WhatIfForecastResult,
+)
+from scripts.build_enron_business_state_example import (
+    build_example as build_business_state_example,
+)
+
 EXAMPLE_PLACEHOLDER = "not-included-in-repo-example"
 
 
@@ -38,7 +52,31 @@ def _rewrite_forecast_result(payload: dict[str, Any]) -> dict[str, Any]:
     return updated
 
 
-def _rewrite_experiment_result(payload: dict[str, Any]) -> dict[str, Any]:
+def _resolve_forecast_filename(
+    source_root: Path,
+    *,
+    experiment_payload: dict[str, Any] | None = None,
+) -> str:
+    artifacts = experiment_payload.get("artifacts") if experiment_payload else None
+    if isinstance(artifacts, dict):
+        raw_path = artifacts.get("forecast_json_path")
+        if isinstance(raw_path, str):
+            filename = Path(raw_path).name
+            if filename and (source_root / filename).exists():
+                return filename
+    for filename in ("whatif_ejepa_result.json", "whatif_ejepa_proxy_result.json"):
+        if (source_root / filename).exists():
+            return filename
+    raise FileNotFoundError(
+        f"forecast result not found under {source_root}"
+    )
+
+
+def _rewrite_experiment_result(
+    payload: dict[str, Any],
+    *,
+    forecast_filename: str,
+) -> dict[str, Any]:
     updated = dict(payload)
     materialization = dict(updated.get("materialization") or {})
     if materialization:
@@ -67,14 +105,76 @@ def _rewrite_experiment_result(payload: dict[str, Any]) -> dict[str, Any]:
         artifacts["result_json_path"] = "whatif_experiment_result.json"
         artifacts["overview_markdown_path"] = "whatif_experiment_overview.md"
         artifacts["llm_json_path"] = "whatif_llm_result.json"
-        artifacts["forecast_json_path"] = "whatif_ejepa_result.json"
+        artifacts["forecast_json_path"] = forecast_filename
         updated["artifacts"] = artifacts
     return updated
+
+
+def _enrich_packaged_business_state(output_root: Path, *, forecast_filename: str) -> None:
+    manifest_path = output_root / "workspace" / "whatif_episode_manifest.json"
+    forecast_path = output_root / forecast_filename
+    result_path = output_root / "whatif_experiment_result.json"
+    context_path = output_root / "workspace" / "context_snapshot.json"
+
+    manifest = WhatIfEpisodeManifest.model_validate_json(
+        manifest_path.read_text(encoding="utf-8")
+    )
+    historical_business_state = assess_historical_business_state(
+        branch_event=manifest.branch_event,
+        forecast=manifest.forecast,
+        organization_domain=manifest.organization_domain,
+        public_context=manifest.public_context,
+    )
+    manifest.historical_business_state = historical_business_state
+    manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+
+    forecast_result = WhatIfForecastResult.model_validate_json(
+        forecast_path.read_text(encoding="utf-8")
+    )
+    forecast_result.business_state_change = describe_forecast_business_change(
+        branch_event=manifest.branch_event,
+        forecast_result=forecast_result,
+        organization_domain=manifest.organization_domain,
+        public_context=manifest.public_context,
+    )
+    forecast_path.write_text(
+        forecast_result.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    experiment_result = WhatIfExperimentResult.model_validate_json(
+        result_path.read_text(encoding="utf-8")
+    )
+    experiment_result.materialization.historical_business_state = (
+        historical_business_state
+    )
+    experiment_result.forecast_result = forecast_result
+    result_path.write_text(
+        experiment_result.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    (output_root / "whatif_experiment_overview.md").write_text(
+        render_experiment_overview(experiment_result),
+        encoding="utf-8",
+    )
+
+    context_payload = _read_json(context_path)
+    metadata = context_payload.setdefault("metadata", {})
+    whatif_metadata = metadata.setdefault("whatif", {})
+    whatif_metadata["historical_business_state"] = historical_business_state.model_dump(
+        mode="json"
+    )
+    _write_json(context_path, context_payload)
 
 
 def package_example(source_root: Path, output_root: Path) -> None:
     workspace_root = source_root / "workspace"
     target_workspace = output_root / "workspace"
+    experiment_payload = _read_json(source_root / "whatif_experiment_result.json")
+    forecast_filename = _resolve_forecast_filename(
+        source_root,
+        experiment_payload=experiment_payload,
+    )
     if output_root.exists():
         shutil.rmtree(output_root)
     target_workspace.mkdir(parents=True, exist_ok=True)
@@ -87,13 +187,14 @@ def package_example(source_root: Path, output_root: Path) -> None:
         source_root / "whatif_llm_result.json", output_root / "whatif_llm_result.json"
     )
     _write_json(
-        output_root / "whatif_ejepa_result.json",
-        _rewrite_forecast_result(_read_json(source_root / "whatif_ejepa_result.json")),
+        output_root / forecast_filename,
+        _rewrite_forecast_result(_read_json(source_root / forecast_filename)),
     )
     _write_json(
         output_root / "whatif_experiment_result.json",
         _rewrite_experiment_result(
-            _read_json(source_root / "whatif_experiment_result.json")
+            experiment_payload,
+            forecast_filename=forecast_filename,
         ),
     )
 
@@ -114,6 +215,8 @@ def package_example(source_root: Path, output_root: Path) -> None:
         target_workspace / "whatif_episode_manifest.json",
         _rewrite_manifest(_read_json(workspace_root / "whatif_episode_manifest.json")),
     )
+    _enrich_packaged_business_state(output_root, forecast_filename=forecast_filename)
+    build_business_state_example(output_root)
 
 
 def main() -> None:

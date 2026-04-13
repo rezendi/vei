@@ -6,11 +6,30 @@ from vei.whatif.models import (
 )
 
 
+def _business_state_change_lines(change) -> list[str]:
+    if change is None:
+        return []
+    lines = [
+        "",
+        "## Business State Change",
+        f"- Summary: {change.summary}",
+        f"- Confidence: {change.confidence}",
+        f"- Net effect score: {change.net_effect_score}",
+    ]
+    for impact in change.impacts[:4]:
+        lines.append(f"- {impact.summary}")
+    for consequence in change.consequence_estimates[:3]:
+        lines.append(f"- {consequence.summary}")
+    return lines
+
+
 def render_experiment_overview(result: WhatIfExperimentResult) -> str:
     lines = [
         f"# {result.label}",
         "",
         f"Thread: `{result.intervention.thread_id}`",
+        f"Case: `{result.materialization.case_id or result.materialization.thread_id}`",
+        f"Surface: {result.materialization.surface}",
         f"Branch event: `{result.intervention.branch_event_id}`",
         f"Changed actor: `{result.materialization.branch_event.actor_id}`",
         f"Historical event type: {result.materialization.branch_event.event_type}",
@@ -29,6 +48,15 @@ def render_experiment_overview(result: WhatIfExperimentResult) -> str:
         f"- Delivered historical future events: {result.baseline.delivered_event_count}",
         f"- Baseline forecast risk score: {result.baseline.forecast.risk_score}",
     ]
+    if result.materialization.case_context is not None:
+        lines.extend(
+            [
+                "",
+                "## Case Context",
+                f"- Related case events: {len(result.materialization.case_context.related_history)}",
+                f"- Linked records: {len(result.materialization.case_context.records)}",
+            ]
+        )
     if result.materialization.baseline_future_preview:
         lines.extend(["- First baseline events:"])
         for event in result.materialization.baseline_future_preview[:3]:
@@ -42,13 +70,13 @@ def render_experiment_overview(result: WhatIfExperimentResult) -> str:
                 "## LLM Actor",
                 f"- Status: {result.llm_result.status}",
                 f"- Summary: {result.llm_result.summary}",
-                f"- Delivered messages: {result.llm_result.delivered_event_count}",
+                f"- Delivered actions: {result.llm_result.delivered_event_count}",
                 f"- Inbox count: {result.llm_result.inbox_count}",
             ]
         )
         for message in result.llm_result.messages[:3]:
             lines.append(
-                f"- `{message.actor_id}` -> `{message.to}` after {message.delay_ms} ms: {message.subject}"
+                f"- `{message.surface}` `{message.actor_id}` -> `{message.to}` after {message.delay_ms} ms: {message.subject}"
             )
     if result.forecast_result is not None:
         lines.extend(
@@ -63,6 +91,11 @@ def render_experiment_overview(result: WhatIfExperimentResult) -> str:
                 f"- External-send delta: {result.forecast_result.delta.external_event_delta}",
                 f"- Escalation delta: {result.forecast_result.delta.escalation_delta}",
             ]
+        )
+        lines.extend(
+            _business_state_change_lines(
+                result.forecast_result.business_state_change,
+            )
         )
     return "\n".join(lines)
 
@@ -91,6 +124,11 @@ def render_ranked_experiment_overview(result: WhatIfRankedExperimentResult) -> s
                 f"  - Score: {candidate.outcome_score.overall_score}",
                 f"  - Prompt: {candidate.intervention.prompt}",
                 f"  - Reason: {candidate.reason}",
+                (
+                    f"  - Business state: {candidate.business_state_change.summary}"
+                    if candidate.business_state_change is not None
+                    else "  - Business state: not available"
+                ),
                 (
                     f"  - Signals: exposure={candidate.average_outcome_signals.exposure_risk}, "
                     f"delay={candidate.average_outcome_signals.delay_risk}, "

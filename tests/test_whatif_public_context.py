@@ -23,6 +23,7 @@ from vei.whatif.models import (
     WhatIfResearchPack,
 )
 from vei.whatif.public_context import (
+    load_public_context,
     load_enron_public_context,
     public_context_prompt_lines,
     slice_public_context_to_branch,
@@ -135,6 +136,54 @@ def _public_context_research_pack() -> WhatIfResearchPack:
     )
 
 
+def _write_generic_public_context_fixture(root: Path) -> Path:
+    path = root / "whatif_public_context.json"
+    path.write_text(
+        json.dumps(
+            {
+                "pack_name": "pycorp_public_context",
+                "organization_name": "Py Corp",
+                "organization_domain": "pycorp.example.com",
+                "financial_snapshots": [
+                    {
+                        "snapshot_id": "py_q1_outlook",
+                        "as_of": "2026-03-01T00:00:00Z",
+                        "kind": "guidance",
+                        "label": "Q1 outlook note",
+                        "summary": "Public guidance held steady entering March.",
+                    },
+                    {
+                        "snapshot_id": "py_q2_outlook",
+                        "as_of": "2026-03-03T00:00:00Z",
+                        "kind": "guidance",
+                        "label": "Q2 outlook note",
+                        "summary": "Public guidance changed after the branch.",
+                    },
+                ],
+                "public_news_events": [
+                    {
+                        "event_id": "py_launch_note",
+                        "timestamp": "2026-03-01T08:00:00Z",
+                        "category": "press",
+                        "headline": "Product launch note",
+                        "summary": "The company announced its launch that morning.",
+                    },
+                    {
+                        "event_id": "py_board_change",
+                        "timestamp": "2026-03-04T08:00:00Z",
+                        "category": "filing",
+                        "headline": "Board change note",
+                        "summary": "A later public filing changed the board slate.",
+                    },
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_load_enron_public_context_slices_world_window() -> None:
     context = load_enron_public_context(
         window_start="2001-04-01T00:00:00Z",
@@ -163,6 +212,21 @@ def test_load_enron_public_context_soft_fails_when_fixture_is_unavailable(
     )
 
     assert context.pack_name == "enron_public_context"
+    assert context.financial_snapshots == []
+    assert context.public_news_events == []
+
+
+def test_load_public_context_soft_fails_for_generic_pack(tmp_path: Path) -> None:
+    context = load_public_context(
+        path=tmp_path / "missing_public_context.json",
+        organization_name="Py Corp",
+        organization_domain="pycorp.example.com",
+        window_start="2026-03-01T00:00:00Z",
+        window_end="2026-03-01T23:59:59Z",
+    )
+
+    assert context.organization_name == "Py Corp"
+    assert context.organization_domain == "pycorp.example.com"
     assert context.financial_snapshots == []
     assert context.public_news_events == []
 
@@ -266,12 +330,18 @@ def test_load_world_materialize_episode_and_saved_scene_round_trip_public_contex
     assert [event.event_id for event in scene.public_context.public_news_events] == [
         "cliff_baxter_resignation"
     ]
+    assert manifest.historical_business_state is not None
+    assert scene.historical_business_state is not None
+    assert scene.historical_business_state.summary
     assert (
         snapshot_payload["metadata"]["whatif"]["public_context"]["public_news_events"][
             0
         ]["event_id"]
         == "cliff_baxter_resignation"
     )
+    assert snapshot_payload["metadata"]["whatif"]["historical_business_state"][
+        "summary"
+    ]
 
 
 def test_llm_prompt_only_includes_public_facts_known_by_branch_date(
@@ -374,3 +444,64 @@ def test_non_enron_world_has_no_public_context(tmp_path: Path) -> None:
     world = load_world(source="mail_archive", source_dir=archive_path)
 
     assert world.public_context is None
+
+
+def test_mail_archive_world_loads_sidecar_public_context(tmp_path: Path) -> None:
+    archive_path = tmp_path / "mail_archive.json"
+    archive_path.write_text(
+        json.dumps(
+            {
+                "organization_name": "Py Corp",
+                "organization_domain": "pycorp.example.com",
+                "threads": [
+                    {
+                        "thread_id": "py-thread",
+                        "subject": "Draft note",
+                        "messages": [
+                            {
+                                "message_id": "py-msg-001",
+                                "from": "emma@pycorp.example.com",
+                                "to": "legal@pycorp.example.com",
+                                "subject": "Draft note",
+                                "body_text": "Please review.",
+                                "timestamp": "2026-03-01T09:00:00Z",
+                            },
+                            {
+                                "message_id": "py-msg-002",
+                                "from": "legal@pycorp.example.com",
+                                "to": "emma@pycorp.example.com",
+                                "subject": "Re: Draft note",
+                                "body_text": "Keep this internal.",
+                                "timestamp": "2026-03-01T09:05:00Z",
+                            },
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_generic_public_context_fixture(tmp_path)
+
+    world = load_world(source="mail_archive", source_dir=archive_path)
+    materialization = materialize_episode(
+        world,
+        root=tmp_path / "generic_episode",
+        event_id="py-msg-002",
+    )
+
+    assert world.public_context is not None
+    assert [item.snapshot_id for item in world.public_context.financial_snapshots] == [
+        "py_q1_outlook"
+    ]
+    assert [item.event_id for item in world.public_context.public_news_events] == [
+        "py_launch_note"
+    ]
+    assert materialization.public_context is not None
+    assert [
+        item.snapshot_id for item in materialization.public_context.financial_snapshots
+    ] == ["py_q1_outlook"]
+    assert [
+        item.event_id for item in materialization.public_context.public_news_events
+    ] == ["py_launch_note"]
