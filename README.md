@@ -305,13 +305,15 @@ vei whatif experiment \
   --counterfactual-prompt "Keep the draft inside Enron, loop in Gerald Nemec for legal review, and hold the outside send until the clean version is approved."
 ```
 
-This flow is designed for archive-backed mail worlds such as the Enron Rosetta tables. VEI first answers broad “what would this have touched?” questions over the full history, then lets you search for a concrete event by actor, thread, or subject, and finally turns that historical event into a replayable mail-first workspace. The workspace branches just before that event, so the event itself becomes the first thing in the baseline future or the first thing a counterfactual path can replace. The replay stays honest to the source data: no fake Slack history is invented, and email bodies are based on the available historical excerpts rather than claiming full originals.
+This flow now runs on a normalized company history bundle instead of assuming the historical world is email-only. VEI first answers broad “what would this have touched?” questions over the full history, then lets you search for a concrete event by actor, thread, subject, or surface, and finally turns that historical event into a replayable workspace on the same surface. The workspace branches just before that event, so the event itself becomes the first thing in the baseline future or the first thing a counterfactual path can replace. The replay stays honest to the source data: mail stays mail, chat stays chat, tickets stay tickets, and every excerpt is labeled as an excerpt when the underlying source is partial.
 
 The experiment command writes a bundle with JSON and Markdown summaries plus per-path outputs under `_vei_out/whatif_experiments`. The LLM path generates bounded follow-up emails on the selected thread. The forecast path can now use a real local E-JEPA runtime when the sibling `ARP_Jepa_exp` repo is available, and it falls back to the proxy forecaster only when that runtime is missing or errors. For exact-event forecasting, the JEPA adapter now trains on a deterministic local slice of related threads around the chosen branch point instead of trying to relearn the whole archive every time.
 
 In Studio, the same flow is available as a search-first loop: find a real historical event, materialize it, then run the counterfactual and inspect the saved comparison.
 
 The Enron flow now carries a packaged public-company context pack alongside the mail archive. That pack lives under `vei/whatif/fixtures/enron_public_context`, can be refreshed with `python scripts/prepare_enron_public_context.py`, and contains 7 dated financial checkpoints plus 7 dated public news events drawn from 7 archived public source files. Those public facts span December 31, 1998 through December 2, 2001. VEI filters that public context twice: once to the loaded Enron email window, and again to the chosen branch date. The saved manifest, the Studio decision scene, the LLM counterfactual prompt, and the held-out benchmark dossiers all use that same pre-branch slice.
+
+The same path now works for a new company without adding a fresh Enron-style code path. Point `vei whatif` at a `context_snapshot.json`, `company_history_bundle.json`, or `mail_archive.json` source. A multi-source context snapshot can now branch from mail, Slack or Teams-style chat, and Jira-style ticket history through the same typed what-if API. VEI also derives a shared case id across those surfaces, then carries earlier cross-surface case activity plus linked document or CRM records into the branch scene and the saved workspace when the normalized bundle has them. Add a sidecar `whatif_public_context.json` in the same folder when you have dated public facts you want VEI to carry into the branch scene and the saved run. Add a research-pack JSON file when you want reusable case sets for pack runs or benchmark builds.
 
 ![Enron historical what-if flow](docs/assets/enron-whatif/enron-whatif-flow.gif)
 
@@ -328,7 +330,17 @@ vei ui serve \
   --port 3055
 ```
 
-That repo-owned bundle also includes the saved experiment overview, the LLM path result, and the JEPA forecast result under `docs/examples/enron-master-agreement-public-context/`. Use the real Rosetta archive when you want whole-history Enron search or a fresh rerun from the full corpus.
+That repo-owned bundle also includes the saved experiment overview, the LLM path result, the JEPA forecast result, and a repo-owned three-way business-state comparison under `docs/examples/enron-master-agreement-public-context/`. Use the real Rosetta archive when you want whole-history Enron search or a fresh rerun from the full corpus.
+
+The saved `Master Agreement` example shows the full loop in one place. VEI starts from a real outside send on September 27, 2000, keeps only the Enron public-company facts that were already known on that date, and then compares alternate moves against the recorded future.
+
+![Enron predicted business change](docs/assets/enron-whatif/enron-predicted-business-change.png)
+
+On that saved run, VEI keeps the same 84-event horizon but predicts 29 fewer outside sends and a small risk drop from `1.000` to `0.983`. The business readout turns that into decision language: lower outside spread risk, slightly stronger commercial footing, and no large delay penalty.
+
+![Enron ranked business comparison](docs/assets/enron-whatif/enron-ranked-comparison.png)
+
+The ranked view shows how VEI turns that forecast into a choice. `Hold for internal review` comes out best at `0.351`, `Send a narrow status note` still helps at `0.155`, and `Push for fast turnaround` falls behind at `-0.019`.
 
 <details>
 <summary>Concrete Enron example: Debra Perlingiere -> Cargill Master Agreement</summary>
@@ -354,6 +366,12 @@ Opening that branch point against the current combined dataset creates a workspa
 **What the saved repo example says about the counterfactual**
 
 The committed example bundle shows both compare paths. The bounded LLM path keeps the draft inside Enron, loops in Gerald Nemec for legal review, and sends an internal status update instead of sending the attachment to Cargill. The JEPA forecast keeps the same 84-event horizon but predicts risk moving from `1.000` to `0.983` and the outside-send count dropping by `29`.
+
+The same saved bundle now also carries a business-state translation layer on top of that forecast. In this example, VEI reads the forecast as lower outside spread risk, slightly stronger commercial position, slightly stronger relationship stability, and slightly higher approval or escalation pressure. The repo-owned comparison file then ranks the three branch-scene candidate moves for this same Enron branch point:
+
+- `Hold for internal review`: strongest net improvement at `0.351`, with a much safer containment path
+- `Send a narrow status note`: positive middle path at `0.155`, with lower spread risk but a smaller overall gain
+- `Push for fast turnaround`: weaker result at `-0.019`, with more execution pressure and no containment gain
 </details>
 
 ### Enron business-outcome benchmark
@@ -395,6 +413,20 @@ vei whatif benchmark eval \
   --model-id jepa_latent \
   --judged-rankings-path _vei_out/whatif_benchmarks/branch_point_ranking_v2/enron_business_outcome_public_context_20260412/judge_result.json \
   --audit-records-path /path/to/completed_audit_records.json
+```
+
+For a new company history bundle, run the same flow against the normalized snapshot and point the held-out cases at a JSON pack file:
+
+```bash
+vei whatif pack run \
+  --source-dir /path/to/newco/context_snapshot.json \
+  --label newco_pack_run \
+  --pack-id /path/to/newco/research_pack.json
+
+vei whatif benchmark build \
+  --source-dir /path/to/newco/context_snapshot.json \
+  --label newco_benchmark \
+  --heldout-pack-id /path/to/newco/research_pack.json
 ```
 
 The current Enron business-outcome benchmark uses 24 held-out cases with 4 candidate actions each. The clean comparison now comes from the matched-input study path, where `jepa_latent`, `full_context_transformer`, and `treatment_transformer` all see the same pre-branch history, summary features, and structured action.

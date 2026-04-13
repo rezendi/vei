@@ -231,6 +231,140 @@ def _write_mail_archive_fixture(root: Path) -> Path:
     return archive_path
 
 
+def _write_company_history_fixture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    snapshot_path = root / "context_snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "organization_name": "Py Corp",
+                "organization_domain": "pycorp.example.com",
+                "captured_at": "2026-03-01T10:15:00Z",
+                "sources": [
+                    {
+                        "provider": "slack",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"channels": 1, "messages": 3, "users": 2},
+                        "data": {
+                            "channels": [
+                                {
+                                    "channel": "#deal-desk",
+                                    "channel_id": "C001",
+                                    "unread": 0,
+                                    "messages": [
+                                        {
+                                            "ts": "2026-03-01T09:00:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "Need a clean internal review thread for LEGAL-7 before we update Redwood.",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:05:00Z",
+                                            "user": "legal@pycorp.example.com",
+                                            "text": "Hold LEGAL-7 internally until legal signs off.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:10:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "I will send Redwood a short LEGAL-7 status note after that review.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                    ],
+                                }
+                            ],
+                            "users": [
+                                {
+                                    "id": "U001",
+                                    "name": "emma",
+                                    "real_name": "Emma Rowan",
+                                    "email": "emma@pycorp.example.com",
+                                },
+                                {
+                                    "id": "U002",
+                                    "name": "legal",
+                                    "real_name": "Legal Team",
+                                    "email": "legal@pycorp.example.com",
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        "provider": "jira",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"issues": 1, "projects": 1},
+                        "data": {
+                            "issues": [
+                                {
+                                    "ticket_id": "LEGAL-7",
+                                    "title": "LEGAL-7 pricing addendum review",
+                                    "status": "in_progress",
+                                    "assignee": "emma@pycorp.example.com",
+                                    "description": "Check LEGAL-7 pricing addendum before any outside update.",
+                                    "updated": "2026-03-01T10:00:00Z",
+                                    "comments": [
+                                        {
+                                            "id": "c1",
+                                            "author": "legal@pycorp.example.com",
+                                            "body": "Need one more LEGAL-7 markup pass before we send anything outside.",
+                                            "created": "2026-03-01T09:02:00Z",
+                                        },
+                                        {
+                                            "id": "c2",
+                                            "author": "emma@pycorp.example.com",
+                                            "body": "Holding the LEGAL-7 response until the markup is done.",
+                                            "created": "2026-03-01T09:06:00Z",
+                                        },
+                                    ],
+                                }
+                            ],
+                            "projects": [{"key": "LEGAL", "name": "Legal"}],
+                        },
+                    },
+                    {
+                        "provider": "google",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"documents": 1},
+                        "data": {
+                            "documents": [
+                                {
+                                    "doc_id": "DOC-LEGAL-7",
+                                    "title": "LEGAL-7 markup tracker",
+                                    "mime_type": "application/vnd.google-apps.document",
+                                    "body": "Markup notes for LEGAL-7 pricing addendum review.",
+                                }
+                            ]
+                        },
+                    },
+                    {
+                        "provider": "salesforce",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"deals": 1},
+                        "data": {
+                            "deals": [
+                                {
+                                    "id": "DEAL-LEGAL-7",
+                                    "name": "LEGAL-7 Redwood renewal",
+                                    "stage": "legal_review",
+                                    "owner": "emma@pycorp.example.com",
+                                    "amount": 240000,
+                                }
+                            ]
+                        },
+                    },
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return snapshot_path
+
+
 def _write_saved_context_snapshot(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     snapshot_path = root / "context_snapshot.json"
@@ -613,6 +747,55 @@ def test_ui_api_whatif_routes_support_generic_mail_archive(
     assert open_payload["materialization"]["branch_event_id"] == "py-msg-002"
 
 
+def test_ui_api_whatif_routes_support_company_history_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    snapshot_path = _write_company_history_fixture(tmp_path / "company_history")
+    monkeypatch.setenv("VEI_WHATIF_SOURCE_DIR", str(snapshot_path))
+
+    client = TestClient(ui_api.create_ui_app(root))
+
+    status_response = client.get("/api/workspace/whatif")
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["available"] is True
+    assert status_payload["source"] == "company_history"
+    assert status_payload["source_dir"] == str(snapshot_path.resolve())
+
+    search_response = client.post(
+        "/api/workspace/whatif/search",
+        json={"source": "auto", "query": "legal signs off"},
+    )
+    assert search_response.status_code == 200
+    search_payload = search_response.json()
+    assert search_payload["source"] == "company_history"
+    assert search_payload["matches"][0]["event"]["surface"] == "slack"
+    slack_thread_id = search_payload["matches"][0]["event"]["thread_id"]
+
+    scene_response = client.post(
+        "/api/workspace/whatif/scene",
+        json={"source": "auto", "thread_id": slack_thread_id},
+    )
+    assert scene_response.status_code == 200
+    scene_payload = scene_response.json()
+    assert scene_payload["source"] == "company_history"
+    assert scene_payload["surface"] == "slack"
+    assert scene_payload["branch_event"]["surface"] == "slack"
+    assert scene_payload["case_id"] == "case:LEGAL-7"
+    assert scene_payload["case_context"]["related_history"]
+    assert {item["surface"] for item in scene_payload["case_context"]["records"]} >= {
+        "docs",
+        "crm",
+    }
+
+
 def test_ui_api_whatif_scene_route_returns_playable_enron_decision(
     tmp_path: Path,
     monkeypatch,
@@ -645,6 +828,7 @@ def test_ui_api_whatif_scene_route_returns_playable_enron_decision(
     assert payload["future_event_count"] == 2
     assert len(payload["candidate_options"]) == 3
     assert payload["candidate_options"][0]["label"] == "Hold for internal review"
+    assert payload["historical_business_state"]["summary"]
     assert payload["public_context"]["financial_snapshots"] == []
     assert payload["public_context"]["public_news_events"] == []
 
@@ -678,6 +862,7 @@ def test_ui_api_whatif_scene_route_returns_branch_filtered_public_context(
     assert [
         item["event_id"] for item in payload["public_context"]["public_news_events"]
     ] == ["cliff_baxter_resignation"]
+    assert payload["historical_business_state"]["summary"]
 
 
 def test_ui_api_whatif_scene_route_supports_generic_mail_archive(
@@ -925,6 +1110,118 @@ def test_ui_api_saved_enron_workspace_without_rosetta_uses_saved_context_snapsho
     assert scene_payload["public_context"]["financial_snapshots"][0]["snapshot_id"] == (
         "fy_1999"
     )
+
+
+def test_ui_api_saved_enron_workspace_prefers_live_rosetta_for_auto_actions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace_root = tmp_path / "saved_enron_workspace"
+    create_workspace_from_template(
+        root=workspace_root,
+        source_kind="vertical",
+        source_ref="b2b_saas",
+    )
+    _write_saved_context_snapshot(workspace_root)
+    rosetta_dir = tmp_path / "rosetta"
+    _write_rosetta_fixture(rosetta_dir)
+    episode = WhatIfEpisodeManifest(
+        source="enron",
+        source_dir="not-included-in-repo-example",
+        workspace_root=workspace_root,
+        organization_name="Enron Corporation",
+        organization_domain="enron.com",
+        thread_id="thr-master-agreement",
+        thread_subject="Master Agreement",
+        branch_event_id="enron_bcda1b925800af8c",
+        branch_timestamp="2000-09-27T13:42:00Z",
+        branch_event=WhatIfEventReference(
+            event_id="enron_bcda1b925800af8c",
+            timestamp="2000-09-27T13:42:00Z",
+            actor_id="debra.perlingiere@enron.com",
+            target_id="kathy_gerken@cargill.com",
+            event_type="assignment",
+            thread_id="thr-master-agreement",
+            subject="Master Agreement",
+            snippet="Historical branch point.",
+            to_recipients=["kathy_gerken@cargill.com"],
+        ),
+        history_message_count=1,
+        future_event_count=84,
+        baseline_dataset_path="whatif_baseline_dataset.json",
+        content_notice="Historical email bodies are grounded in archive excerpts and metadata.",
+        forecast=WhatIfForecast(backend="historical", risk_score=1.0),
+    )
+    (workspace_root / "whatif_episode_manifest.json").write_text(
+        episode.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+
+    def fake_run_ranked_counterfactual_experiment(world, *args, **kwargs):
+        assert world.source == "enron"
+        return SimpleNamespace(
+            model_dump=lambda mode="json": {
+                "label": kwargs["label"],
+                "objective_pack": {
+                    "pack_id": "contain_exposure",
+                    "title": "Contain Exposure",
+                },
+                "recommended_candidate_label": "Hold internal",
+                "candidates": [],
+                "artifacts": {
+                    "result_json_path": "ranked-result.json",
+                    "overview_markdown_path": "ranked-overview.md",
+                },
+            }
+        )
+
+    monkeypatch.setattr(
+        workspace_routes,
+        "run_ranked_counterfactual_experiment",
+        fake_run_ranked_counterfactual_experiment,
+    )
+
+    client = TestClient(ui_api.create_ui_app(workspace_root))
+
+    status_response = client.get("/api/workspace/whatif")
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["available"] is True
+    assert status_payload["source"] == "enron"
+    assert status_payload["source_dir"] == str(rosetta_dir.resolve())
+
+    scene_response = client.post(
+        "/api/workspace/whatif/scene",
+        json={
+            "source": "auto",
+            "event_id": "enron_bcda1b925800af8c",
+            "thread_id": "thr-master-agreement",
+        },
+    )
+    assert scene_response.status_code == 200
+    scene_payload = scene_response.json()
+    assert scene_payload["branch_event_id"] == "enron_bcda1b925800af8c"
+
+    rank_response = client.post(
+        "/api/workspace/whatif/rank",
+        json={
+            "source": "auto",
+            "event_id": "evt-001",
+            "thread_id": "thr-external",
+            "label": "ranked term-sheet options",
+            "objective_pack_id": "contain_exposure",
+            "candidates": [
+                {
+                    "label": "Hold internal",
+                    "prompt": "Keep this internal.",
+                }
+            ],
+        },
+    )
+    assert rank_response.status_code == 200
+    rank_payload = rank_response.json()
+    assert rank_payload["recommended_candidate_label"] == "Hold internal"
 
 
 def test_ui_api_whatif_run_route_returns_experiment_payload(

@@ -142,7 +142,7 @@ def list_packs_command(
 @app.command("explore")
 def explore_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -195,7 +195,7 @@ def explore_command(
 @app.command("open-episode")
 def open_episode_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -230,7 +230,7 @@ def open_episode_command(
 @app.command("events")
 def events_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -308,7 +308,7 @@ def replay_command(
 @app.command("experiment")
 def experiment_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -414,7 +414,7 @@ def experiment_command(
 @app.command("rank")
 def rank_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -558,7 +558,7 @@ def show_ranked_result_command(
 @pack_app.command("run")
 def run_pack_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,
@@ -573,7 +573,7 @@ def run_pack_command(
     label: str = typer.Option(..., help="Human-friendly label for this pack run"),
     pack_id: str = typer.Option(
         "enron_research_v1",
-        help="Research pack id",
+        help="Research pack id or path to a research-pack JSON file",
     ),
     provider: str = typer.Option("openai", help="LLM provider for the actor path"),
     model: str = typer.Option(
@@ -603,7 +603,7 @@ def run_pack_command(
     """Run a historical what-if research pack and compare backend scores."""
 
     try:
-        resolved_pack_id = get_research_pack(pack_id).pack_id
+        research_pack = get_research_pack(pack_id)
     except KeyError as exc:
         raise typer.BadParameter(str(exc)) from exc
     world = load_world(source=source, source_dir=source_dir)
@@ -612,7 +612,7 @@ def run_pack_command(
             world,
             artifacts_root=artifacts_root,
             label=label,
-            pack_id=resolved_pack_id,
+            research_pack=research_pack,
             provider=provider,
             model=model,
             ejepa_epochs=ejepa_epochs,
@@ -666,7 +666,7 @@ def list_benchmark_models_command(
 @benchmark_app.command("build")
 def build_benchmark_command(
     source: str = typer.Option(
-        "auto", help="What-if source: auto | enron | mail_archive"
+        "auto", help="What-if source: auto | enron | mail_archive | company_history"
     ),
     source_dir: Path = typer.Option(
         ...,

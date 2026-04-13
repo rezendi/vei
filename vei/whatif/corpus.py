@@ -8,6 +8,7 @@ from typing import Any, Sequence
 
 from vei.context.models import ContextSnapshot
 
+from .cases import assign_case_ids, build_case_summaries
 from .models import (
     WhatIfActorProfile,
     WhatIfArtifactFlags,
@@ -20,7 +21,7 @@ from .models import (
     WhatIfWorld,
     WhatIfWorldSummary,
 )
-from .public_context import empty_enron_public_context, load_enron_public_context
+from .public_context import empty_enron_public_context, resolve_world_public_context
 
 ENRON_DOMAIN = "enron.com"
 CONTENT_NOTICE = (
@@ -31,6 +32,10 @@ MAIL_ARCHIVE_CONTENT_NOTICE = (
     "Historical email bodies come from the supplied mail archive snapshot. "
     "They reflect the available archive text for each message."
 )
+COMPANY_HISTORY_CONTENT_NOTICE = (
+    "Historical excerpts come from the normalized company history bundle. "
+    "They reflect the available source text for each recorded surface."
+)
 EXECUTIVE_MARKERS = ("skilling", "lay", "fastow", "kean")
 MAIL_ARCHIVE_FILE_NAMES = (
     "context_snapshot.json",
@@ -38,14 +43,23 @@ MAIL_ARCHIVE_FILE_NAMES = (
     "historical_mail_archive.json",
     "whatif_mail_archive.json",
 )
+MAIL_SOURCE_PROVIDERS = {"mail_archive", "gmail"}
+CHAT_SOURCE_PROVIDERS = {"slack", "teams"}
+WORK_SOURCE_PROVIDERS = {"jira"}
+STATE_CONTEXT_PROVIDERS = {"google", "crm", "salesforce"}
+EVENT_HISTORY_PROVIDERS = (
+    MAIL_SOURCE_PROVIDERS | CHAT_SOURCE_PROVIDERS | WORK_SOURCE_PROVIDERS
+)
+SUPPORTED_HISTORY_PROVIDERS = EVENT_HISTORY_PROVIDERS | STATE_CONTEXT_PROVIDERS
 
 
 def detect_whatif_source(source_dir: str | Path) -> str:
     resolved = Path(source_dir).expanduser().resolve()
     if _looks_like_enron_rosetta(resolved):
         return "enron"
-    if _looks_like_mail_archive(resolved):
-        return "mail_archive"
+    detected_snapshot_source = _detect_snapshot_source_kind(resolved)
+    if detected_snapshot_source is not None:
+        return detected_snapshot_source
     raise ValueError(f"could not detect historical source from: {resolved}")
 
 
@@ -114,11 +128,13 @@ def load_enron_world(
         events.append(event)
 
     events.sort(key=lambda item: (item.timestamp_ms, item.event_id))
+    events = assign_case_ids(events)
     if max_events is not None:
         events = events[: max(0, int(max_events))]
 
     threads = build_thread_summaries(events, organization_domain=ENRON_DOMAIN)
     actors = build_actor_profiles(events, organization_domain=ENRON_DOMAIN)
+    cases = build_case_summaries(events)
     summary = WhatIfWorldSummary(
         source="enron",
         organization_name="Enron Corporation",
@@ -140,7 +156,11 @@ def load_enron_world(
         key_actor_ids=[actor.actor_id for actor in actors[:5]],
     )
     public_context = (
-        load_enron_public_context(
+        resolve_world_public_context(
+            source="enron",
+            source_dir=base,
+            organization_name=summary.organization_name,
+            organization_domain=summary.organization_domain,
             window_start=summary.first_timestamp,
             window_end=summary.last_timestamp,
         )
@@ -154,6 +174,7 @@ def load_enron_world(
         scenarios=list(scenarios or []),
         actors=actors,
         threads=threads,
+        cases=cases,
         events=events,
         metadata={"content_notice": CONTENT_NOTICE},
         public_context=public_context,
@@ -211,6 +232,7 @@ def load_mail_archive_world(
             events.append(event)
 
     events.sort(key=lambda item: (item.timestamp_ms, item.event_id))
+    events = assign_case_ids(events)
     if max_events is not None:
         events = events[: max(0, int(max_events))]
 
@@ -225,6 +247,7 @@ def load_mail_archive_world(
         events,
         organization_domain=organization_domain,
     )
+    cases = build_case_summaries(events)
     summary = WhatIfWorldSummary(
         source="mail_archive",
         organization_name=organization_name,
@@ -238,6 +261,15 @@ def load_mail_archive_world(
         event_type_counts=dict(Counter(event.event_type for event in events)),
         key_actor_ids=[actor.actor_id for actor in actors[:5]],
     )
+    public_context = resolve_world_public_context(
+        source="mail_archive",
+        source_dir=resolved_source_dir,
+        organization_name=summary.organization_name,
+        organization_domain=summary.organization_domain,
+        window_start=summary.first_timestamp,
+        window_end=summary.last_timestamp,
+        metadata=snapshot.metadata,
+    )
     return WhatIfWorld(
         source="mail_archive",
         source_dir=resolved_source_dir,
@@ -245,9 +277,96 @@ def load_mail_archive_world(
         scenarios=list(scenarios or []),
         actors=actors,
         threads=threads,
+        cases=cases,
         events=events,
         metadata={"content_notice": MAIL_ARCHIVE_CONTENT_NOTICE},
-        public_context=None,
+        public_context=public_context,
+    )
+
+
+def load_company_history_world(
+    *,
+    source_dir: str | Path,
+    scenarios: Sequence[WhatIfScenario] | None = None,
+    time_window: tuple[str, str] | None = None,
+    max_events: int | None = None,
+    include_content: bool = False,
+) -> WhatIfWorld:
+    resolved_source_dir = Path(source_dir).expanduser().resolve()
+    snapshot = _load_history_snapshot(resolved_source_dir)
+    provider_names = _supported_history_provider_names(snapshot)
+    event_provider_names = _event_history_provider_names(snapshot)
+    if not provider_names or not event_provider_names:
+        raise ValueError(
+            "company history snapshot does not contain any supported sources"
+        )
+
+    organization_name, organization_domain = _history_snapshot_identity(snapshot)
+    time_bounds = resolve_time_window(time_window)
+    events = _build_company_history_events(
+        snapshot=snapshot,
+        organization_domain=organization_domain,
+        include_content=include_content,
+    )
+    if time_bounds is not None:
+        events = [
+            event
+            for event in events
+            if time_bounds[0] <= event.timestamp_ms <= time_bounds[1]
+        ]
+    events.sort(key=lambda item: (item.timestamp_ms, item.event_id))
+    events = assign_case_ids(events)
+    if max_events is not None:
+        events = events[: max(0, int(max_events))]
+
+    actors = _override_actor_profiles(
+        build_actor_profiles(events, organization_domain=organization_domain),
+        actor_payload=_history_actor_payload(
+            snapshot,
+            organization_domain=organization_domain,
+        ),
+    )
+    threads = build_thread_summaries(
+        events,
+        organization_domain=organization_domain,
+    )
+    cases = build_case_summaries(events)
+    summary = WhatIfWorldSummary(
+        source="company_history",
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        event_count=len(events),
+        thread_count=len(threads),
+        actor_count=len(actors),
+        custodian_count=0,
+        first_timestamp=events[0].timestamp if events else "",
+        last_timestamp=events[-1].timestamp if events else "",
+        event_type_counts=dict(Counter(event.event_type for event in events)),
+        key_actor_ids=[actor.actor_id for actor in actors[:5]],
+    )
+    public_context = resolve_world_public_context(
+        source="company_history",
+        source_dir=resolved_source_dir,
+        organization_name=summary.organization_name,
+        organization_domain=summary.organization_domain,
+        window_start=summary.first_timestamp,
+        window_end=summary.last_timestamp,
+        metadata=snapshot.metadata,
+    )
+    return WhatIfWorld(
+        source="company_history",
+        source_dir=resolved_source_dir,
+        summary=summary,
+        scenarios=list(scenarios or []),
+        actors=actors,
+        threads=threads,
+        cases=cases,
+        events=events,
+        metadata={
+            "content_notice": COMPANY_HISTORY_CONTENT_NOTICE,
+            "source_providers": ",".join(provider_names),
+        },
+        public_context=public_context,
     )
 
 
@@ -263,7 +382,27 @@ def _looks_like_mail_archive(path: Path) -> bool:
     return any((path / filename).exists() for filename in MAIL_ARCHIVE_FILE_NAMES)
 
 
+def _detect_snapshot_source_kind(path: Path) -> str | None:
+    try:
+        snapshot = _load_history_snapshot(path)
+    except Exception:  # noqa: BLE001
+        return None
+    provider_names = _event_history_provider_names(snapshot)
+    if not provider_names:
+        return None
+    if (
+        provider_names <= MAIL_SOURCE_PROVIDERS
+        and provider_names & MAIL_SOURCE_PROVIDERS
+    ):
+        return "mail_archive"
+    return "company_history"
+
+
 def _load_mail_archive_snapshot(path: Path) -> ContextSnapshot:
+    return _load_history_snapshot(path)
+
+
+def _load_history_snapshot(path: Path) -> ContextSnapshot:
     if path.is_file():
         return _snapshot_from_json_payload(path)
     for filename in MAIL_ARCHIVE_FILE_NAMES:
@@ -312,6 +451,37 @@ def _snapshot_from_archive_payload(payload: dict[str, Any]) -> ContextSnapshot:
     )
 
 
+def _supported_history_provider_names(snapshot: ContextSnapshot) -> set[str]:
+    return {
+        str(source.provider).strip().lower()
+        for source in snapshot.sources
+        if source.status != "error"
+        and str(source.provider).strip().lower() in SUPPORTED_HISTORY_PROVIDERS
+    }
+
+
+def _event_history_provider_names(snapshot: ContextSnapshot) -> set[str]:
+    return {
+        str(source.provider).strip().lower()
+        for source in snapshot.sources
+        if source.status != "error"
+        and str(source.provider).strip().lower() in EVENT_HISTORY_PROVIDERS
+    }
+
+
+def _history_snapshot_identity(snapshot: ContextSnapshot) -> tuple[str, str]:
+    organization_domain = str(snapshot.organization_domain or "").strip().lower()
+    if not organization_domain:
+        organization_domain = _organization_domain_from_snapshot(snapshot)
+    organization_name = str(snapshot.organization_name or "").strip()
+    if not organization_name:
+        organization_name = _organization_name_from_domain(organization_domain)
+    return (
+        organization_name or "Historical Archive",
+        organization_domain or "archive.local",
+    )
+
+
 def _mail_archive_source_payload(snapshot: ContextSnapshot) -> dict[str, Any]:
     mail_archive_source = snapshot.source_for("mail_archive")
     if mail_archive_source is not None and isinstance(mail_archive_source.data, dict):
@@ -323,6 +493,429 @@ def _mail_archive_source_payload(snapshot: ContextSnapshot) -> dict[str, Any]:
             "actors": [],
         }
     raise ValueError("snapshot does not contain a mail archive or gmail mail source")
+
+
+def _build_company_history_events(
+    *,
+    snapshot: ContextSnapshot,
+    organization_domain: str,
+    include_content: bool,
+) -> list[WhatIfEvent]:
+    events: list[WhatIfEvent] = []
+    events.extend(
+        _company_history_mail_events(
+            snapshot=snapshot,
+            organization_domain=organization_domain,
+            include_content=include_content,
+        )
+    )
+    events.extend(
+        _company_history_chat_events(
+            snapshot=snapshot,
+            provider="slack",
+            organization_domain=organization_domain,
+            include_content=include_content,
+        )
+    )
+    events.extend(
+        _company_history_chat_events(
+            snapshot=snapshot,
+            provider="teams",
+            organization_domain=organization_domain,
+            include_content=include_content,
+        )
+    )
+    events.extend(
+        _company_history_jira_events(
+            snapshot=snapshot,
+            organization_domain=organization_domain,
+            include_content=include_content,
+        )
+    )
+    return events
+
+
+def _company_history_mail_events(
+    *,
+    snapshot: ContextSnapshot,
+    organization_domain: str,
+    include_content: bool,
+) -> list[WhatIfEvent]:
+    try:
+        threads_payload = _archive_threads_from_snapshot(snapshot)
+    except Exception:  # noqa: BLE001
+        return []
+
+    events: list[WhatIfEvent] = []
+    for thread_index, thread in enumerate(threads_payload):
+        if not isinstance(thread, dict):
+            continue
+        raw_thread_id = _archive_thread_id(thread, index=thread_index)
+        normalized_thread_id = _company_history_thread_id("mail", raw_thread_id)
+        thread_subject = _archive_thread_subject(thread, fallback=normalized_thread_id)
+        messages = [
+            item for item in (thread.get("messages") or []) if isinstance(item, dict)
+        ]
+        for message_index, message in enumerate(messages):
+            event = build_archive_event(
+                message=message,
+                thread_id=normalized_thread_id,
+                thread_subject=thread_subject,
+                organization_domain=organization_domain,
+                thread_index=thread_index,
+                message_index=message_index,
+                include_content=include_content,
+            )
+            if event is None:
+                continue
+            events.append(
+                event.model_copy(
+                    update={
+                        "surface": "mail",
+                        "conversation_anchor": raw_thread_id,
+                        "flags": event.flags.model_copy(
+                            update={"source": "mail_archive"}
+                        ),
+                    }
+                )
+            )
+    return events
+
+
+def _company_history_chat_events(
+    *,
+    snapshot: ContextSnapshot,
+    provider: str,
+    organization_domain: str,
+    include_content: bool,
+) -> list[WhatIfEvent]:
+    source = snapshot.source_for(provider)
+    if source is None or not isinstance(source.data, dict):
+        return []
+    channels = source.data.get("channels", [])
+    if not isinstance(channels, list):
+        return []
+    user_lookup = _history_chat_user_lookup(source.data)
+
+    events: list[WhatIfEvent] = []
+    for channel_index, channel in enumerate(channels):
+        if not isinstance(channel, dict):
+            continue
+        channel_name = str(
+            channel.get(
+                "channel", channel.get("channel_id", f"channel-{channel_index + 1}")
+            )
+        ).strip()
+        if not channel_name:
+            continue
+        messages = [
+            item for item in (channel.get("messages") or []) if isinstance(item, dict)
+        ]
+        ordered_messages = sorted(
+            messages,
+            key=lambda item: _channel_message_timestamp_ms(
+                item.get("ts"),
+                fallback_index=channel_index + len(events),
+            ),
+        )
+        for message_index, message in enumerate(ordered_messages):
+            ts_value = str(message.get("ts", "") or "").strip()
+            raw_anchor = str(message.get("thread_ts", ts_value) or ts_value).strip()
+            conversation_anchor = str(
+                _channel_message_timestamp_ms(
+                    raw_anchor,
+                    fallback_index=(channel_index + 1) * 1000 + message_index,
+                )
+            )
+            thread_id = _company_history_thread_id(
+                provider,
+                f"{channel_name}:{conversation_anchor}",
+            )
+            body_text = str(message.get("text", "") or "").strip()
+            actor_id = _normalized_actor_id(
+                _resolved_chat_actor_value(
+                    message.get("user"),
+                    user_lookup=user_lookup,
+                ),
+                organization_domain=organization_domain,
+                fallback=f"{provider}-user-{message_index + 1}",
+            )
+            timestamp_ms = _channel_message_timestamp_ms(
+                message.get("ts"),
+                fallback_index=(channel_index + 1) * 1000 + message_index,
+            )
+            timestamp_text = _timestamp_text_from_ms(timestamp_ms)
+            is_reply = conversation_anchor != str(
+                _channel_message_timestamp_ms(
+                    ts_value,
+                    fallback_index=(channel_index + 1) * 1000 + message_index,
+                )
+            )
+            subject = _channel_subject(
+                channel_name=channel_name,
+                conversation_anchor=conversation_anchor,
+                messages=ordered_messages,
+            )
+            snippet = body_text if include_content else _truncate_snippet(body_text)
+            event_type = _channel_event_type(
+                body_text=body_text,
+                is_reply=is_reply,
+            )
+            flags = WhatIfArtifactFlags(
+                consult_legal_specialist=_contains_keyword(
+                    " ".join([channel_name, body_text]),
+                    ("legal", "counsel", "compliance", "regulatory"),
+                ),
+                consult_trading_specialist=_contains_keyword(
+                    " ".join([channel_name, body_text]),
+                    ("trading", "trade", "desk", "market"),
+                ),
+                has_attachment_reference=_contains_keyword(
+                    body_text,
+                    ("attach", "attachment", "draft", ".pdf", ".doc"),
+                ),
+                is_escalation=_contains_keyword(
+                    body_text,
+                    ("escalate", "urgent", "leadership", "executive"),
+                ),
+                is_reply=is_reply,
+                to_count=1,
+                to_recipients=[channel_name],
+                subject=subject,
+                norm_subject=subject.lower().strip(),
+                message_id=str(message.get("id", "") or ""),
+                source=provider,
+            )
+            events.append(
+                WhatIfEvent(
+                    event_id=_company_history_event_id(
+                        provider=provider,
+                        raw_event_id=ts_value or "",
+                        fallback_parts=(
+                            channel_name,
+                            conversation_anchor,
+                            str(message_index + 1),
+                        ),
+                    ),
+                    timestamp=timestamp_text,
+                    timestamp_ms=timestamp_ms,
+                    actor_id=actor_id,
+                    event_type=event_type,
+                    thread_id=thread_id,
+                    surface="slack",
+                    conversation_anchor=conversation_anchor,
+                    subject=subject,
+                    snippet=snippet,
+                    flags=flags,
+                )
+            )
+    return events
+
+
+def _history_chat_user_lookup(payload: dict[str, Any]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    users = payload.get("users", [])
+    if not isinstance(users, list):
+        return lookup
+    for user in users:
+        if not isinstance(user, dict):
+            continue
+        canonical = str(user.get("email", "") or user.get("name", "") or "").strip()
+        if not canonical:
+            continue
+        for key in (
+            user.get("id"),
+            user.get("name"),
+            user.get("real_name"),
+            user.get("email"),
+        ):
+            text = str(key or "").strip()
+            if text:
+                lookup[text.lower()] = canonical
+    return lookup
+
+
+def _resolved_chat_actor_value(
+    value: Any,
+    *,
+    user_lookup: dict[str, str],
+) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return user_lookup.get(text.lower(), text)
+
+
+def _company_history_jira_events(
+    *,
+    snapshot: ContextSnapshot,
+    organization_domain: str,
+    include_content: bool,
+) -> list[WhatIfEvent]:
+    source = snapshot.source_for("jira")
+    if source is None or not isinstance(source.data, dict):
+        return []
+    issues = source.data.get("issues", [])
+    if not isinstance(issues, list):
+        return []
+
+    events: list[WhatIfEvent] = []
+    for issue_index, issue in enumerate(issues):
+        if not isinstance(issue, dict):
+            continue
+        ticket_id = str(issue.get("ticket_id", "") or "").strip()
+        if not ticket_id:
+            continue
+        thread_id = _company_history_thread_id("jira", ticket_id)
+        title = str(issue.get("title", ticket_id) or ticket_id).strip()
+        assignee = _normalized_actor_id(
+            issue.get("assignee"),
+            organization_domain=organization_domain,
+            fallback=f"jira-assignee-{issue_index + 1}",
+        )
+        updated_raw = issue.get("updated") or ""
+        if assignee:
+            events.append(
+                WhatIfEvent(
+                    event_id=_company_history_event_id(
+                        provider="jira",
+                        raw_event_id=f"{ticket_id}:state",
+                        fallback_parts=(ticket_id, "state"),
+                    ),
+                    timestamp=timestamp_to_text(updated_raw),
+                    timestamp_ms=_history_timestamp_ms(
+                        updated_raw,
+                        fallback_index=(issue_index + 1) * 1000,
+                    ),
+                    actor_id=assignee,
+                    event_type=_jira_issue_event_type(issue),
+                    thread_id=thread_id,
+                    surface="tickets",
+                    subject=title,
+                    snippet=_jira_issue_snippet(issue, include_content=include_content),
+                    flags=WhatIfArtifactFlags(
+                        consult_legal_specialist=_contains_keyword(
+                            " ".join([title, str(issue.get("description", "") or "")]),
+                            ("legal", "counsel", "compliance", "contract"),
+                        ),
+                        is_escalation=_contains_keyword(
+                            " ".join([title, str(issue.get("status", "") or "")]),
+                            ("blocked", "urgent", "critical", "escalat"),
+                        ),
+                        to_count=1,
+                        to_recipients=[ticket_id],
+                        subject=title,
+                        norm_subject=title.lower().strip(),
+                        source="jira",
+                    ),
+                )
+            )
+        comments = issue.get("comments", [])
+        if not isinstance(comments, list):
+            continue
+        for comment_index, comment in enumerate(comments):
+            if not isinstance(comment, dict):
+                continue
+            body_text = str(comment.get("body", "") or "").strip()
+            author = _normalized_actor_id(
+                comment.get("author"),
+                organization_domain=organization_domain,
+                fallback=assignee or f"jira-commenter-{comment_index + 1}",
+            )
+            timestamp_raw = comment.get("created") or updated_raw
+            events.append(
+                WhatIfEvent(
+                    event_id=_company_history_event_id(
+                        provider="jira",
+                        raw_event_id=str(comment.get("id", "") or ""),
+                        fallback_parts=(ticket_id, "comment", str(comment_index + 1)),
+                    ),
+                    timestamp=timestamp_to_text(timestamp_raw),
+                    timestamp_ms=_history_timestamp_ms(
+                        timestamp_raw,
+                        fallback_index=(issue_index + 1) * 1000 + comment_index + 1,
+                    ),
+                    actor_id=author,
+                    event_type="reply",
+                    thread_id=thread_id,
+                    surface="tickets",
+                    subject=title,
+                    snippet=(
+                        body_text if include_content else _truncate_snippet(body_text)
+                    ),
+                    flags=WhatIfArtifactFlags(
+                        consult_legal_specialist=_contains_keyword(
+                            " ".join([title, body_text]),
+                            ("legal", "counsel", "compliance", "contract"),
+                        ),
+                        is_escalation=_contains_keyword(
+                            body_text,
+                            ("blocked", "urgent", "critical", "escalat"),
+                        ),
+                        is_reply=True,
+                        to_count=1,
+                        to_recipients=[ticket_id],
+                        subject=title,
+                        norm_subject=title.lower().strip(),
+                        source="jira",
+                    ),
+                )
+            )
+    return events
+
+
+def _history_actor_payload(
+    snapshot: ContextSnapshot,
+    *,
+    organization_domain: str,
+) -> list[dict[str, Any]]:
+    payload: dict[str, dict[str, str]] = {}
+    for actor in _mail_archive_source_payload_or_empty(snapshot).get("actors", []):
+        if not isinstance(actor, dict):
+            continue
+        actor_id = str(actor.get("actor_id", actor.get("email", "")) or "").strip()
+        if not actor_id:
+            continue
+        payload[actor_id] = {
+            "actor_id": actor_id,
+            "email": str(actor.get("email", actor_id) or actor_id).strip(),
+            "display_name": str(actor.get("display_name", "") or "").strip(),
+        }
+    for provider in ("slack", "teams"):
+        source = snapshot.source_for(provider)
+        if source is None or not isinstance(source.data, dict):
+            continue
+        users = source.data.get("users", [])
+        if not isinstance(users, list):
+            continue
+        for user in users:
+            if not isinstance(user, dict):
+                continue
+            actor_id = _normalized_actor_id(
+                user.get("email") or user.get("name") or user.get("real_name"),
+                organization_domain=organization_domain,
+                fallback="",
+            )
+            if not actor_id:
+                continue
+            payload.setdefault(
+                actor_id,
+                {
+                    "actor_id": actor_id,
+                    "email": str(user.get("email", actor_id) or actor_id).strip(),
+                    "display_name": str(
+                        user.get("real_name", user.get("name", actor_id)) or actor_id
+                    ).strip(),
+                },
+            )
+    return list(payload.values())
+
+
+def _mail_archive_source_payload_or_empty(snapshot: ContextSnapshot) -> dict[str, Any]:
+    try:
+        return _mail_archive_source_payload(snapshot)
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def _archive_threads_from_snapshot(snapshot: ContextSnapshot) -> list[dict[str, Any]]:
@@ -647,6 +1240,53 @@ def _organization_domain_from_threads(threads: Sequence[dict[str, Any]]) -> str:
     return ""
 
 
+def _organization_domain_from_snapshot(snapshot: ContextSnapshot) -> str:
+    source_payload = _mail_archive_source_payload_or_empty(snapshot)
+    mail_threads = source_payload.get("threads", [])
+    if not isinstance(mail_threads, list):
+        mail_threads = []
+    domain = _organization_domain_from_threads(mail_threads)
+    if domain:
+        return domain
+
+    domains: Counter[str] = Counter()
+    for provider in ("slack", "teams"):
+        source = snapshot.source_for(provider)
+        if source is None or not isinstance(source.data, dict):
+            continue
+        users = source.data.get("users", [])
+        if not isinstance(users, list):
+            continue
+        for user in users:
+            if not isinstance(user, dict):
+                continue
+            email_domain = _email_domain(str(user.get("email", "") or ""))
+            if email_domain:
+                domains[email_domain] += 1
+    jira_source = snapshot.source_for("jira")
+    if jira_source is not None and isinstance(jira_source.data, dict):
+        issues = jira_source.data.get("issues", [])
+        if isinstance(issues, list):
+            for issue in issues:
+                if not isinstance(issue, dict):
+                    continue
+                assignee_domain = _email_domain(str(issue.get("assignee", "") or ""))
+                if assignee_domain:
+                    domains[assignee_domain] += 1
+                comments = issue.get("comments", [])
+                if not isinstance(comments, list):
+                    continue
+                for comment in comments:
+                    if not isinstance(comment, dict):
+                        continue
+                    author_domain = _email_domain(str(comment.get("author", "") or ""))
+                    if author_domain:
+                        domains[author_domain] += 1
+    if not domains:
+        return ""
+    return sorted(domains.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
 def _organization_name_from_domain(domain: str) -> str:
     cleaned = str(domain or "").strip().lower()
     if not cleaned:
@@ -654,6 +1294,137 @@ def _organization_name_from_domain(domain: str) -> str:
     token = cleaned.split(".", 1)[0].replace("-", " ").replace("_", " ")
     label = " ".join(part.capitalize() for part in token.split() if part)
     return label or "Historical Archive"
+
+
+def _company_history_thread_id(provider: str, raw_id: str) -> str:
+    normalized_provider = provider.strip().lower() or "history"
+    normalized_raw_id = str(raw_id or "").strip() or "thread"
+    return f"{normalized_provider}:{normalized_raw_id}"
+
+
+def _company_history_event_id(
+    *,
+    provider: str,
+    raw_event_id: str,
+    fallback_parts: Sequence[str],
+) -> str:
+    normalized_provider = provider.strip().lower() or "history"
+    normalized_raw_event_id = str(raw_event_id or "").strip()
+    if normalized_raw_event_id:
+        return f"{normalized_provider}:{normalized_raw_event_id}"
+    joined = ":".join(str(part).strip() for part in fallback_parts if str(part).strip())
+    return f"{normalized_provider}:{joined or 'event'}"
+
+
+def _normalized_actor_id(
+    value: Any,
+    *,
+    organization_domain: str,
+    fallback: str,
+) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return _fallback_internal_address(organization_domain, fallback or "unknown")
+    if "@" in text:
+        return text.lower()
+    cleaned = text.replace(" ", ".").strip(".").lower()
+    if organization_domain:
+        return f"{cleaned}@{organization_domain}"
+    return cleaned
+
+
+def _history_timestamp_ms(value: Any, *, fallback_index: int) -> int:
+    if value in {None, ""}:
+        return fallback_index * 1000
+    try:
+        return timestamp_to_ms(value)
+    except Exception:  # noqa: BLE001
+        pass
+    text = str(value).strip()
+    try:
+        return int(float(text) * 1000)
+    except Exception:  # noqa: BLE001
+        return fallback_index * 1000
+
+
+def _channel_message_timestamp_ms(value: Any, *, fallback_index: int) -> int:
+    return _history_timestamp_ms(value, fallback_index=fallback_index)
+
+
+def _timestamp_text_from_ms(value: int) -> str:
+    return timestamp_to_text(datetime.fromtimestamp(value / 1000, tz=timezone.utc))
+
+
+def _channel_subject(
+    *,
+    channel_name: str,
+    conversation_anchor: str,
+    messages: Sequence[dict[str, Any]],
+) -> str:
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        message_anchor = str(
+            _channel_message_timestamp_ms(
+                message.get("thread_ts", message.get("ts", "")),
+                fallback_index=0,
+            )
+        )
+        if message_anchor != conversation_anchor:
+            continue
+        root_text = str(message.get("text", "") or "").strip()
+        if root_text:
+            return _truncate_snippet(root_text, max_chars=80)
+    return channel_name
+
+
+def _channel_event_type(*, body_text: str, is_reply: bool) -> str:
+    if _contains_keyword(
+        body_text, ("approve", "approved", "ship it", ":white_check_mark:")
+    ):
+        return "approval"
+    if _contains_keyword(body_text, ("assign", "owner", "handoff")):
+        return "assignment"
+    if _contains_keyword(body_text, ("escalate", "urgent", "leadership", "executive")):
+        return "escalation"
+    if is_reply:
+        return "reply"
+    return "message"
+
+
+def _jira_issue_event_type(issue: dict[str, Any]) -> str:
+    status = str(issue.get("status", "") or "").strip().lower()
+    title = str(issue.get("title", "") or "").strip().lower()
+    if "approv" in status or "approv" in title:
+        return "approval"
+    if "block" in status or "urgent" in title:
+        return "escalation"
+    if issue.get("assignee"):
+        return "assignment"
+    return "message"
+
+
+def _jira_issue_snippet(
+    issue: dict[str, Any],
+    *,
+    include_content: bool,
+) -> str:
+    description = str(issue.get("description", "") or "").strip()
+    status = str(issue.get("status", "") or "").strip()
+    assignee = str(issue.get("assignee", "") or "").strip()
+    parts = [
+        part
+        for part in (
+            description,
+            f"Status: {status}" if status else "",
+            f"Assignee: {assignee}" if assignee else "",
+        )
+        if part
+    ]
+    text = "\n".join(parts).strip()
+    if include_content:
+        return text
+    return _truncate_snippet(text)
 
 
 def _fallback_internal_address(domain: str, local_part: str) -> str:
@@ -829,6 +1600,8 @@ def build_thread_summaries(
             {
                 "thread_id": event.thread_id,
                 "subject": event.subject or event.thread_id,
+                "case_ids": Counter(),
+                "surface": event.surface or "mail",
                 "event_count": 0,
                 "actor_ids": set(),
                 "first_timestamp": event.timestamp,
@@ -845,6 +1618,8 @@ def build_thread_summaries(
             },
         )
         bucket["event_count"] += 1
+        if event.case_id:
+            bucket["case_ids"][event.case_id] += 1
         bucket["actor_ids"].add(event.actor_id)
         if event.target_id:
             bucket["actor_ids"].add(event.target_id)
@@ -874,6 +1649,8 @@ def build_thread_summaries(
         WhatIfThreadSummary(
             thread_id=payload["thread_id"],
             subject=payload["subject"],
+            case_id=_primary_case_id(payload["case_ids"]),
+            surface=payload["surface"],
             event_count=payload["event_count"],
             actor_ids=sorted(actor_id for actor_id in payload["actor_ids"] if actor_id),
             first_timestamp=payload["first_timestamp"],
@@ -1025,6 +1802,9 @@ def event_reference(event: WhatIfEvent) -> WhatIfEventReference:
         target_id=event.target_id,
         event_type=event.event_type,
         thread_id=event.thread_id,
+        case_id=event.case_id,
+        surface=event.surface,
+        conversation_anchor=event.conversation_anchor,
         subject=event.subject,
         snippet=event.snippet,
         to_recipients=list(event.flags.to_recipients),
@@ -1062,6 +1842,12 @@ def event_reason_labels(
     ):
         labels.append("external_recipient")
     return labels
+
+
+def _primary_case_id(counts: Counter[str]) -> str:
+    if not counts:
+        return ""
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
 
 
 def event_is_flagged(
@@ -1242,17 +2028,85 @@ def has_external_recipients(
     *,
     organization_domain: str = ENRON_DOMAIN,
 ) -> bool:
-    internal_domain = organization_domain.strip().lower()
-    for recipient in recipients:
-        recipient_domain = _email_domain(recipient)
-        if not recipient_domain:
-            continue
-        if internal_domain and recipient_domain == internal_domain:
-            continue
-        if not internal_domain and recipient_domain.endswith(".local"):
-            continue
+    return (
+        external_recipient_count(
+            recipients,
+            organization_domain=organization_domain,
+        )
+        > 0
+    )
+
+
+def is_internal_recipient(
+    recipient: str,
+    *,
+    organization_domain: str = ENRON_DOMAIN,
+) -> bool:
+    normalized_recipient = str(recipient or "").strip().lower()
+    normalized_domain = str(organization_domain or "").strip().lower()
+    if not normalized_recipient:
         return True
-    return False
+    if "@" not in normalized_recipient:
+        return True
+    if not normalized_domain:
+        recipient_domain = _email_domain(normalized_recipient)
+        if not recipient_domain:
+            return True
+        return recipient_domain.endswith(".local")
+    return normalized_recipient.endswith(f"@{normalized_domain}")
+
+
+def external_recipient_count(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str = ENRON_DOMAIN,
+) -> int:
+    return sum(
+        1
+        for recipient in recipients
+        if recipient
+        and not is_internal_recipient(
+            recipient,
+            organization_domain=organization_domain,
+        )
+    )
+
+
+def internal_recipient_count(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str = ENRON_DOMAIN,
+) -> int:
+    return sum(
+        1
+        for recipient in recipients
+        if is_internal_recipient(
+            recipient,
+            organization_domain=organization_domain,
+        )
+    )
+
+
+def recipient_scope(
+    recipients: Sequence[str],
+    *,
+    organization_domain: str = ENRON_DOMAIN,
+    empty_value: str = "unknown",
+) -> str:
+    cleaned = [
+        str(recipient).strip() for recipient in recipients if str(recipient).strip()
+    ]
+    if not cleaned:
+        return empty_value
+    external = external_recipient_count(
+        cleaned,
+        organization_domain=organization_domain,
+    )
+    if external == 0:
+        return "internal"
+    if external == len(cleaned):
+        return "external"
+    return "mixed"
 
 
 def matches_custodian_filter(
