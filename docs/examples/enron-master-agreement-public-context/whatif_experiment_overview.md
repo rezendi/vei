@@ -40,3 +40,15 @@ Prompt: Keep the draft inside Enron, loop in Gerald Nemec for legal review, and 
 - Predicted risk: 0.983
 - External-send delta: -29
 - Escalation delta: 2
+
+## Business State Change
+- Summary: Moderately lower outside spread risk.
+- Confidence: high
+- Net effect score: 0.05
+- Moderately lower outside spread risk.
+- Slightly stronger commercial position.
+- Slightly stronger relationship stability.
+- Internal handling load stays close to the historical path.
+- The thread looks safer to contain.
+- Handling burden stays close to the historical path.
+- Execution pace stays close to the historical path.

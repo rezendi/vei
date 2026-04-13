@@ -366,6 +366,68 @@
           }
         ],
         "public_news_events": []
+      },
+      "historical_business_state": {
+        "method": "historical_v1",
+        "confidence": "medium",
+        "summary": "Recorded business state centers on outside spread risk and commercial position.",
+        "snapshot": {
+          "exposure": 0.94,
+          "trust": 0.356,
+          "coordination_load": 0.423,
+          "execution_delay": 0.559,
+          "deal_position": 0.307,
+          "governance_pressure": 0.119
+        },
+        "indicators": [
+          {
+            "state_id": "exposure",
+            "label": "Outside spread risk",
+            "value": 0.94,
+            "level": "very_high",
+            "summary": "Outside spread risk is high in the recorded path."
+          },
+          {
+            "state_id": "deal_position",
+            "label": "Commercial position",
+            "value": 0.307,
+            "level": "low",
+            "summary": "Commercial position looks fragile in the recorded path."
+          },
+          {
+            "state_id": "trust",
+            "label": "Relationship stability",
+            "value": 0.356,
+            "level": "low",
+            "summary": "Relationship stability looks fragile in the recorded path."
+          },
+          {
+            "state_id": "execution_delay",
+            "label": "Execution delay",
+            "value": 0.559,
+            "level": "medium",
+            "summary": "Execution delay is moderate in the recorded path."
+          },
+          {
+            "state_id": "coordination_load",
+            "label": "Internal handling load",
+            "value": 0.423,
+            "level": "medium",
+            "summary": "Internal handling load is moderate in the recorded path."
+          },
+          {
+            "state_id": "governance_pressure",
+            "label": "Approval and escalation pressure",
+            "value": 0.119,
+            "level": "very_low",
+            "summary": "Approval and escalation pressure stays limited in the recorded path."
+          }
+        ],
+        "implications": [
+          "Outside spread risk is high in the recorded path.",
+          "Commercial position looks fragile in the recorded path.",
+          "Relationship stability looks fragile in the recorded path."
+        ]
       }
     }
   }

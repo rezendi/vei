@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-WhatIfSourceName = Literal["enron", "mail_archive"]
+WhatIfSourceName = Literal["enron", "mail_archive", "company_history"]
 WhatIfScenarioId = Literal[
     "compliance_gateway",
     "escalation_firewall",
@@ -72,6 +72,10 @@ WhatIfOutsideSharingPosture = Literal[
     "broad_external",
 ]
 WhatIfDecisionPosture = Literal["hold", "review", "resolve", "escalate"]
+WhatIfBusinessConfidence = Literal["low", "medium", "high"]
+WhatIfBusinessImpactEffect = Literal["better", "worse", "flat"]
+WhatIfBusinessImpactMagnitude = Literal["flat", "slight", "moderate", "strong"]
+WhatIfBusinessStateLevel = Literal["very_low", "low", "medium", "high", "very_high"]
 
 
 class WhatIfArtifactFlags(BaseModel):
@@ -103,6 +107,9 @@ class WhatIfEvent(BaseModel):
     target_id: str = ""
     event_type: str
     thread_id: str
+    case_id: str = ""
+    surface: str = "mail"
+    conversation_anchor: str = ""
     subject: str = ""
     snippet: str = ""
     flags: WhatIfArtifactFlags = Field(default_factory=WhatIfArtifactFlags)
@@ -122,6 +129,8 @@ class WhatIfActorProfile(BaseModel):
 class WhatIfThreadSummary(BaseModel):
     thread_id: str
     subject: str
+    case_id: str = ""
+    surface: str = "mail"
     event_count: int = 0
     actor_ids: list[str] = Field(default_factory=list)
     first_timestamp: str = ""
@@ -165,6 +174,7 @@ class WhatIfWorld(BaseModel):
     scenarios: list[WhatIfScenario] = Field(default_factory=list)
     actors: list[WhatIfActorProfile] = Field(default_factory=list)
     threads: list[WhatIfThreadSummary] = Field(default_factory=list)
+    cases: list["WhatIfCaseSummary"] = Field(default_factory=list)
     events: list[WhatIfEvent] = Field(default_factory=list)
     metadata: dict[str, str | int | float | bool] = Field(default_factory=dict)
     public_context: WhatIfPublicContext | None = None
@@ -207,6 +217,71 @@ class WhatIfPublicContext(BaseModel):
         default_factory=list
     )
     public_news_events: list[WhatIfPublicNewsEvent] = Field(default_factory=list)
+
+
+class WhatIfBusinessStateSnapshot(BaseModel):
+    exposure: float = 0.0
+    trust: float = 0.0
+    coordination_load: float = 0.0
+    execution_delay: float = 0.0
+    deal_position: float = 0.0
+    governance_pressure: float = 0.0
+
+
+class WhatIfBusinessStateIndicator(BaseModel):
+    state_id: str
+    label: str
+    value: float = 0.0
+    level: WhatIfBusinessStateLevel = "medium"
+    summary: str = ""
+
+
+class WhatIfBusinessConsequenceEstimate(BaseModel):
+    consequence_id: str
+    label: str
+    effect: WhatIfBusinessImpactEffect = "flat"
+    magnitude: WhatIfBusinessImpactMagnitude = "flat"
+    summary: str = ""
+
+
+class WhatIfBusinessStateAssessment(BaseModel):
+    method: str = "historical_v1"
+    confidence: WhatIfBusinessConfidence = "medium"
+    summary: str = ""
+    snapshot: WhatIfBusinessStateSnapshot = Field(
+        default_factory=WhatIfBusinessStateSnapshot
+    )
+    indicators: list[WhatIfBusinessStateIndicator] = Field(default_factory=list)
+    implications: list[str] = Field(default_factory=list)
+
+
+class WhatIfBusinessStateImpact(BaseModel):
+    state_id: str
+    label: str
+    baseline_value: float = 0.0
+    predicted_value: float = 0.0
+    delta: float = 0.0
+    effect: WhatIfBusinessImpactEffect = "flat"
+    magnitude: WhatIfBusinessImpactMagnitude = "flat"
+    summary: str = ""
+
+
+class WhatIfBusinessStateChange(BaseModel):
+    method: str = "forecast_v1"
+    confidence: WhatIfBusinessConfidence = "medium"
+    summary: str = ""
+    baseline: WhatIfBusinessStateSnapshot = Field(
+        default_factory=WhatIfBusinessStateSnapshot
+    )
+    predicted: WhatIfBusinessStateSnapshot = Field(
+        default_factory=WhatIfBusinessStateSnapshot
+    )
+    impacts: list[WhatIfBusinessStateImpact] = Field(default_factory=list)
+    consequence_estimates: list[WhatIfBusinessConsequenceEstimate] = Field(
+        default_factory=list
+    )
+    tradeoffs: list[str] = Field(default_factory=list)
+    net_effect_score: float = 0.0
 
 
 class WhatIfActorImpact(BaseModel):
@@ -268,6 +343,9 @@ class WhatIfEventReference(BaseModel):
     target_id: str = ""
     event_type: str
     thread_id: str
+    case_id: str = ""
+    surface: str = "mail"
+    conversation_anchor: str = ""
     subject: str = ""
     snippet: str = ""
     to_recipients: list[str] = Field(default_factory=list)
@@ -294,6 +372,34 @@ class WhatIfEventSearchResult(BaseModel):
     matches: list[WhatIfEventMatch] = Field(default_factory=list)
 
 
+class WhatIfCaseSummary(BaseModel):
+    case_id: str
+    title: str = ""
+    event_count: int = 0
+    thread_count: int = 0
+    surfaces: list[str] = Field(default_factory=list)
+    thread_ids: list[str] = Field(default_factory=list)
+    first_timestamp: str = ""
+    last_timestamp: str = ""
+    anchor_tokens: list[str] = Field(default_factory=list)
+
+
+class WhatIfCaseRecord(BaseModel):
+    record_id: str
+    provider: str
+    surface: str = ""
+    label: str
+    summary: str = ""
+    related_ids: list[str] = Field(default_factory=list)
+
+
+class WhatIfCaseContext(BaseModel):
+    case_id: str
+    title: str = ""
+    related_history: list[WhatIfEventReference] = Field(default_factory=list)
+    records: list[WhatIfCaseRecord] = Field(default_factory=list)
+
+
 class WhatIfEpisodeManifest(BaseModel):
     version: Literal["1", "2"] = "2"
     source: WhatIfSourceName = "enron"
@@ -303,6 +409,8 @@ class WhatIfEpisodeManifest(BaseModel):
     organization_domain: str
     thread_id: str
     thread_subject: str
+    case_id: str = ""
+    surface: str = "mail"
     branch_event_id: str
     branch_timestamp: str
     branch_event: WhatIfEventReference
@@ -311,9 +419,12 @@ class WhatIfEpisodeManifest(BaseModel):
     baseline_dataset_path: str
     content_notice: str
     actor_ids: list[str] = Field(default_factory=list)
+    history_preview: list[WhatIfEventReference] = Field(default_factory=list)
     baseline_future_preview: list[WhatIfEventReference] = Field(default_factory=list)
     forecast: WhatIfForecast = Field(default_factory=WhatIfForecast)
     public_context: WhatIfPublicContext | None = None
+    case_context: WhatIfCaseContext | None = None
+    historical_business_state: WhatIfBusinessStateAssessment | None = None
 
 
 class WhatIfEpisodeMaterialization(BaseModel):
@@ -325,24 +436,32 @@ class WhatIfEpisodeMaterialization(BaseModel):
     organization_name: str
     organization_domain: str
     thread_id: str
+    case_id: str = ""
+    surface: str = "mail"
     branch_event_id: str
     branch_event: WhatIfEventReference
     history_message_count: int = 0
     future_event_count: int = 0
+    history_preview: list[WhatIfEventReference] = Field(default_factory=list)
     baseline_future_preview: list[WhatIfEventReference] = Field(default_factory=list)
     forecast: WhatIfForecast = Field(default_factory=WhatIfForecast)
     public_context: WhatIfPublicContext | None = None
+    case_context: WhatIfCaseContext | None = None
+    historical_business_state: WhatIfBusinessStateAssessment | None = None
 
 
 class WhatIfReplaySummary(BaseModel):
     workspace_root: Path
     baseline_dataset_path: Path
+    surface: str = "mail"
     scheduled_event_count: int = 0
     delivered_event_count: int = 0
     current_time_ms: int = 0
     pending_events: dict[str, int] = Field(default_factory=dict)
     inbox_count: int = 0
     top_subjects: list[str] = Field(default_factory=list)
+    visible_item_count: int = 0
+    top_items: list[str] = Field(default_factory=list)
     baseline_future_preview: list[WhatIfEventReference] = Field(default_factory=list)
     forecast: WhatIfForecast = Field(default_factory=WhatIfForecast)
 
@@ -358,10 +477,12 @@ class WhatIfInterventionSpec(BaseModel):
 
 class WhatIfLLMGeneratedMessage(BaseModel):
     actor_id: str
+    surface: str = "mail"
     to: str
     subject: str
     body_text: str
     delay_ms: int
+    conversation_anchor: str = ""
     rationale: str = ""
 
 
@@ -420,6 +541,7 @@ class WhatIfForecastResult(BaseModel):
     current_state_summary: dict[str, float] = Field(default_factory=dict)
     predicted_state_summary: dict[str, float] = Field(default_factory=dict)
     actual_state_summary: dict[str, float] = Field(default_factory=dict)
+    business_state_change: WhatIfBusinessStateChange | None = None
     artifacts: WhatIfForecastArtifacts | None = None
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
@@ -472,6 +594,8 @@ class WhatIfDecisionScene(BaseModel):
     organization_domain: str
     thread_id: str
     thread_subject: str
+    case_id: str = ""
+    surface: str = "mail"
     branch_event_id: str
     branch_event: WhatIfEventReference
     history_message_count: int = 0
@@ -486,6 +610,8 @@ class WhatIfDecisionScene(BaseModel):
     historical_future_preview: list[WhatIfEventReference] = Field(default_factory=list)
     candidate_options: list[WhatIfDecisionOption] = Field(default_factory=list)
     public_context: WhatIfPublicContext | None = None
+    case_context: WhatIfCaseContext | None = None
+    historical_business_state: WhatIfBusinessStateAssessment | None = None
 
 
 class WhatIfOutcomeSignals(BaseModel):
@@ -533,6 +659,7 @@ class WhatIfCandidateRanking(BaseModel):
     reason: str = ""
     rollouts: list[WhatIfRankedRolloutResult] = Field(default_factory=list)
     shadow: WhatIfShadowOutcomeScore | None = None
+    business_state_change: WhatIfBusinessStateChange | None = None
 
 
 class WhatIfRankedExperimentArtifacts(BaseModel):

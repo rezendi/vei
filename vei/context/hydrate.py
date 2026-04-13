@@ -6,6 +6,9 @@ from vei.blueprint.models import (
     BlueprintAsset,
     BlueprintCapabilityGraphsAsset,
     BlueprintCommGraphAsset,
+    BlueprintCrmCompanyAsset,
+    BlueprintCrmContactAsset,
+    BlueprintCrmDealAsset,
     BlueprintDocGraphAsset,
     BlueprintDocumentAsset,
     BlueprintIdentityApplicationAsset,
@@ -14,6 +17,7 @@ from vei.blueprint.models import (
     BlueprintIdentityUserAsset,
     BlueprintMailMessageAsset,
     BlueprintMailThreadAsset,
+    BlueprintRevenueGraphAsset,
     BlueprintSlackChannelAsset,
     BlueprintSlackMessageAsset,
     BlueprintTicketAsset,
@@ -36,6 +40,8 @@ def hydrate_snapshot_to_blueprint(
     gmail_source = snapshot.source_for("gmail")
     mail_archive_source = snapshot.source_for("mail_archive")
     teams_source = snapshot.source_for("teams")
+    crm_source = snapshot.source_for("crm")
+    salesforce_source = snapshot.source_for("salesforce")
 
     comm_graph = _build_comm_graph(slack_source, teams_source)
     mail_threads = _build_mail_threads(gmail_source, mail_archive_source)
@@ -46,6 +52,7 @@ def hydrate_snapshot_to_blueprint(
 
     doc_graph = _build_doc_graph(google_source)
     work_graph = _build_work_graph(jira_source)
+    revenue_graph = _build_revenue_graph(crm_source, salesforce_source)
     identity_graph = _build_identity_graph(
         okta_source,
         google_source,
@@ -60,6 +67,8 @@ def hydrate_snapshot_to_blueprint(
         gmail_source,
         mail_archive_source,
         teams_source,
+        crm_source,
+        salesforce_source,
     )
 
     return BlueprintAsset(
@@ -79,6 +88,7 @@ def hydrate_snapshot_to_blueprint(
             doc_graph=doc_graph,
             work_graph=work_graph,
             identity_graph=identity_graph,
+            revenue_graph=revenue_graph,
             metadata={
                 "source": "context_capture",
                 "captured_at": snapshot.captured_at,
@@ -389,6 +399,116 @@ def _build_identity_graph(
     )
 
 
+def _build_revenue_graph(
+    crm_source: Optional[ContextSourceResult],
+    salesforce_source: Optional[ContextSourceResult] = None,
+) -> Optional[BlueprintRevenueGraphAsset]:
+    sources = [
+        source
+        for source in (crm_source, salesforce_source)
+        if source is not None and source.status != "error"
+    ]
+    if not sources:
+        return None
+
+    companies = [
+        BlueprintCrmCompanyAsset(
+            id=str(item.get("id", item.get("company_id", f"COMP-{index}"))),
+            name=str(item.get("name", "")),
+            domain=str(item.get("domain", "")),
+        )
+        for source in sources
+        for index, item in enumerate(source.data.get("companies", []))
+        if isinstance(item, dict)
+    ]
+    contacts = [
+        BlueprintCrmContactAsset(
+            id=str(item.get("id", item.get("contact_id", f"CONTACT-{index}"))),
+            email=str(item.get("email", "")),
+            first_name=str(item.get("first_name", "")),
+            last_name=str(item.get("last_name", "")),
+            company_id=(str(item.get("company_id", "")).strip() or None),
+        )
+        for source in sources
+        for index, item in enumerate(source.data.get("contacts", []))
+        if isinstance(item, dict)
+    ]
+    deals = [
+        BlueprintCrmDealAsset(
+            id=str(item.get("id", item.get("deal_id", f"DEAL-{index}"))),
+            name=str(item.get("name", item.get("title", ""))),
+            amount=_crm_amount(item.get("amount", item.get("amount_usd", 0.0))),
+            stage=str(item.get("stage", "open")),
+            owner=str(item.get("owner", "")),
+            contact_id=(str(item.get("contact_id", "")).strip() or None),
+            company_id=(str(item.get("company_id", "")).strip() or None),
+        )
+        for source in sources
+        for index, item in enumerate(source.data.get("deals", []))
+        if isinstance(item, dict)
+    ]
+
+    if not companies and not contacts and not deals:
+        return None
+
+    source_providers = [source.provider for source in sources]
+    return BlueprintRevenueGraphAsset(
+        companies=_dedupe_crm_companies(companies),
+        contacts=_dedupe_crm_contacts(contacts),
+        deals=_dedupe_crm_deals(deals),
+        metadata={
+            "source_provider": source_providers[0],
+            "source_providers": source_providers,
+        },
+    )
+
+
+def _crm_amount(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    negative = text.startswith("(") and text.endswith(")")
+    cleaned = (
+        text.replace("$", "").replace(",", "").replace("(", "").replace(")", "").strip()
+    )
+    try:
+        amount = float(cleaned)
+    except ValueError:
+        return 0.0
+    if negative:
+        return -amount
+    return amount
+
+
+def _dedupe_crm_companies(
+    companies: list[BlueprintCrmCompanyAsset],
+) -> list[BlueprintCrmCompanyAsset]:
+    deduped: dict[str, BlueprintCrmCompanyAsset] = {}
+    for company in companies:
+        deduped.setdefault(company.id, company)
+    return list(deduped.values())
+
+
+def _dedupe_crm_contacts(
+    contacts: list[BlueprintCrmContactAsset],
+) -> list[BlueprintCrmContactAsset]:
+    deduped: dict[str, BlueprintCrmContactAsset] = {}
+    for contact in contacts:
+        deduped.setdefault(contact.id, contact)
+    return list(deduped.values())
+
+
+def _dedupe_crm_deals(
+    deals: list[BlueprintCrmDealAsset],
+) -> list[BlueprintCrmDealAsset]:
+    deduped: dict[str, BlueprintCrmDealAsset] = {}
+    for deal in deals:
+        deduped.setdefault(deal.id, deal)
+    return list(deduped.values())
+
+
 def _infer_facades(
     slack_source: Optional[ContextSourceResult],
     jira_source: Optional[ContextSourceResult],
@@ -397,6 +517,8 @@ def _infer_facades(
     gmail_source: Optional[ContextSourceResult] = None,
     mail_archive_source: Optional[ContextSourceResult] = None,
     teams_source: Optional[ContextSourceResult] = None,
+    crm_source: Optional[ContextSourceResult] = None,
+    salesforce_source: Optional[ContextSourceResult] = None,
 ) -> list[str]:
     facades: list[str] = []
     if slack_source and slack_source.status != "error":
@@ -421,6 +543,10 @@ def _infer_facades(
         facades.append("identity")
     if okta_source and okta_source.status != "error":
         facades.append("identity")
+    if (crm_source and crm_source.status != "error") or (
+        salesforce_source and salesforce_source.status != "error"
+    ):
+        facades.append("crm")
     return facades
 
 

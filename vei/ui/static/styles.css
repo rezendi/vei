@@ -2575,7 +2575,9 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-thread-head,
 .whatif-option-grid,
 .whatif-chip-row,
-.whatif-summary-flags {
+.whatif-summary-flags,
+.whatif-business-grid,
+.whatif-business-list {
   display: grid;
   gap: 12px;
 }
@@ -2632,7 +2634,8 @@ body.developer-mode .studio-nav-button.developer-only {
 }
 
 .whatif-public-grid,
-.whatif-public-list {
+.whatif-public-list,
+.whatif-business-item {
   display: grid;
   gap: 10px;
 }
@@ -2641,10 +2644,15 @@ body.developer-mode .studio-nav-button.developer-only {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.whatif-public-item {
+.whatif-public-item,
+.whatif-business-item {
   display: grid;
   gap: 6px;
   padding: 12px 14px;
+}
+
+.whatif-business-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .whatif-event-list {

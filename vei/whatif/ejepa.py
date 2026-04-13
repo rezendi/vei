@@ -45,6 +45,7 @@ def run_ejepa_counterfactual(
     root: str | Path,
     *,
     prompt: str,
+    source: str,
     source_dir: str | Path,
     thread_id: str,
     branch_event_id: str,
@@ -85,7 +86,8 @@ def run_ejepa_counterfactual(
     request_path = request_root / "forecast_request.json"
     response_path = request_root / "forecast_response.json"
     request = {
-        "rosetta_dir": str(resolved_source_dir),
+        "source": str(source).strip().lower() or "mail_archive",
+        "source_dir": str(resolved_source_dir),
         "cache_root": str(resolved_cache_root),
         "thread_id": thread_id,
         "branch_event_id": branch_event_id,
@@ -159,4 +161,4 @@ def _default_cache_root(
     digest = sha256(
         f"{source_dir}|{thread_id}|{branch_event_id}".encode("utf-8")
     ).hexdigest()[:12]
-    return Path("_vei_out/whatif_ejepa") / f"enron_{digest}"
+    return Path("_vei_out/whatif_ejepa") / f"historical_{digest}"

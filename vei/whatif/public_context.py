@@ -1,14 +1,48 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from importlib import resources
+from pathlib import Path
+from typing import Any, Mapping
 
 from .models import (
     WhatIfPublicContext,
     WhatIfPublicFinancialSnapshot,
     WhatIfPublicNewsEvent,
 )
+
+_DEFAULT_PUBLIC_CONTEXT_FILE_NAMES = (
+    "whatif_public_context.json",
+    "public_context.json",
+    "historical_public_context.json",
+)
+_PUBLIC_CONTEXT_METADATA_KEYS = (
+    "whatif_public_context_path",
+    "public_context_path",
+)
+
+
+def empty_public_context(
+    *,
+    organization_name: str = "",
+    organization_domain: str = "",
+    pack_name: str = "",
+    window_start: str = "",
+    window_end: str = "",
+    branch_timestamp: str = "",
+) -> WhatIfPublicContext:
+    normalized_domain = organization_domain.strip().lower()
+    resolved_pack_name = pack_name.strip() or _default_pack_name(normalized_domain)
+    return WhatIfPublicContext(
+        pack_name=resolved_pack_name,
+        organization_name=organization_name,
+        organization_domain=normalized_domain,
+        window_start=window_start,
+        window_end=window_end,
+        branch_timestamp=branch_timestamp,
+    )
 
 
 def empty_enron_public_context(
@@ -17,13 +51,71 @@ def empty_enron_public_context(
     window_end: str = "",
     branch_timestamp: str = "",
 ) -> WhatIfPublicContext:
-    return WhatIfPublicContext(
-        pack_name="enron_public_context",
+    return empty_public_context(
         organization_name="Enron Corporation",
         organization_domain="enron.com",
+        pack_name="enron_public_context",
         window_start=window_start,
         window_end=window_end,
         branch_timestamp=branch_timestamp,
+    )
+
+
+def discover_public_context_path(
+    *,
+    source_dir: str | Path,
+    metadata: Mapping[str, Any] | None = None,
+) -> Path | None:
+    env_path = os.environ.get("VEI_WHATIF_PUBLIC_CONTEXT_PATH", "").strip()
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+
+    resolved_source_dir = Path(source_dir).expanduser().resolve()
+    metadata_path = _metadata_public_context_path(
+        resolved_source_dir,
+        metadata=metadata,
+    )
+    if metadata_path is not None:
+        return metadata_path
+
+    candidate_paths = _sidecar_public_context_paths(resolved_source_dir)
+    for candidate in candidate_paths:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_public_context(
+    *,
+    path: str | Path,
+    organization_name: str = "",
+    organization_domain: str = "",
+    pack_name: str = "",
+    window_start: str = "",
+    window_end: str = "",
+) -> WhatIfPublicContext:
+    empty = empty_public_context(
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        pack_name=pack_name,
+        window_start=window_start,
+        window_end=window_end,
+    )
+    try:
+        payload = Path(path).expanduser().resolve().read_text(encoding="utf-8")
+        context = WhatIfPublicContext.model_validate(json.loads(payload))
+    except Exception:  # noqa: BLE001
+        return empty
+    context = _fill_public_context_identity(
+        context,
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        pack_name=pack_name,
+    )
+    return slice_public_context_to_window(
+        context,
+        window_start=window_start,
+        window_end=window_end,
     )
 
 
@@ -40,15 +132,47 @@ def load_enron_public_context(
         fixture = resources.files("vei.whatif").joinpath(
             "fixtures/enron_public_context/enron_public_context_v1.json"
         )
-        payload = fixture.read_text(encoding="utf-8")
-        context = WhatIfPublicContext.model_validate(json.loads(payload))
+        context = load_public_context(
+            path=Path(str(fixture)),
+            organization_name="Enron Corporation",
+            organization_domain="enron.com",
+            pack_name="enron_public_context",
+            window_start=window_start,
+            window_end=window_end,
+        )
     except Exception:  # noqa: BLE001
         return empty
-    return slice_public_context_to_window(
-        context,
-        window_start=window_start,
-        window_end=window_end,
+    return context
+
+
+def resolve_world_public_context(
+    *,
+    source: str,
+    source_dir: str | Path,
+    organization_name: str,
+    organization_domain: str,
+    window_start: str = "",
+    window_end: str = "",
+    metadata: Mapping[str, Any] | None = None,
+) -> WhatIfPublicContext | None:
+    context_path = discover_public_context_path(
+        source_dir=source_dir,
+        metadata=metadata,
     )
+    if context_path is not None:
+        return load_public_context(
+            path=context_path,
+            organization_name=organization_name,
+            organization_domain=organization_domain,
+            window_start=window_start,
+            window_end=window_end,
+        )
+    if source.strip().lower() == "enron":
+        return load_enron_public_context(
+            window_start=window_start,
+            window_end=window_end,
+        )
+    return None
 
 
 def slice_public_context_to_window(
@@ -239,3 +363,65 @@ def _timestamp_ms(value: str) -> int | None:
         )
     except ValueError:
         return None
+
+
+def _default_pack_name(organization_domain: str) -> str:
+    if not organization_domain:
+        return "public_context"
+    return f"{organization_domain.replace('.', '_')}_public_context"
+
+
+def _fill_public_context_identity(
+    context: WhatIfPublicContext,
+    *,
+    organization_name: str,
+    organization_domain: str,
+    pack_name: str,
+) -> WhatIfPublicContext:
+    update: dict[str, str] = {}
+    if not context.organization_name and organization_name:
+        update["organization_name"] = organization_name
+    if not context.organization_domain and organization_domain:
+        update["organization_domain"] = organization_domain.strip().lower()
+    if not context.pack_name:
+        update["pack_name"] = pack_name.strip() or _default_pack_name(
+            organization_domain.strip().lower()
+        )
+    if not update:
+        return context
+    return context.model_copy(update=update)
+
+
+def _metadata_public_context_path(
+    source_dir: Path,
+    *,
+    metadata: Mapping[str, Any] | None,
+) -> Path | None:
+    if metadata is None:
+        return None
+    for key in _PUBLIC_CONTEXT_METADATA_KEYS:
+        value = str(metadata.get(key, "") or "").strip()
+        if not value:
+            continue
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            candidate = _source_root(source_dir) / candidate
+        return candidate.resolve()
+    return None
+
+
+def _sidecar_public_context_paths(source_dir: Path) -> list[Path]:
+    root = _source_root(source_dir)
+    candidates = [root / filename for filename in _DEFAULT_PUBLIC_CONTEXT_FILE_NAMES]
+    if source_dir.is_file():
+        candidates.insert(
+            0,
+            root / f"{source_dir.stem}_public_context.json",
+        )
+    return candidates
+
+
+def _source_root(source_dir: Path) -> Path:
+    if source_dir.is_file():
+        return source_dir.parent
+    return source_dir
