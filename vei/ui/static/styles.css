@@ -2613,6 +2613,19 @@ body.developer-mode .studio-nav-button.developer-only {
   gap: 8px;
 }
 
+.whatif-scene-hero {
+  border-left: 3px solid var(--accent-bright);
+}
+
+.whatif-scene-panel.is-public-context {
+  border-left: 3px solid var(--accent-gold);
+}
+
+.whatif-scene-panel.is-business-state,
+.whatif-scene-panel.is-business-change {
+  border-left: 3px solid var(--accent-teal);
+}
+
 .whatif-scene-copy {
   display: grid;
   gap: 6px;
@@ -2649,6 +2662,16 @@ body.developer-mode .studio-nav-button.developer-only {
   display: grid;
   gap: 6px;
   padding: 12px 14px;
+}
+
+.whatif-business-item.is-better {
+  border-left: 3px solid rgba(26, 168, 141, 0.6);
+  background: rgba(26, 168, 141, 0.06);
+}
+
+.whatif-business-item.is-worse {
+  border-left: 3px solid rgba(255, 109, 94, 0.6);
+  background: rgba(255, 109, 94, 0.06);
 }
 
 .whatif-business-grid {
@@ -2755,6 +2778,45 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-summary-card.is-picked {
   border-color: rgba(255, 180, 84, 0.35);
   box-shadow: 0 0 0 1px rgba(255, 180, 84, 0.14) inset;
+}
+
+.whatif-summary-card.is-baseline {
+  border-top: 2px solid var(--accent-gold);
+}
+
+.whatif-summary-card.is-llm-path {
+  border-top: 2px solid var(--accent-bright);
+}
+
+.whatif-summary-card.is-forecast {
+  border-top: 2px solid var(--accent-teal);
+}
+
+.whatif-card .eyebrow {
+  font-size: 12px;
+  color: rgba(100, 170, 230, 0.88);
+}
+
+.whatif-ranked-details {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.whatif-ranked-details summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.55);
+  list-style: none;
+}
+
+.whatif-ranked-details summary::before {
+  content: "\25B8  ";
+}
+
+.whatif-ranked-details[open] summary::before {
+  content: "\25BE  ";
 }
 
 .whatif-advanced summary {
