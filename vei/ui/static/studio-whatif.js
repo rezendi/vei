@@ -102,7 +102,7 @@ function renderWhatIfPublicContext(context) {
     ? context.public_news_events
     : [];
   return `
-    <div class="whatif-scene-panel">
+    <div class="whatif-scene-panel is-public-context">
       <div class="whatif-thread-head">
         <div>
           <p class="eyebrow">Public Company Context</p>
@@ -232,7 +232,7 @@ function renderWhatIfBusinessAssessment(assessment) {
     return "";
   }
   return `
-    <div class="whatif-scene-panel">
+    <div class="whatif-scene-panel is-business-state">
       <div class="whatif-thread-head">
         <div>
           <p class="eyebrow">Recorded Business State</p>
@@ -283,8 +283,13 @@ function renderWhatIfBusinessChange(change, { title = "Predicted Business Change
   if (!change.summary && !impacts.length && !consequences.length) {
     return "";
   }
+  function effectClass(effect) {
+    if (effect === "better") return "is-better";
+    if (effect === "worse") return "is-worse";
+    return "";
+  }
   return `
-    <div class="whatif-scene-panel">
+    <div class="whatif-scene-panel is-business-change">
       <div class="whatif-thread-head">
         <div>
           <p class="eyebrow">${escapeHtml(title)}</p>
@@ -300,7 +305,7 @@ function renderWhatIfBusinessChange(change, { title = "Predicted Business Change
           .slice(0, 4)
           .map(
             (impact) => `
-              <div class="whatif-business-item">
+              <div class="whatif-business-item ${effectClass(impact.effect)}">
                 <span class="whatif-result-meta">${escapeHtml(impact.effect || "flat")} · ${escapeHtml(impact.magnitude || "flat")}</span>
                 <strong>${escapeHtml(impact.label || impact.state_id || "Business state")}</strong>
                 <span class="whatif-result-caption">${escapeHtml(impact.summary || "")}</span>
@@ -897,12 +902,15 @@ function renderWhatIfStudio() {
                 <span>${escapeHtml(candidate.reason || "")}</span>
                 <span>Score ${escapeHtml(score)} across ${escapeHtml(candidate.rollout_count || 0)} rollouts</span>
                 <span>Exposure ${escapeHtml(candidate.average_outcome_signals?.exposure_risk ?? "n/a")} · Delay ${escapeHtml(candidate.average_outcome_signals?.delay_risk ?? "n/a")} · Relationship ${escapeHtml(candidate.average_outcome_signals?.relationship_protection ?? "n/a")}</span>
-                ${renderWhatIfBusinessChange(candidate.business_state_change, { title: "Forecasted business change" })}
-                ${
-                  shadowScore != null
-                    ? `<span>Shadow ${escapeHtml(candidate.shadow?.backend || "forecast")} ${escapeHtml(shadowScore)}</span>`
-                    : ""
-                }
+                <details class="whatif-ranked-details">
+                  <summary>Show forecasted change</summary>
+                  ${renderWhatIfBusinessChange(candidate.business_state_change, { title: "Forecasted business change" })}
+                  ${
+                    shadowScore != null
+                      ? `<span>Shadow ${escapeHtml(candidate.shadow?.backend || "forecast")} ${escapeHtml(shadowScore)}</span>`
+                      : ""
+                  }
+                </details>
               </div>
             `;
           })
@@ -939,20 +947,20 @@ function renderWhatIfStudio() {
   const baselineExternalCount = baseline.forecast?.future_external_event_count ?? 0;
   resultNode.innerHTML = `
     <div class="whatif-summary-grid">
-      <div class="whatif-summary-card">
+      <div class="whatif-summary-card is-baseline">
         <p class="eyebrow">Historical baseline</p>
         <strong>${escapeHtml(branch.subject || branch.thread_id || branch.event_id || experiment.label)}</strong>
         <span>${escapeHtml(branch.actor_id || "")} -> ${escapeHtml(branchRecipients || "")}</span>
         <span>${escapeHtml(baseline.delivered_event_count || 0)} delivered baseline events</span>
         <span>${escapeHtml(baselineExternalCount)} outside-addressed events in the historical path</span>
       </div>
-      <div class="whatif-summary-card">
+      <div class="whatif-summary-card is-llm-path">
         <p class="eyebrow">LLM alternate path</p>
         <strong>${escapeHtml(llm?.status || "not run")}</strong>
         <span>${escapeHtml(llm?.summary || "No LLM branch for this run.")}</span>
         <span>${escapeHtml(llm?.delivered_event_count || 0)} alternate messages delivered</span>
       </div>
-      <div class="whatif-summary-card">
+      <div class="whatif-summary-card is-forecast">
         <p class="eyebrow">Learned forecast</p>
         <strong>${escapeHtml(forecast?.backend || "not run")}</strong>
         <span>${escapeHtml(forecast?.summary || "No forecast for this run.")}</span>

@@ -81,23 +81,25 @@ vei ui serve \
 
 Open `http://127.0.0.1:3055`.
 
-![Enron historical what-if flow](docs/assets/enron-whatif/enron-whatif-flow.gif)
-
-![Enron decision scene with dated public context](docs/assets/enron-whatif/enron-decision-scene-top.png)
+![Decision scene for the Enron Master Agreement branch point, showing the branch moment, what actually happened, public company context, and recorded business state](docs/assets/enron-whatif/enron-decision-scene-top.png)
 
 Here is the exact story this example shows:
 
 1. VEI loads a real Enron branch point from the `Master Agreement` thread.
 2. The saved world contains 6 prior messages and 84 recorded future events on that case.
 3. The branch date is September 27, 2000, so the public-company slice shows the facts that were already public by that date: 2 financial checkpoints and 0 public news items.
+
+![Public company context sliced to the branch date, showing financial checkpoints and public news known before September 27, 2000](docs/assets/enron-whatif/enron-public-context.png)
+
 4. The real move is Debra Perlingiere sending a draft agreement outside Enron to `kathy_gerken@cargill.com`.
 5. The alternate move keeps the draft inside Enron, asks Gerald Nemec and Sara Shackleton for review, and holds the outside send.
 6. The saved continuation stays internal. The saved forecast keeps the same 84-event horizon, moves risk from `1.000` to `0.983`, and predicts `29` fewer outside sends.
+
+![Predicted business change comparing the historical baseline, the LLM alternate path, and the learned forecast](docs/assets/enron-whatif/enron-predicted-business-change.png)
+
 7. The ranked comparison turns that into a business choice: `Hold for internal review` ranks first at `0.351`, `Send a narrow status note` ranks second at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
 
-![Enron predicted business change](docs/assets/enron-whatif/enron-predicted-business-change.png)
-
-![Enron ranked business comparison](docs/assets/enron-whatif/enron-ranked-comparison.png)
+![Ranked business comparison of three candidate moves scored against the recorded future](docs/assets/enron-whatif/enron-ranked-comparison.png)
 
 Useful files in that example:
 
