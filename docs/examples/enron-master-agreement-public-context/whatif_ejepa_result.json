@@ -102,19 +102,19 @@
     "summary": "Moderately lower outside spread risk.",
     "baseline": {
       "exposure": 0.94,
-      "trust": 0.356,
-      "coordination_load": 0.423,
-      "execution_delay": 0.559,
-      "deal_position": 0.307,
-      "governance_pressure": 0.119
+      "trust": 0.345,
+      "coordination_load": 0.431,
+      "execution_delay": 0.565,
+      "deal_position": 0.301,
+      "governance_pressure": 0.172
     },
     "predicted": {
       "exposure": 0.845,
-      "trust": 0.402,
-      "coordination_load": 0.406,
-      "execution_delay": 0.548,
-      "deal_position": 0.355,
-      "governance_pressure": 0.133
+      "trust": 0.391,
+      "coordination_load": 0.414,
+      "execution_delay": 0.553,
+      "deal_position": 0.349,
+      "governance_pressure": 0.186
     },
     "impacts": [
       {
@@ -130,8 +130,8 @@
       {
         "state_id": "deal_position",
         "label": "Commercial position",
-        "baseline_value": 0.307,
-        "predicted_value": 0.355,
+        "baseline_value": 0.301,
+        "predicted_value": 0.349,
         "delta": 0.048,
         "effect": "better",
         "magnitude": "slight",
@@ -140,8 +140,8 @@
       {
         "state_id": "trust",
         "label": "Relationship stability",
-        "baseline_value": 0.356,
-        "predicted_value": 0.402,
+        "baseline_value": 0.345,
+        "predicted_value": 0.391,
         "delta": 0.046,
         "effect": "better",
         "magnitude": "slight",
@@ -150,8 +150,8 @@
       {
         "state_id": "coordination_load",
         "label": "Internal handling load",
-        "baseline_value": 0.423,
-        "predicted_value": 0.406,
+        "baseline_value": 0.431,
+        "predicted_value": 0.414,
         "delta": -0.017,
         "effect": "flat",
         "magnitude": "flat",
@@ -160,8 +160,8 @@
       {
         "state_id": "governance_pressure",
         "label": "Approval and escalation pressure",
-        "baseline_value": 0.119,
-        "predicted_value": 0.133,
+        "baseline_value": 0.172,
+        "predicted_value": 0.186,
         "delta": 0.014,
         "effect": "flat",
         "magnitude": "flat",
@@ -170,9 +170,9 @@
       {
         "state_id": "execution_delay",
         "label": "Execution delay",
-        "baseline_value": 0.559,
-        "predicted_value": 0.548,
-        "delta": -0.011,
+        "baseline_value": 0.565,
+        "predicted_value": 0.553,
+        "delta": -0.012,
         "effect": "flat",
         "magnitude": "flat",
         "summary": "Execution delay stays close to the historical path."

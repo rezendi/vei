@@ -11,7 +11,7 @@ This walkthrough describes the current Studio experience for the `service_ops` p
 
 ## 1. Entering the World
 
-The Studio opens on the **Living Company** view. The top of the screen still centers the company identity and mission controls:
+The Studio opens on the **Company** tab with the **Live Company** section in focus. The top of the screen still centers the company identity and mission controls:
 
 - **Company**: Clearwater Field Services
 - **Crisis**: one of the built-in service-ops crisis variants
@@ -79,7 +79,7 @@ These actions appear both in the Control Plane activity log and in the run timel
 
 ---
 
-## 5. The Living Company View
+## 5. The Live Company Section
 
 The rest of the Company view still shows the full business wall:
 

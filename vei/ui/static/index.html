@@ -74,13 +74,20 @@
       </header>
 
       <div class="layout-container">
-        <section class="card studio-shell-card">
+      <section class="card studio-shell-card">
         <p class="eyebrow" id="shell-context-hint">Track the company, then make the next move</p>
         <div id="studio-nav" class="studio-nav">
           <button type="button" class="studio-nav-button active" data-studio-view="company">Company</button>
           <button type="button" class="studio-nav-button" data-studio-view="crisis">Crisis</button>
           <button type="button" class="studio-nav-button" data-studio-view="outcome">Outcome</button>
           <button type="button" class="studio-nav-button" data-studio-view="audit">Audit</button>
+        </div>
+        <p id="studio-view-helper" class="studio-view-helper">Company state, missions, and historical what-if are all in this view.</p>
+        <div id="company-subnav" class="company-subnav" role="navigation" aria-label="Company sections">
+          <button type="button" class="company-subnav-button active" data-company-target="company-overview">Live Company</button>
+          <button type="button" class="company-subnav-button" data-company-target="company-mission">Next Move</button>
+          <button type="button" class="company-subnav-button" data-company-target="company-recent">Recent Changes</button>
+          <button type="button" class="company-subnav-button" data-company-target="company-historical">Historical Decision</button>
         </div>
         <div id="cinema-narrative" class="cinema-narrative"></div>
         <details class="developer-only studio-dev-launcher">
@@ -150,7 +157,7 @@
         </section>
 
         <!-- ========== TAB: COMPANY ========== -->
-        <section class="card living-company-card" data-studio-view="company">
+        <section class="card living-company-card" data-studio-view="company" id="company-overview">
           <div class="section-header">
             <div>
               <p class="eyebrow">Company</p>
@@ -162,7 +169,7 @@
             <span id="cascade-label" class="cascade-label"></span>
           </div>
           <div id="living-company-context" class="living-company-context"></div>
-          <div id="situation-room-strip" class="situation-room-strip"></div>
+          <div id="situation-room-strip" class="situation-room-strip" role="status" aria-live="polite"></div>
           <div id="governor-fleet-strip" class="governor-fleet-strip"></div>
           <div id="living-company-impact" class="living-company-impact"></div>
           <div class="living-company-layout">
@@ -173,7 +180,7 @@
           </div>
         </section>
 
-        <section class="card play-card sandbox-only" data-studio-view="company">
+        <section class="card play-card sandbox-only" data-studio-view="company" id="company-mission">
           <div class="section-header">
             <div>
               <p class="eyebrow">Next Move</p>
@@ -184,14 +191,14 @@
           <div id="mission-moves-panel" class="run-grid"></div>
         </section>
 
-        <section class="card move-log-card" data-studio-view="company">
+        <section class="card move-log-card" data-studio-view="company" id="company-recent">
           <details id="move-log-shell" class="secondary-disclosure move-log-shell">
             <summary>Recent changes</summary>
             <div id="move-log-panel" class="move-log"></div>
           </details>
         </section>
 
-        <section class="card whatif-card" data-studio-view="company">
+        <section class="card whatif-card" data-studio-view="company" id="company-historical">
           <div class="section-header">
             <div>
               <p class="eyebrow">Historical Decision</p>
@@ -201,35 +208,49 @@
               </p>
             </div>
           </div>
-          <div id="whatif-status" class="whatif-status"></div>
-          <div class="whatif-controls">
-            <label class="whatif-field whatif-field-wide">
-              <span>Find a moment</span>
-              <input id="whatif-query-input" type="text" placeholder="contract draft legal review outside send" />
-            </label>
-            <label class="whatif-field">
-              <span>Max results</span>
-              <input id="whatif-limit-input" type="number" min="1" max="20" value="6" />
-            </label>
-            <div class="whatif-actions">
-              <button id="whatif-search-btn" type="button">Search history</button>
+          <div id="whatif-status" class="whatif-status" role="status" aria-live="polite"></div>
+          <div class="whatif-step-shell">
+            <div class="whatif-step-head">
+              <span class="whatif-step-kicker">Step 1</span>
+              <h3>Find Decision</h3>
+            </div>
+            <div class="whatif-controls">
+              <label class="whatif-field whatif-field-wide">
+                <span>Find a moment</span>
+                <input id="whatif-query-input" type="text" placeholder="contract draft legal review outside send" />
+              </label>
+              <label class="whatif-field">
+                <span>Max results</span>
+                <input id="whatif-limit-input" type="number" min="1" max="20" value="6" />
+              </label>
+              <div class="whatif-actions">
+                <button id="whatif-search-btn" type="button">Search history</button>
+              </div>
+            </div>
+            <div id="whatif-results" class="whatif-results"></div>
+          </div>
+
+          <div class="whatif-step-shell">
+            <div class="whatif-step-head">
+              <span class="whatif-step-kicker">Step 2</span>
+              <h3>Compare Moves</h3>
+            </div>
+            <div id="whatif-selection" class="whatif-selection"></div>
+            <div class="whatif-playbar">
+              <label class="whatif-field">
+                <span>Objective</span>
+                <select id="whatif-objective-select"></select>
+              </label>
+              <label class="whatif-field">
+                <span>Rollouts per option</span>
+                <input id="whatif-rollout-count-input" type="number" min="1" max="16" value="4" />
+              </label>
+              <div class="whatif-actions">
+                <button id="whatif-rank-btn" type="button">Score this decision</button>
+              </div>
             </div>
           </div>
-          <div id="whatif-results" class="whatif-results"></div>
-          <div id="whatif-selection" class="whatif-selection"></div>
-          <div class="whatif-playbar">
-            <label class="whatif-field">
-              <span>Objective</span>
-              <select id="whatif-objective-select"></select>
-            </label>
-            <label class="whatif-field">
-              <span>Rollouts per option</span>
-              <input id="whatif-rollout-count-input" type="number" min="1" max="16" value="4" />
-            </label>
-            <div class="whatif-actions">
-              <button id="whatif-rank-btn" type="button">Score this decision</button>
-            </div>
-          </div>
+
           <details class="secondary-disclosure secondary-disclosure-quiet whatif-advanced">
             <summary>Advanced controls</summary>
             <div class="whatif-runner">
@@ -253,8 +274,14 @@
               </label>
             </div>
           </details>
-          <div id="whatif-open-result" class="whatif-open-result"></div>
-          <div id="whatif-experiment-result" class="whatif-experiment-result"></div>
+          <div class="whatif-step-shell">
+            <div class="whatif-step-head">
+              <span class="whatif-step-kicker">Step 3</span>
+              <h3>Review Forecast</h3>
+            </div>
+            <div id="whatif-open-result" class="whatif-open-result"></div>
+            <div id="whatif-experiment-result" class="whatif-experiment-result"></div>
+          </div>
         </section>
 
         <!-- ========== TAB: CRISIS ========== -->

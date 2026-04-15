@@ -22,9 +22,9 @@ def test_enron_public_context_fixture_is_present_and_cross_referenced() -> None:
     source_ids = {source["source_id"] for source in package_payload["sources"]}
     assert package_payload["name"] == "enron_public_context"
     assert dataset_payload["pack_name"] == "enron_public_context"
-    assert len(package_payload["sources"]) == 7
-    assert len(dataset_payload["financial_snapshots"]) == 7
-    assert len(dataset_payload["public_news_events"]) == 7
+    assert len(package_payload["sources"]) == 17
+    assert len(dataset_payload["financial_snapshots"]) == 11
+    assert len(dataset_payload["public_news_events"]) == 13
     assert dataset_payload["financial_snapshots"][0]["as_of"] == "1998-12-31T00:00:00Z"
     assert (
         dataset_payload["public_news_events"][-1]["timestamp"] == "2001-12-02T00:00:00Z"

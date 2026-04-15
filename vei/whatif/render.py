@@ -36,8 +36,8 @@ def _preview(text: str, *, limit: int = 280) -> str:
 def _public_context_lines(
     context: WhatIfPublicContext | None,
     *,
-    max_financial: int = 2,
-    max_news: int = 2,
+    max_financial: int = 4,
+    max_news: int = 4,
 ) -> list[str]:
     if context is None:
         return []

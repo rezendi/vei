@@ -14,7 +14,7 @@ Historical subject: Master Agreement
 ### Rank 1: Hold for internal review
 - Prompt: Keep "Master Agreement" inside Enron Corporation, ask legal or the internal owner for one more review, and hold the outside send until one owner clears it.
 - Business state: Much lower outside spread risk.
-- Net effect score: 0.351
+- Net effect score: 0.352
 - Forecast summary: Predicted risk moves down by 0.740, with escalation delta -8 and external-send delta -64.
 - Risk change: 1.0 -> 0.26
 - External-send delta: -64

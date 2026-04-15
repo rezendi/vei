@@ -41,6 +41,25 @@ _STATE_ORDER: Final[tuple[str, ...]] = (
     "coordination_load",
     "governance_pressure",
 )
+_PUBLIC_NEWS_PRESSURE_WEIGHTS: Final[dict[str, float]] = {
+    "bankruptcy": 1.0,
+    "restatement": 0.95,
+    "regulatory": 0.9,
+    "financial_disclosure": 0.75,
+    "governance": 0.6,
+    "merger": 0.35,
+    "acquisition_offer": 0.16,
+    "market_launch": 0.08,
+    "commercial_agreement": 0.08,
+    "platform_growth": 0.08,
+    "product_launch": 0.06,
+}
+_FINANCIAL_PRESSURE_WEIGHTS: Final[dict[str, float]] = {
+    "annual": 0.18,
+    "quarterly_release": 0.14,
+    "event_checkpoint": 0.3,
+    "guidance": 0.1,
+}
 
 
 def assess_historical_business_state(
@@ -384,10 +403,28 @@ _branch_has_external_sharing = branch_has_external_sharing
 def _public_pressure(context: WhatIfPublicContext | None) -> float:
     if context is None:
         return 0.0
-    item_count = len(context.financial_snapshots) + len(context.public_news_events)
-    if item_count <= 0:
+    pressure_score = 0.0
+    for snapshot in context.financial_snapshots:
+        pressure_score += _financial_pressure_weight(snapshot.kind)
+    for event in context.public_news_events:
+        pressure_score += _public_news_pressure_weight(event.category)
+    if pressure_score <= 0:
         return 0.0
-    return _clamp(item_count / 12.0)
+    return _clamp(pressure_score / 3.0)
+
+
+def _financial_pressure_weight(kind: str) -> float:
+    normalized_kind = str(kind or "").strip().lower()
+    if not normalized_kind:
+        return 0.1
+    return _FINANCIAL_PRESSURE_WEIGHTS.get(normalized_kind, 0.12)
+
+
+def _public_news_pressure_weight(category: str) -> float:
+    normalized_category = str(category or "").strip().lower()
+    if not normalized_category:
+        return 0.08
+    return _PUBLIC_NEWS_PRESSURE_WEIGHTS.get(normalized_category, 0.08)
 
 
 def _state_label(
