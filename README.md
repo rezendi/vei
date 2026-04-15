@@ -68,7 +68,7 @@ Public-company facts live beside the bundle in `whatif_public_context.json` when
 
 ## Walk Through The Enron Case
 
-The repo ships a real saved Enron example under `docs/examples/enron-master-agreement-public-context/`. It combines a real Enron email branch point with a dated public-company context pack built from financial checkpoints and public news sources. This specific branch date only shows the facts that were already public on September 27, 2000. Later Enron branch dates automatically pick up the later public news items too.
+The repo ships a real saved Enron example under `docs/examples/enron-master-agreement-public-context/`. It combines a real Enron email branch point with a dated public-company context pack built from 11 financial checkpoints and 13 public news events across 17 archived public source files. This specific branch date only shows the facts that were already public on September 27, 2000. Later Enron branch dates automatically pick up the later public news items too.
 
 Open it in Studio:
 
@@ -87,7 +87,7 @@ Here is the exact story this example shows:
 
 1. VEI loads a real Enron branch point from the `Master Agreement` thread.
 2. The saved world contains 6 prior messages and 84 recorded future events on that case.
-3. The branch date is September 27, 2000, so the public-company slice shows the facts that were already public by that date: 2 financial checkpoints and 0 public news items.
+3. The branch date is September 27, 2000, so the public-company slice shows the facts that were already public by that date: 5 financial checkpoints and 6 public news items.
 
 ![Public company context sliced to the branch date, showing financial checkpoints and public news known before September 27, 2000](docs/assets/enron-whatif/enron-public-context.png)
 
@@ -97,7 +97,7 @@ Here is the exact story this example shows:
 
 ![Predicted business change comparing the historical baseline, the LLM alternate path, and the learned forecast](docs/assets/enron-whatif/enron-predicted-business-change.png)
 
-7. The ranked comparison turns that into a business choice: `Hold for internal review` ranks first at `0.351`, `Send a narrow status note` ranks second at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
+7. The ranked comparison turns that into a business choice: `Hold for internal review` ranks first at `0.352`, `Send a narrow status note` ranks second at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
 
 ![Ranked business comparison of three candidate moves scored against the recorded future](docs/assets/enron-whatif/enron-ranked-comparison.png)
 

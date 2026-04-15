@@ -13,6 +13,10 @@ from vei.whatif.business_state import (
     assess_historical_business_state,
     describe_forecast_business_change,
 )
+from vei.whatif.public_context import (
+    load_enron_public_context,
+    slice_public_context_to_branch,
+)
 from vei.whatif.models import (
     WhatIfEpisodeManifest,
     WhatIfExperimentResult,
@@ -46,8 +50,8 @@ def _copy_file(source: Path, target: Path) -> None:
     shutil.copy2(source, target)
 
 
-def _preserve_readme(output_root: Path) -> str | None:
-    readme_path = output_root / "README.md"
+def _source_readme(source_root: Path) -> str | None:
+    readme_path = source_root / "README.md"
     if not readme_path.exists():
         return None
     return readme_path.read_text(encoding="utf-8")
@@ -57,6 +61,42 @@ def _rewrite_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     updated = dict(payload)
     updated["source_dir"] = EXAMPLE_PLACEHOLDER
     updated["workspace_root"] = "workspace"
+    return updated
+
+
+def _refreshed_public_context(payload: dict[str, Any]) -> dict[str, Any] | None:
+    branch_timestamp = str(payload.get("branch_timestamp") or "").strip()
+    source_public_context = payload.get("public_context")
+    if not isinstance(source_public_context, dict):
+        return None
+    window_start = str(source_public_context.get("window_start") or "").strip()
+    window_end = str(source_public_context.get("window_end") or "").strip()
+    if not branch_timestamp or not window_start or not window_end:
+        return None
+    context = load_enron_public_context(
+        window_start=window_start,
+        window_end=window_end,
+    )
+    refreshed = slice_public_context_to_branch(
+        context,
+        branch_timestamp=branch_timestamp,
+    )
+    return refreshed.model_dump(mode="json")
+
+
+def _rewrite_context_snapshot(
+    payload: dict[str, Any],
+    *,
+    public_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if public_context is None:
+        return payload
+    updated = dict(payload)
+    metadata = dict(updated.get("metadata") or {})
+    whatif_metadata = dict(metadata.get("whatif") or {})
+    whatif_metadata["public_context"] = public_context
+    metadata["whatif"] = whatif_metadata
+    updated["metadata"] = metadata
     return updated
 
 
@@ -164,6 +204,7 @@ def _enrich_packaged_business_state(
     experiment_result.materialization.historical_business_state = (
         historical_business_state
     )
+    experiment_result.materialization.public_context = manifest.public_context
     experiment_result.forecast_result = forecast_result
     result_path.write_text(
         experiment_result.model_dump_json(indent=2),
@@ -187,11 +228,13 @@ def package_example(source_root: Path, output_root: Path) -> None:
     workspace_root = source_root / "workspace"
     target_workspace = output_root / "workspace"
     experiment_payload = _read_json(source_root / "whatif_experiment_result.json")
+    source_manifest_payload = _read_json(workspace_root / "episode_manifest.json")
+    public_context = _refreshed_public_context(source_manifest_payload)
     forecast_filename = _resolve_forecast_filename(
         source_root,
         experiment_payload=experiment_payload,
     )
-    preserved_readme = _preserve_readme(output_root)
+    preserved_readme = _source_readme(source_root)
     if output_root.exists():
         shutil.rmtree(output_root)
     target_workspace.mkdir(parents=True, exist_ok=True)
@@ -218,7 +261,6 @@ def package_example(source_root: Path, output_root: Path) -> None:
     )
 
     for relative_path in (
-        "context_snapshot.json",
         "whatif_baseline_dataset.json",
         "vei_project.json",
         "contracts/default.contract.json",
@@ -231,8 +273,20 @@ def package_example(source_root: Path, output_root: Path) -> None:
         _copy_file(workspace_root / relative_path, target_workspace / relative_path)
 
     _write_json(
+        target_workspace / "context_snapshot.json",
+        _rewrite_context_snapshot(
+            _read_json(workspace_root / "context_snapshot.json"),
+            public_context=public_context,
+        ),
+    )
+    _write_json(
         target_workspace / "episode_manifest.json",
-        _rewrite_manifest(_read_json(workspace_root / "episode_manifest.json")),
+        {
+            **_rewrite_manifest(source_manifest_payload),
+            **(
+                {"public_context": public_context} if public_context is not None else {}
+            ),
+        },
     )
     _enrich_packaged_business_state(output_root, forecast_filename=forecast_filename)
     build_business_state_example(output_root)

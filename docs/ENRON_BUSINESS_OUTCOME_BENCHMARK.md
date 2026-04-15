@@ -24,11 +24,13 @@ The current Enron benchmark build joins two repo-owned inputs:
 
 That public-context fixture currently contains:
 
-- 7 dated financial checkpoints
-- 7 dated public news events
-- 7 archived public source files
+- 11 dated financial checkpoints
+- 13 dated public news events
+- 17 archived public source files
 
 Its public dates span December 31, 1998 through December 2, 2001.
+
+That thicker fixture gives the earlier 2000 Enron branch dates much better public-company coverage than the older pack did.
 
 ## What comes out
 

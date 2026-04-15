@@ -116,7 +116,7 @@ The forecast bundle is written as `whatif_ejepa_result.json` when the real JEPA 
 
 This makes it easy to inspect the result in Studio later, compare runs, or hand the output to another tool.
 
-For Enron, VEI also ships a packaged public-company context fixture under `vei/whatif/fixtures/enron_public_context`. Refresh it with `python scripts/prepare_enron_public_context.py`. The current fixture carries 7 dated financial checkpoints and 7 dated public news events from 7 archived public source files, spanning December 31, 1998 through December 2, 2001. VEI slices that fixture to the active Enron email window and then to the chosen branch date before it is shown in Studio, written into the saved episode manifest, added to the LLM counterfactual prompt, or attached to benchmark dossiers.
+For Enron, VEI also ships a packaged public-company context fixture under `vei/whatif/fixtures/enron_public_context`. Refresh it with `python scripts/prepare_enron_public_context.py`. The current fixture carries 11 dated financial checkpoints and 13 dated public news events from 17 archived public source files, spanning December 31, 1998 through December 2, 2001. VEI slices that fixture to the active Enron email window and then to the chosen branch date before it is shown in Studio, written into the saved episode manifest, added to the LLM counterfactual prompt, or attached to benchmark dossiers.
 
 The same path now works for a new company history bundle. Put the normalized historical source in `context_snapshot.json`. Multi-source snapshots can now branch from mail, Slack or Teams-style chat, and Jira-style ticket history through the same typed what-if path. VEI derives a shared case id from that history, shows earlier cross-surface case activity in the branch scene, and carries that linked operational history plus linked document or CRM records into the saved workspace when the bundle includes them. Put a sidecar `whatif_public_context.json` in the same folder when you want dated public facts in the branch scene, the prompt, and the saved run. Put a research-pack JSON file anywhere on disk when you want a reusable set of held-out branch cases for `vei whatif pack run` or `vei whatif benchmark build`.
 
@@ -159,10 +159,10 @@ vei whatif benchmark build \
 
 ## Current Studio flow
 
-The current combined Enron setup has two repo-owned inputs:
+The current repo-owned Enron example has two committed layers:
 
-- the Rosetta mail archive for branch history and recorded futures
-- the packaged public-company context fixture for dated financial and public-news facts
+- the saved `Master Agreement` example bundle under `docs/examples/enron-master-agreement-public-context/` for the branch workspace and saved result files
+- the packaged public-company context fixture under `vei/whatif/fixtures/enron_public_context` for dated financial and public-news facts
 
 The screenshots below were refreshed from the repo-owned `Master Agreement` bundle under `docs/examples/enron-master-agreement-public-context/`, so a fresh clone can show the same branch point, search it, and inspect the saved comparisons without depending on ignored local output folders.
 
@@ -172,7 +172,7 @@ The screenshots below were refreshed from the repo-owned `Master Agreement` bund
 
 ![Enron decision scene with public context](assets/enron-whatif/enron-decision-scene-top.png)
 
-The public-company panel is its own dated slice. This saved `Master Agreement` branch is on September 27, 2000, so it shows the two financial checkpoints that were already public by that date and no public-news rows yet.
+The public-company panel is its own dated slice. This saved `Master Agreement` branch is on September 27, 2000, so it shows the five financial checkpoints and six public-news rows that were already public by that date.
 
 ![Enron public company context panel](assets/enron-whatif/enron-public-context.png)
 
@@ -205,7 +205,7 @@ The committed example bundle also carries:
 - `whatif_business_state_comparison.md`
 - `whatif_business_state_comparison.json`
 
-Those files live under `docs/examples/enron-master-agreement-public-context/` beside the saved workspace. The branch date is September 27, 2000, so the saved scene shows 2 financial checkpoints and 0 public-news items. Use the real Rosetta archive when you want whole-history Enron search or a new run from the full corpus.
+Those files live under `docs/examples/enron-master-agreement-public-context/` beside the saved workspace. The branch date is September 27, 2000, so the saved scene shows 5 financial checkpoints and 6 public-news items. Use the real Rosetta archive when you want whole-history Enron search or a new run from the full corpus.
 
 ## Enron business-outcome benchmark
 

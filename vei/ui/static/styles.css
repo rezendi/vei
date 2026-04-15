@@ -1,6 +1,23 @@
 :root {
   --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
   --font-display: "Sora", "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --elevation-soft: 0 8px 24px rgba(17, 34, 53, 0.1);
+  --elevation-focus: 0 0 0 2px rgba(30, 108, 242, 0.25);
+  --bp-mobile: 720px;
+  --bp-tablet: 960px;
+  --bp-desktop: 1220px;
   --bg: #eef3f0;
   --bg-deep: #0f2133;
   --surface: rgba(255, 255, 255, 0.78);
@@ -22,7 +39,6 @@
   --surface-docs: #1aa88d;
   --surface-approvals: #9b7bff;
   --surface-heartbeat: #17324a;
-  --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
 
   --skin-accent: var(--accent-bright);
   --skin-accent-glow: rgba(30, 108, 242, 0.16);
@@ -59,7 +75,7 @@ body {
 .layout-container {
   max-width: 1680px;
   margin: 0 auto;
-  padding: 0 24px 52px;
+  padding: 0 var(--space-5) calc(var(--space-7) + var(--space-1));
 }
 
 .hero {
@@ -436,8 +452,8 @@ button:disabled {
 }
 
 .studio-shell-card {
-  margin-bottom: 32px;
-  padding: 0 0 24px;
+  margin-bottom: var(--space-6);
+  padding: 0 0 var(--space-5);
   border-bottom: 1px solid var(--border);
   background: transparent;
 }
@@ -467,14 +483,14 @@ button:disabled {
 }
 
 .studio-nav {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: var(--space-2);
 }
 
 .studio-nav-button {
   width: 100%;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.68);
   color: var(--ink);
@@ -489,6 +505,44 @@ button:disabled {
   background: linear-gradient(135deg, rgba(23, 50, 74, 0.96), color-mix(in srgb, var(--skin-nav-active-bg) 92%, transparent));
   color: #fff;
   box-shadow: 0 16px 34px var(--skin-accent-glow);
+}
+
+.studio-view-helper {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.company-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  position: sticky;
+  top: var(--space-2);
+  z-index: 3;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 92%, #fff);
+}
+
+.company-subnav-button {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.company-subnav-button.active {
+  border-color: color-mix(in srgb, var(--accent-bright) 35%, var(--border));
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent-bright) 9%, #fff);
 }
 
 .developer-toggle {
@@ -696,12 +750,20 @@ body.developer-mode .studio-nav-button.developer-only {
 .situation-room-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  padding: 12px 0;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
 }
 
-.situation-room-strip:empty {
-  display: none;
+.situation-room-strip.is-empty {
+  grid-template-columns: 1fr;
+}
+
+.sit-room-empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(17, 34, 53, 0.02);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink-soft);
 }
 
 .sit-room-cell {
@@ -2341,7 +2403,44 @@ body.developer-mode .studio-nav-button.developer-only {
 
 .whatif-card {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
+}
+
+.whatif-step-shell {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(17, 34, 53, 0.02);
+  padding: var(--space-4);
+}
+
+.whatif-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.whatif-step-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.whatif-step-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgba(17, 34, 53, 0.05);
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
 }
 
 .whatif-status,
@@ -2364,8 +2463,8 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-option-card {
   border: 1px solid var(--border);
   background: rgba(17, 34, 53, 0.02);
-  border-radius: 8px;
-  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
   color: var(--ink);
 }
 
@@ -2381,7 +2480,7 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-playbar,
 .whatif-runner {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   grid-template-columns: minmax(0, 2fr) minmax(140px, 0.6fr) auto;
   align-items: end;
 }
@@ -2396,7 +2495,7 @@ body.developer-mode .studio-nav-button.developer-only {
 
 .whatif-field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
   font-size: 0.92rem;
 }
 
@@ -2408,11 +2507,11 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-field select,
 .whatif-field textarea {
   width: 100%;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(5, 10, 20, 0.75);
   color: #f7f8fa;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-3);
   font: inherit;
 }
 
@@ -2431,8 +2530,29 @@ body.developer-mode .studio-nav-button.developer-only {
 
 .whatif-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.whatif-actions button {
+  min-height: 42px;
+}
+
+.whatif-actions button.is-busy {
+  pointer-events: none;
+}
+
+.whatif-actions button.is-busy::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  margin-left: 8px;
+  border-radius: var(--radius-pill);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  display: inline-block;
+  vertical-align: middle;
+  animation: spin 0.8s linear infinite;
 }
 
 .whatif-result-list {
@@ -2445,7 +2565,7 @@ body.developer-mode .studio-nav-button.developer-only {
   display: grid;
   gap: 4px;
   padding: 14px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(17, 34, 53, 0.02);
   color: inherit;
@@ -2456,6 +2576,11 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-option-card.is-selected {
   border-color: rgba(30, 108, 242, 0.35);
   box-shadow: 0 0 0 1px rgba(30, 108, 242, 0.15) inset;
+}
+
+.whatif-empty.is-muted {
+  background: rgba(17, 34, 53, 0.01);
+  color: var(--ink-soft);
 }
 
 .whatif-result-item:hover {
@@ -2504,6 +2629,43 @@ body.developer-mode .studio-nav-button.developer-only {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.whatif-signal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.whatif-signal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: rgba(17, 34, 53, 0.05);
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  font-size: 0.76rem;
+}
+
+.whatif-signal-pill strong {
+  color: var(--ink);
+}
+
+.whatif-signal-pill.is-high {
+  border-color: rgba(255, 109, 94, 0.32);
+  background: rgba(255, 109, 94, 0.13);
+}
+
+.whatif-signal-pill.is-mid {
+  border-color: rgba(255, 180, 84, 0.34);
+  background: rgba(255, 180, 84, 0.14);
+}
+
+.whatif-signal-pill.is-low {
+  border-color: rgba(26, 168, 141, 0.32);
+  background: rgba(26, 168, 141, 0.14);
 }
 
 .whatif-chip {
@@ -2734,6 +2896,12 @@ body.developer-mode .studio-nav-button.developer-only {
 
 .whatif-ranked-details[open] summary::before {
   content: "\25BE  ";
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .whatif-advanced summary {
@@ -4983,17 +5151,22 @@ a[aria-disabled="true"] {
 /* Focus visibility (keyboard) */
 .toolbar-menu summary:focus-visible,
 .studio-nav-button:focus-visible,
+.company-subnav-button:focus-visible,
 .ghost-button:focus-visible,
 .primary-button:focus-visible,
 .run-form button:focus-visible,
 .control-room-mode-button:focus-visible,
-details.secondary-disclosure summary:focus-visible {
+details.secondary-disclosure summary:focus-visible,
+.whatif-actions button:focus-visible {
   outline: 2px solid rgba(30, 108, 242, 0.85);
   outline-offset: 2px;
 }
 
 .toolbar-field select:focus-visible,
-.toolbar-field input:focus-visible {
+.toolbar-field input:focus-visible,
+.whatif-field input:focus-visible,
+.whatif-field select:focus-visible,
+.whatif-field textarea:focus-visible {
   outline: 2px solid rgba(100, 170, 255, 0.9);
   outline-offset: 2px;
 }
@@ -5907,6 +6080,27 @@ body[data-vei-tone="control-room"] .studio-nav-button.active {
   border-color: rgba(100, 181, 246, 0.42);
 }
 
+body[data-vei-tone="control-room"] .studio-view-helper {
+  color: rgba(194, 213, 233, 0.75);
+}
+
+body[data-vei-tone="control-room"] .company-subnav {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(9, 20, 33, 0.76);
+}
+
+body[data-vei-tone="control-room"] .company-subnav-button {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(194, 213, 233, 0.82);
+}
+
+body[data-vei-tone="control-room"] .company-subnav-button.active {
+  border-color: rgba(132, 195, 255, 0.58);
+  background: rgba(33, 88, 145, 0.34);
+  color: #f4f8fb;
+}
+
 body[data-vei-tone="control-room"] .living-company-card,
 body[data-vei-tone="control-room"] .play-card,
 body[data-vei-tone="control-room"] .move-log-card,
@@ -6282,6 +6476,27 @@ body[data-vei-tone="casebook"] .studio-nav-button.active {
   border-color: rgba(24, 39, 58, 0.96);
   color: #f7f1e7;
   box-shadow: 0 16px 30px rgba(24, 39, 58, 0.12);
+}
+
+body[data-vei-tone="casebook"] .studio-view-helper {
+  color: rgba(24, 39, 58, 0.7);
+}
+
+body[data-vei-tone="casebook"] .company-subnav {
+  border-color: rgba(24, 39, 58, 0.12);
+  background: rgba(255, 252, 246, 0.88);
+}
+
+body[data-vei-tone="casebook"] .company-subnav-button {
+  border-color: rgba(24, 39, 58, 0.18);
+  background: rgba(255, 255, 255, 0.7);
+  color: rgba(24, 39, 58, 0.76);
+}
+
+body[data-vei-tone="casebook"] .company-subnav-button.active {
+  border-color: rgba(199, 148, 61, 0.42);
+  background: rgba(214, 158, 63, 0.2);
+  color: #18273a;
 }
 
 body[data-vei-tone="casebook"] .context-strip {

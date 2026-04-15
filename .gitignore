@@ -70,6 +70,7 @@ _vei_out/
 vei_out/
 evals/
 **/trace.jsonl
+**/exercise_manifest.json
 archive_data/
 
 # Environment files and logs

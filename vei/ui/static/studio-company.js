@@ -124,9 +124,19 @@ function renderSituationRoom() {
   const ss = state.surfaceState;
   const ms = state.missionState;
   if (!ss || !Array.isArray(ss.panels) || !ss.panels.length) {
-    el.innerHTML = "";
+    const historical = hasHistoricalWorkspace();
+    el.classList.add("is-empty");
+    el.innerHTML = `
+      <div class="sit-room-empty">
+        <strong>${historical ? "Historical indicators are loading." : "Situation room is waiting for live signals."}</strong>
+        <span>${historical
+          ? "Load a decision scene below to populate branch context and observed outcomes."
+          : "Start a run or open a mission to populate systems, exceptions, and approvals."}</span>
+      </div>
+    `;
     return;
   }
+  el.classList.remove("is-empty");
 
   let attentionCount = 0;
   let warningCount = 0;
@@ -144,14 +154,19 @@ function renderSituationRoom() {
   let highSeverity = false;
   let disputeAmount = "";
   let pendingApprovals = 0;
+  let pendingDispatches = 0;
   if (servicePanel && Array.isArray(servicePanel.items)) {
     servicePanel.items.forEach((item) => {
       const badges = Array.isArray(item.badges) ? item.badges : [];
       const isException = badges.some((b) => b === "high" || b === "mitigated" || b === "open" || b === "resolved");
       const isBilling = (item.title || "").toLowerCase().includes("billing");
+      const isDispatch = (item.title || "").toLowerCase().includes("dispatch");
       const isApproval = false;
       if (isException && !isBilling) { exceptionCount++; if (badges.includes("high")) highSeverity = true; }
       if (isBilling && badges.includes("open")) disputeAmount = "at risk";
+      if (isDispatch && badges.some((badge) => badge === "open" || badge === "running")) {
+        pendingDispatches += 1;
+      }
     });
   }
 
@@ -175,6 +190,7 @@ function renderSituationRoom() {
   const policyClass = policyStatus === "drifting" ? "sit-danger" : policyStatus === "sound" ? "sit-ok" : "";
   const deadlineClass = deadlineStatus === "critical" ? "sit-danger" : deadlineStatus === "compressed" ? "sit-warn" : "sit-ok";
   const approvalClass = pendingApprovals > 0 ? "sit-warn" : "sit-ok";
+  const dispatchClass = pendingDispatches > 0 ? "sit-warn" : "sit-ok";
   const riskClass = riskLevel === "high" ? "sit-danger" : riskLevel === "moderate" ? "sit-warn" : "sit-ok";
 
   const workforce = state.workforceStatus;
@@ -215,6 +231,11 @@ function renderSituationRoom() {
       <span class="sit-label">Approvals</span>
       <span class="sit-value">${pendingApprovals}</span>
       <span class="sit-detail">${pendingApprovals ? "pending" : "clear"}</span>
+    </div>
+    <div class="sit-room-cell ${dispatchClass}">
+      <span class="sit-label">Dispatch</span>
+      <span class="sit-value">${pendingDispatches}</span>
+      <span class="sit-detail">${pendingDispatches ? "active queue" : "on time"}</span>
     </div>
     <div class="sit-room-cell ${deadlineClass}">
       <span class="sit-label">Deadline</span>
@@ -868,7 +889,7 @@ function renderSurfaceWall() {
         <p class="metric-detail">${
           loadingRun
             ? "Loading the latest company state so the tools can appear here."
-            : "Enter the world to see Slack, email, tickets, and the ops loop come alive."
+            : "No incidents or pending work right now. Enter the world to see Slack, email, tickets, and the ops loop come alive."
         }</p>
       </div>
     `;
