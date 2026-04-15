@@ -90,8 +90,20 @@ def test_repo_owned_enron_example_bundle_is_present_and_clean() -> None:
     ] == [
         "FY1998 selected financial data",
         "FY1999 selected financial data",
+        "Q4 1999 annual earnings release",
+        "Q1 2000 earnings release",
+        "Q2 2000 earnings release",
     ]
-    assert manifest["public_context"]["public_news_events"] == []
+    assert [
+        item["event_id"] for item in manifest["public_context"]["public_news_events"]
+    ] == [
+        "enrononline_emissions_auction_launch",
+        "ibm_energy_services_agreement",
+        "mg_plc_cash_offer",
+        "enrononline_fifty_billion_milestone",
+        "blockbuster_on_demand_launch",
+        "clickpaper_launch",
+    ]
 
     for relative_path in (
         "whatif_experiment_result.json",
@@ -248,8 +260,21 @@ def test_repo_owned_enron_example_workspace_loads_saved_scene() -> None:
     ] == [
         "FY1998 selected financial data",
         "FY1999 selected financial data",
+        "Q4 1999 annual earnings release",
+        "Q1 2000 earnings release",
+        "Q2 2000 earnings release",
     ]
-    assert scene_payload["public_context"]["public_news_events"] == []
+    assert [
+        item["event_id"]
+        for item in scene_payload["public_context"]["public_news_events"]
+    ] == [
+        "enrononline_emissions_auction_launch",
+        "ibm_energy_services_agreement",
+        "mg_plc_cash_offer",
+        "enrononline_fifty_billion_milestone",
+        "blockbuster_on_demand_launch",
+        "clickpaper_launch",
+    ]
 
 
 def test_repo_owned_enron_example_workspace_uses_saved_experiment_without_rosetta(

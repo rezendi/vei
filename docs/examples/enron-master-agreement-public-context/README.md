@@ -17,7 +17,7 @@ Open `http://127.0.0.1:3055`.
 
 - Historical branch point: Debra Perlingiere sending the `Master Agreement` draft to Cargill on September 27, 2000
 - Saved branch scene: 6 prior messages and 84 recorded future events
-- Public-company slice at that date: 2 financial checkpoints and 0 public-news events
+- Public-company slice at that date: 5 financial checkpoints and 6 public-news events
 - Bounded LLM path: keep the draft inside Enron, ask Gerald Nemec for legal review, and hold the outside send
 - JEPA forecast: same 84-event horizon, risk from `1.000` to `0.983`, outside-send delta `-29`
 - Business-state readout: the saved forecast now translates those proxy shifts into decision language such as outside spread risk, handling burden, execution delay, and commercial position
@@ -29,7 +29,7 @@ VEI starts from the real September 27, 2000 outside send, keeps only the public-
 
 ![Predicted business change](../../assets/enron-whatif/enron-predicted-business-change.png)
 
-The saved ranked comparison turns that into a choice. `Hold for internal review` comes out best at `0.351`, `Send a narrow status note` is still positive at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
+The saved ranked comparison turns that into a choice. `Hold for internal review` comes out best at `0.352`, `Send a narrow status note` is still positive at `0.155`, and `Push for fast turnaround` falls to `-0.019`.
 
 ![Ranked business comparison](../../assets/enron-whatif/enron-ranked-comparison.png)
 

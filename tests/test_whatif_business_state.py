@@ -14,6 +14,9 @@ from vei.whatif.models import (
     WhatIfHistoricalScore,
     WhatIfCounterfactualEstimateDelta,
     WhatIfCounterfactualEstimateResult,
+    WhatIfPublicContext,
+    WhatIfPublicFinancialSnapshot,
+    WhatIfPublicNewsEvent,
 )
 
 
@@ -237,3 +240,85 @@ def test_proxy_forecast_attaches_business_state_change_for_enron_candidate_style
     )
     assert status_result.business_state_change.net_effect_score > 0
     assert fast_result.business_state_change.net_effect_score < 0
+
+
+def test_public_context_weights_crisis_news_higher_than_growth_news() -> None:
+    branch_event = _branch_event()
+    forecast = _baseline_forecast()
+    growth_context = WhatIfPublicContext(
+        financial_snapshots=[
+            WhatIfPublicFinancialSnapshot(
+                snapshot_id="q1_2000",
+                as_of="2000-04-12T00:00:00Z",
+                kind="quarterly_release",
+                label="Q1 2000 earnings release",
+            ),
+            WhatIfPublicFinancialSnapshot(
+                snapshot_id="q2_2000",
+                as_of="2000-07-24T00:00:00Z",
+                kind="quarterly_release",
+                label="Q2 2000 earnings release",
+            ),
+        ],
+        public_news_events=[
+            WhatIfPublicNewsEvent(
+                event_id="ibm_agreement",
+                timestamp="2000-04-11T00:00:00Z",
+                category="commercial_agreement",
+                headline="IBM agreement",
+            ),
+            WhatIfPublicNewsEvent(
+                event_id="enrononline_milestone",
+                timestamp="2000-06-01T00:00:00Z",
+                category="platform_growth",
+                headline="EnronOnline milestone",
+            ),
+            WhatIfPublicNewsEvent(
+                event_id="clickpaper_launch",
+                timestamp="2000-09-05T00:00:00Z",
+                category="product_launch",
+                headline="Clickpaper launch",
+            ),
+        ],
+    )
+    crisis_context = WhatIfPublicContext(
+        financial_snapshots=growth_context.financial_snapshots,
+        public_news_events=[
+            WhatIfPublicNewsEvent(
+                event_id="sec_request",
+                timestamp="2001-10-22T00:00:00Z",
+                category="regulatory",
+                headline="SEC information request",
+            ),
+            WhatIfPublicNewsEvent(
+                event_id="restatement",
+                timestamp="2001-11-08T00:00:00Z",
+                category="restatement",
+                headline="Restatement",
+            ),
+            WhatIfPublicNewsEvent(
+                event_id="chapter_11",
+                timestamp="2001-12-02T00:00:00Z",
+                category="bankruptcy",
+                headline="Chapter 11",
+            ),
+        ],
+    )
+
+    growth_assessment = assess_historical_business_state(
+        branch_event=branch_event,
+        forecast=forecast,
+        organization_domain="enron.com",
+        public_context=growth_context,
+    )
+    crisis_assessment = assess_historical_business_state(
+        branch_event=branch_event,
+        forecast=forecast,
+        organization_domain="enron.com",
+        public_context=crisis_context,
+    )
+
+    assert (
+        crisis_assessment.snapshot.governance_pressure
+        > growth_assessment.snapshot.governance_pressure
+    )
