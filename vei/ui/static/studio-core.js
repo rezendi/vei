@@ -52,6 +52,10 @@ const state = {
   provenanceIndex: [],
   historicalWorkspace: null,
   whatIfStatus: null,
+  whatIfSearchPending: false,
+  whatIfOpenPending: false,
+  whatIfRunPending: false,
+  whatIfRankPending: false,
   whatIfSearchResult: null,
   whatIfSelectedEvent: null,
   whatIfScene: null,
@@ -80,6 +84,8 @@ const state = {
   selectedSnapshotFrom: null,
   selectedSnapshotTo: null,
   studioView: "company",
+  activeCompanySection: "company-overview",
+  historicalAutoFocusKey: "",
   developerMode: false,
   cinemaMode: false,
   timelineMode: false,
@@ -759,6 +765,36 @@ function normalizeStudioView(view) {
   return ALIASES[normalized] || normalized || "company";
 }
 
+const STUDIO_VIEW_HELPER_TEXT = {
+  company: "Company state, missions, and historical what-if are all in this view.",
+  crisis: "Review the active situation, constraints, and objective before choosing a move.",
+  outcome: "Inspect run outcomes, compare paths, and verify effects across systems.",
+  audit: "Audit model-ranked decisions and log reviewer judgments.",
+};
+
+const COMPANY_SECTIONS = {
+  "company-overview": "company-overview",
+  "company-mission": "company-mission",
+  "company-recent": "company-recent",
+  "company-historical": "company-historical",
+};
+
+function setActiveCompanySection(sectionId) {
+  const normalized = COMPANY_SECTIONS[sectionId] || "company-overview";
+  state.activeCompanySection = normalized;
+  document.querySelectorAll(".company-subnav-button").forEach((node) => {
+    node.classList.toggle("active", node.dataset.companyTarget === normalized);
+  });
+}
+
+function updateStudioViewHelper() {
+  const helper = document.getElementById("studio-view-helper");
+  if (!helper) {
+    return;
+  }
+  helper.textContent = STUDIO_VIEW_HELPER_TEXT[state.studioView] || STUDIO_VIEW_HELPER_TEXT.company;
+}
+
 function setStudioView(view) {
   state.studioView = normalizeStudioView(view);
   document.querySelectorAll("main [data-studio-view]").forEach((node) => {
@@ -770,6 +806,11 @@ function setStudioView(view) {
   if (state.studioView === "audit" && typeof loadAuditQueue === "function") {
     loadAuditQueue();
   }
+  const companySubnav = document.getElementById("company-subnav");
+  if (companySubnav) {
+    companySubnav.hidden = state.studioView !== "company";
+  }
+  updateStudioViewHelper();
 }
 
 function toggleDeveloperMode() {
@@ -787,6 +828,18 @@ function jumpToStudioView(view) {
   const target = document.querySelector(`[data-studio-view="${normalized}"]`);
   if (target) {
     target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function jumpToCompanySection(sectionId, { behavior = "smooth", forceCompanyView = true } = {}) {
+  const normalized = COMPANY_SECTIONS[sectionId] || "company-overview";
+  setActiveCompanySection(normalized);
+  if (forceCompanyView) {
+    setStudioView("company");
+  }
+  const target = document.getElementById(normalized);
+  if (target) {
+    target.scrollIntoView({ behavior, block: "start" });
   }
 }
 

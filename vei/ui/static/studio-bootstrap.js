@@ -173,6 +173,14 @@ async function captureProvider(providerName) {
   }
 }
 
+function bindCompanySubnav() {
+  document.querySelectorAll(".company-subnav-button").forEach((node) => {
+    node.addEventListener("click", () => {
+      jumpToCompanySection(node.dataset.companyTarget || "company-overview");
+    });
+  });
+}
+
 function bindControls() {
   document.getElementById("run-form").addEventListener("submit", startRun);
   document.getElementById("start-mission-button").addEventListener("click", () => {
@@ -196,7 +204,15 @@ function bindControls() {
   });
   document.querySelectorAll(".studio-nav-button").forEach((node) => {
     node.addEventListener("click", () => {
-      setStudioView(node.dataset.studioView || "company");
+      const nextView = node.dataset.studioView || "company";
+      if (nextView === "company") {
+        jumpToCompanySection(
+          state.activeCompanySection || "company-overview",
+          { behavior: "smooth", forceCompanyView: true },
+        );
+        return;
+      }
+      setStudioView(nextView);
     });
   });
   document.getElementById("developer-toggle").addEventListener("click", toggleDeveloperMode);
@@ -247,6 +263,12 @@ function bindControls() {
   document.getElementById("whatif-search-btn")?.addEventListener("click", () => {
     void searchWhatIfEvents();
   });
+  document.getElementById("whatif-query-input")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void searchWhatIfEvents();
+    }
+  });
   document.getElementById("whatif-open-btn")?.addEventListener("click", () => {
     void materializeWhatIfEpisode();
   });
@@ -259,6 +281,7 @@ function bindControls() {
 }
 
 bindControls();
+bindCompanySubnav();
 
 async function runEvalAgent() {
   const provider = document.getElementById("eval-provider-input")?.value?.trim() || "openai";

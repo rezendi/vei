@@ -77,7 +77,7 @@ VEI now has a product-shaped layer above the kernel:
 - `vei.ui`
   - local FastAPI + SSE playback/debug app over workspace and run APIs
   - control-room style playback surface for launch, timeline, contract, graph, and snapshot inspection
-  - Living Company View that turns the latest run snapshot into a normalized software wall for chat, mail, work tracking, documents, approvals, and the vertical heartbeat
+  - Company tab with a `Live Company` section that turns the latest run snapshot into a normalized software wall for chat, mail, work tracking, documents, approvals, and the vertical heartbeat
   - Governor mode indicator banner and Control Plane panel (agent cards, policy badges, approval queue, connector strip, readable activity log)
   - Sandbox features: fork-from-here on snapshots, Compare Paths button, snapshot pickers, cross-run snapshot comparison grouped by domain, and `service_ops` policy replay
 - `vei.playable`
@@ -158,7 +158,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `GET /api/runs/{run_id}/policy-knobs` / `POST /api/runs/{run_id}/replay-with-policy` — service-ops policy replay endpoints used by the Studio outcome flow
   - `GET /api/workspace/whatif` / `POST /api/workspace/whatif/search` / `POST /api/workspace/whatif/scene` / `POST /api/workspace/whatif/open` / `POST /api/workspace/whatif/run` / `POST /api/workspace/whatif/rank` — search-first historical what-if flow used by the Studio workspace view
   - `GET /api/workspace/whatif/audit` / `POST /api/workspace/whatif/audit/{case_id}/{objective_pack_id}` — benchmark audit workflow used by the Studio audit view
-  - Studio browser code is loaded as ordered plain scripts (`studio-core.js`, `studio-compare.js`, `studio-company.js`, `studio-outcome.js`, `studio-whatif.js`, `studio-audit.js`, `studio-bootstrap.js`) rather than one giant frontend file
+  - Studio browser code is loaded as ordered plain scripts (`studio-core.js`, `studio-compare.js`, `studio-company.js`, `studio-whatif.js`, `studio-audit.js`, `studio-outcome.js`, `studio-bootstrap.js`) rather than one giant frontend file
 
 ## Context and Synthesis Layer
 
@@ -227,7 +227,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `mirror_denied` event kind for surface-access enforcement denials
 - `vei.ui`
   - local playback/debug server for workspace runs
-  - now also exposes VEI Studio mode, which presents the same kernel through Presentation, Company, Mission, Objective, Play, Results, and Exports
+  - now also exposes the one Studio shell, which presents the same kernel through `Company`, `Crisis`, `Outcome`, and `Audit` tabs plus Company sub-sections for `Live Company`, `Next Move`, `Recent Changes`, and `Historical Decision`
 - `vei.playable`
   - mission-first product layer over vertical workspaces
   - human playthroughs use the same graph-native actions, event spine, snapshots, and contract engine as the automated paths

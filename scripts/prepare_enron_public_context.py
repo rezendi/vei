@@ -45,6 +45,95 @@ SOURCE_DOCUMENTS: tuple[SourceDocument, ...] = (
         topics=("financials", "annual", "filing"),
     ),
     SourceDocument(
+        source_id="enron_2000_q4_1999_release",
+        filename="2000_q4_1999_earnings_release.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/4qenet",
+        file_type="html",
+        description="Archived fourth-quarter 1999 Enron earnings release.",
+        topics=("financials", "quarterly"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_q1_release",
+        filename="2000_q1_earnings_release.html",
+        url=(
+            "https://enroncorp.com/corp/pressroom/releases/2000/ene/"
+            "1q00release-4-11-final"
+        ),
+        file_type="html",
+        description="Archived first-quarter 2000 Enron earnings release.",
+        topics=("financials", "quarterly"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_q2_release",
+        filename="2000_q2_earnings_release.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/2qearnreal-jul20",
+        file_type="html",
+        description="Archived second-quarter 2000 Enron earnings release.",
+        topics=("financials", "quarterly"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_q3_release",
+        filename="2000_q3_earnings_release.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/3q-final",
+        file_type="html",
+        description="Archived third-quarter 2000 Enron earnings release.",
+        topics=("financials", "quarterly"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_emissions_auction",
+        filename="2000_enrononline_emissions_auction.html",
+        url=(
+            "https://enroncorp.com/corp/pressroom/releases/2000/ene/"
+            "enrononline_auction_press_release"
+        ),
+        file_type="html",
+        description="Archived EnronOnline emissions auction launch release.",
+        topics=("news", "market_launch", "enrononline"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_ibm_agreement",
+        filename="2000_ibm_energy_services_agreement.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/ibmreleaseversion2",
+        file_type="html",
+        description="Archived Enron Energy Services agreement with IBM.",
+        topics=("news", "commercial_agreement", "energy_services"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_mg_offer",
+        filename="2000_mg_plc_offer.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/merlinrelease",
+        file_type="html",
+        description="Archived Enron offer for MG plc.",
+        topics=("news", "acquisition_offer", "metals"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_enrononline_milestone",
+        filename="2000_enrononline_50b_milestone.html",
+        url=(
+            "https://enroncorp.com/corp/pressroom/releases/2000/ene/"
+            "49-enrononlinemilestone"
+        ),
+        file_type="html",
+        description="Archived EnronOnline $50B transaction milestone release.",
+        topics=("news", "platform_growth", "enrononline"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_blockbuster_launch",
+        filename="2000_blockbuster_on_demand_launch.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ec/68-blockbuster",
+        file_type="html",
+        description="Archived Enron and Blockbuster on-demand launch release.",
+        topics=("news", "product_launch", "broadband"),
+    ),
+    SourceDocument(
+        source_id="enron_2000_clickpaper_launch",
+        filename="2000_clickpaper_launch.html",
+        url="https://enroncorp.com/corp/pressroom/releases/2000/ene/clickpaper.com",
+        file_type="html",
+        description="Archived Clickpaper.com launch release.",
+        topics=("news", "product_launch", "industrial_markets"),
+    ),
+    SourceDocument(
         source_id="enron_2001_press_chronology",
         filename="2001_press_chronology.html",
         url="https://enroncorp.com/corp/pressroom/releases/2001/press_chron2001",
@@ -260,6 +349,72 @@ def _financial_snapshots() -> list[dict[str, Any]]:
             },
         },
         {
+            "snapshot_id": "q4_1999_annual_release",
+            "as_of": "2000-01-18T00:00:00Z",
+            "kind": "quarterly_release",
+            "label": "Q4 1999 annual earnings release",
+            "source_ids": ["enron_2000_q4_1999_release"],
+            "summary": (
+                "Enron reported full-year 1999 revenues of $40.0B, net income of "
+                "$957M before nonrecurring items, annual diluted EPS of $1.18, and "
+                "fourth-quarter diluted EPS of $0.31."
+            ),
+            "metrics": {
+                "annual_revenue_usd_millions": 40000,
+                "annual_net_income_usd_millions": 957,
+                "annual_diluted_eps": 1.18,
+                "fourth_quarter_diluted_eps": 0.31,
+            },
+        },
+        {
+            "snapshot_id": "q1_2000_earnings_release",
+            "as_of": "2000-04-12T00:00:00Z",
+            "kind": "quarterly_release",
+            "label": "Q1 2000 earnings release",
+            "source_ids": ["enron_2000_q1_release"],
+            "summary": (
+                "Enron reported first-quarter revenues of $13.1B, net income of "
+                "$338M, and diluted EPS of $0.40."
+            ),
+            "metrics": {
+                "revenue_usd_millions": 13100,
+                "net_income_usd_millions": 338,
+                "diluted_eps": 0.40,
+            },
+        },
+        {
+            "snapshot_id": "q2_2000_earnings_release",
+            "as_of": "2000-07-24T00:00:00Z",
+            "kind": "quarterly_release",
+            "label": "Q2 2000 earnings release",
+            "source_ids": ["enron_2000_q2_release"],
+            "summary": (
+                "Enron reported second-quarter revenues of $16.9B, net income of "
+                "$289M, and diluted EPS of $0.34."
+            ),
+            "metrics": {
+                "revenue_usd_millions": 16900,
+                "net_income_usd_millions": 289,
+                "diluted_eps": 0.34,
+            },
+        },
+        {
+            "snapshot_id": "q3_2000_earnings_release",
+            "as_of": "2000-10-17T00:00:00Z",
+            "kind": "quarterly_release",
+            "label": "Q3 2000 earnings release",
+            "source_ids": ["enron_2000_q3_release"],
+            "summary": (
+                "Enron reported third-quarter revenues of $30.0B, net income of "
+                "$292M, and diluted EPS of $0.34."
+            ),
+            "metrics": {
+                "revenue_usd_millions": 30000,
+                "net_income_usd_millions": 292,
+                "diluted_eps": 0.34,
+            },
+        },
+        {
             "snapshot_id": "fy2000_10k",
             "as_of": "2000-12-31T00:00:00Z",
             "kind": "annual",
@@ -347,6 +502,72 @@ def _financial_snapshots() -> list[dict[str, Any]]:
 def _public_news_events() -> list[dict[str, Any]]:
     return [
         {
+            "event_id": "enrononline_emissions_auction_launch",
+            "timestamp": "2000-03-09T00:00:00Z",
+            "category": "market_launch",
+            "headline": "Enron launched its first online emissions allowance auction",
+            "summary": (
+                "Enron said EnronOnline would host the first online sulfur dioxide "
+                "emissions allowance auction and planned to run the auctions monthly."
+            ),
+            "source_ids": ["enron_2000_emissions_auction"],
+        },
+        {
+            "event_id": "ibm_energy_services_agreement",
+            "timestamp": "2000-04-11T00:00:00Z",
+            "category": "commercial_agreement",
+            "headline": "Enron signed a $610M long-term electricity agreement with IBM",
+            "summary": (
+                "Enron Energy Services said it would supply or procure electricity "
+                "for IBM under a ten-year agreement valued at $610M."
+            ),
+            "source_ids": ["enron_2000_ibm_agreement"],
+        },
+        {
+            "event_id": "mg_plc_cash_offer",
+            "timestamp": "2000-05-22T00:00:00Z",
+            "category": "acquisition_offer",
+            "headline": "Enron announced a cash offer for MG plc",
+            "summary": (
+                "Enron said its recommended cash offer valued MG plc at $446M and "
+                "would extend Enron's business model into metals."
+            ),
+            "source_ids": ["enron_2000_mg_offer"],
+        },
+        {
+            "event_id": "enrononline_fifty_billion_milestone",
+            "timestamp": "2000-06-01T00:00:00Z",
+            "category": "platform_growth",
+            "headline": "EnronOnline passed $50B of transaction value in 2000",
+            "summary": (
+                "Enron said EnronOnline had exceeded $50B of transaction value in "
+                "calendar 2000 and had already beaten its yearly projection."
+            ),
+            "source_ids": ["enron_2000_enrononline_milestone"],
+        },
+        {
+            "event_id": "blockbuster_on_demand_launch",
+            "timestamp": "2000-07-19T00:00:00Z",
+            "category": "product_launch",
+            "headline": "Enron and Blockbuster announced a 20-year on-demand service deal",
+            "summary": (
+                "Enron Broadband Services and Blockbuster announced a 20-year "
+                "exclusive agreement to launch an entertainment-on-demand service."
+            ),
+            "source_ids": ["enron_2000_blockbuster_launch"],
+        },
+        {
+            "event_id": "clickpaper_launch",
+            "timestamp": "2000-09-05T00:00:00Z",
+            "category": "product_launch",
+            "headline": "Enron launched Clickpaper.com for the forest products market",
+            "summary": (
+                "Enron Industrial Markets launched Clickpaper.com as an Internet "
+                "transaction system for pulp, paper, and wood commodities."
+            ),
+            "source_ids": ["enron_2000_clickpaper_launch"],
+        },
+        {
             "event_id": "cliff_baxter_resignation",
             "timestamp": "2001-05-02T00:00:00Z",
             "category": "governance",
@@ -428,12 +649,21 @@ def _public_news_events() -> list[dict[str, Any]]:
 
 
 def _write_readme() -> None:
+    financial_count = len(_financial_snapshots())
+    news_count = len(_public_news_events())
     README_PATH.write_text(
         "\n".join(
             [
                 "# Enron Public Context",
                 "",
                 "This fixture stores public-source material that can be joined to an Enron mail slice later.",
+                "",
+                "The current packaged fixture contains:",
+                f"- {financial_count} dated financial checkpoints",
+                f"- {news_count} dated public news events",
+                f"- {len(SOURCE_DOCUMENTS)} archived public source files",
+                "",
+                "The public dates currently span December 31, 1998 through December 2, 2001.",
                 "",
                 "Contents:",
                 "- `raw/`: downloaded public-source HTML and PDF files.",
@@ -446,6 +676,8 @@ def _write_readme() -> None:
                 "Integration rule:",
                 "- Read the oldest and latest email timestamps from the active Enron dataset.",
                 "- Keep only the public rows whose dates overlap that email window.",
+                "- For a concrete branch point, keep only the rows whose dates are on or before the branch timestamp.",
+                "- If the packaged fixture is missing or malformed, Enron mail loading still succeeds with an empty public-context slice.",
                 "",
             ]
         )

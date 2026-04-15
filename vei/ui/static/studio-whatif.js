@@ -59,6 +59,57 @@ function whatIfSourceLabel() {
   return "Historical archive";
 }
 
+function whatIfHasPendingRequest() {
+  return Boolean(
+    state.whatIfSearchPending ||
+      state.whatIfOpenPending ||
+      state.whatIfRunPending ||
+      state.whatIfRankPending ||
+      state.whatIfSceneLoading,
+  );
+}
+
+function updateWhatIfActionButtons() {
+  const hasPendingRequest = whatIfHasPendingRequest();
+  const actionConfig = [
+    {
+      id: "whatif-search-btn",
+      pending: state.whatIfSearchPending,
+      idleLabel: "Search history",
+      busyLabel: "Searching",
+    },
+    {
+      id: "whatif-open-btn",
+      pending: state.whatIfOpenPending,
+      idleLabel: "Materialize baseline",
+      busyLabel: "Materializing",
+    },
+    {
+      id: "whatif-run-btn",
+      pending: state.whatIfRunPending,
+      idleLabel: "Run single counterfactual",
+      busyLabel: "Running",
+    },
+    {
+      id: "whatif-rank-btn",
+      pending: state.whatIfRankPending,
+      idleLabel: "Score this decision",
+      busyLabel: "Scoring",
+    },
+  ];
+  actionConfig.forEach((item) => {
+    const button = document.getElementById(item.id);
+    if (!button) {
+      return;
+    }
+    const isBusy = Boolean(item.pending);
+    button.disabled = hasPendingRequest;
+    button.classList.toggle("is-busy", isBusy);
+    button.textContent = isBusy ? item.busyLabel : item.idleLabel;
+    button.setAttribute("aria-busy", isBusy ? "true" : "false");
+  });
+}
+
 function whatIfCustomMovePrompt() {
   return String(state.whatIfCustomMovePrompt || "").trim();
 }
@@ -599,6 +650,33 @@ function renderWhatIfCandidateCard(candidate, { chosenLabel = "", recommendedLab
   const sourceChip = candidate.saved_result
     ? `<span class="whatif-chip">Saved forecast</span>`
     : `<span class="whatif-chip">${escapeHtml(candidate.rollout_count || 0)} rollouts</span>`;
+  const signals = candidate.average_outcome_signals || {};
+  const signalBadges = [
+    { label: "Exposure", value: signals.exposure_risk },
+    { label: "Delay", value: signals.delay_risk },
+    { label: "Relationship", value: signals.relationship_protection },
+  ]
+    .map((item) => {
+      if (item.value == null) {
+        return "";
+      }
+      const raw = Number(item.value);
+      const cls = Number.isFinite(raw)
+        ? raw >= 0.7
+          ? "is-high"
+          : raw >= 0.4
+            ? "is-mid"
+            : "is-low"
+        : "";
+      return `
+        <span class="whatif-signal-pill ${cls}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(String(item.value))}</strong>
+        </span>
+      `;
+    })
+    .filter(Boolean)
+    .join("");
   return `
     <article class="whatif-ranking-card ${isRecommended ? "is-recommended" : ""} ${isPicked ? "is-picked" : ""}">
       <div class="whatif-ranking-top">
@@ -620,6 +698,7 @@ function renderWhatIfCandidateCard(candidate, { chosenLabel = "", recommendedLab
           <span class="whatif-result-caption">${escapeHtml(objectiveTitle || "Objective score")}</span>
         </div>
       </div>
+      ${signalBadges ? `<div class="whatif-signal-row">${signalBadges}</div>` : ""}
       ${renderWhatIfLeadDeltas(candidate.business_state_change, candidate.average_outcome_signals)}
       <details class="whatif-ranked-details">
         <summary>Show forecasted change</summary>
@@ -781,6 +860,7 @@ function renderWhatIfStudio() {
   }
 
   const status = state.whatIfStatus || { available: false };
+  updateWhatIfActionButtons();
   if (!status.available) {
     statusNode.innerHTML = `
       <div class="whatif-empty">
@@ -830,6 +910,7 @@ function renderWhatIfStudio() {
   }
 
   const searchResult = state.whatIfSearchResult;
+  const activeQuery = document.getElementById("whatif-query-input")?.value?.trim() || "";
   if (searchResult?.error) {
     resultsNode.innerHTML = `
       <div class="whatif-empty">
@@ -837,12 +918,19 @@ function renderWhatIfStudio() {
         <span>${escapeHtml(searchResult.error)}</span>
       </div>
     `;
-  } else if (
-    !searchResult ||
-    !Array.isArray(searchResult.matches) ||
-    !searchResult.matches.length
-  ) {
-    resultsNode.innerHTML = `<div class="whatif-empty">Search for a person, thread, or decision moment to begin.</div>`;
+  } else if (!searchResult) {
+    resultsNode.innerHTML = `
+      <div class="whatif-empty is-muted">
+        Search for a person, thread, or decision moment to begin.
+      </div>
+    `;
+  } else if (!Array.isArray(searchResult.matches) || !searchResult.matches.length) {
+    resultsNode.innerHTML = `
+      <div class="whatif-empty">
+        <strong>No matching decision moments found.</strong>
+        <span>${activeQuery ? `Try broadening "${escapeHtml(activeQuery)}" or increasing max results.` : "Try broadening your query or increasing max results."}</span>
+      </div>
+    `;
   } else {
     resultsNode.innerHTML = `
       <div class="whatif-result-list">
@@ -1084,6 +1172,9 @@ function renderWhatIfStudio() {
 }
 
 async function searchWhatIfEvents() {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
   const query = document.getElementById("whatif-query-input")?.value?.trim() || "";
   const limit = Number(document.getElementById("whatif-limit-input")?.value || 6);
   if (!query) {
@@ -1099,6 +1190,8 @@ async function searchWhatIfEvents() {
   if (statusNode) {
     statusNode.innerHTML = `<div class="whatif-status-pill"><strong>Searching</strong><span>${escapeHtml(query)}</span></div>`;
   }
+  state.whatIfSearchPending = true;
+  updateWhatIfActionButtons();
   try {
     const result = await getJson("/api/workspace/whatif/search", {
       method: "POST",
@@ -1122,11 +1215,16 @@ async function searchWhatIfEvents() {
       matches: [],
       error: error?.message || String(error),
     };
+  } finally {
+    state.whatIfSearchPending = false;
   }
   renderWhatIfStudio();
 }
 
 async function loadWhatIfDecisionScene({ eventId = null, threadId = null } = {}) {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
   if (!eventId && !threadId) {
     return;
   }
@@ -1154,6 +1252,9 @@ async function loadWhatIfDecisionScene({ eventId = null, threadId = null } = {})
 }
 
 async function materializeWhatIfEpisode() {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
   const event = whatIfSelectedEventPayload();
   if (!event) {
     return;
@@ -1161,6 +1262,8 @@ async function materializeWhatIfEpisode() {
   const label =
     document.getElementById("whatif-label-input")?.value?.trim() ||
     whatIfSuggestedLabel(event, whatIfSelectedOption());
+  state.whatIfOpenPending = true;
+  updateWhatIfActionButtons();
   try {
     state.whatIfOpenResult = await getJson("/api/workspace/whatif/open", {
       method: "POST",
@@ -1178,11 +1281,16 @@ async function materializeWhatIfEpisode() {
       episode_root: "",
       error: error?.message || String(error),
     };
+  } finally {
+    state.whatIfOpenPending = false;
   }
   renderWhatIfStudio();
 }
 
 async function runWhatIfExperimentFromUI() {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
   const event = whatIfSelectedEventPayload();
   if (!event) {
     return;
@@ -1201,6 +1309,8 @@ async function runWhatIfExperimentFromUI() {
   if (statusNode) {
     statusNode.innerHTML = `<div class="whatif-status-pill"><strong>Running</strong><span>${escapeHtml(label)}</span></div>`;
   }
+  state.whatIfRunPending = true;
+  updateWhatIfActionButtons();
   try {
     state.whatIfRankedResult = null;
     state.whatIfExperimentResult = await getJson("/api/workspace/whatif/run", {
@@ -1221,6 +1331,8 @@ async function runWhatIfExperimentFromUI() {
       artifacts: {},
       error: error?.message || String(error),
     };
+  } finally {
+    state.whatIfRunPending = false;
   }
   renderWhatIfStudio();
   document.getElementById("whatif-experiment-result")?.scrollIntoView({
@@ -1230,6 +1342,9 @@ async function runWhatIfExperimentFromUI() {
 }
 
 async function runRankedWhatIfFromUI() {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
   const event = whatIfSelectedEventPayload();
   if (!event) {
     return;
@@ -1251,6 +1366,8 @@ async function runRankedWhatIfFromUI() {
   if (statusNode) {
     statusNode.innerHTML = `<div class="whatif-status-pill"><strong>Scoring</strong><span>${escapeHtml(label)}</span></div>`;
   }
+  state.whatIfRankPending = true;
+  updateWhatIfActionButtons();
   try {
     state.whatIfExperimentResult = null;
     state.whatIfRankedResult = await getJson("/api/workspace/whatif/rank", {
@@ -1272,6 +1389,8 @@ async function runRankedWhatIfFromUI() {
       artifacts: {},
       error: error?.message || String(error),
     };
+  } finally {
+    state.whatIfRankPending = false;
   }
   renderWhatIfStudio();
   document.getElementById("whatif-experiment-result")?.scrollIntoView({

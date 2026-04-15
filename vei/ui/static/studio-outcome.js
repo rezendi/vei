@@ -615,6 +615,7 @@ function togglePlayback() {
 }
 
 async function loadWorkspace() {
+  const previousHistoricalFocusKey = state.historicalAutoFocusKey || "";
   const [workspace, storyArtifacts, playableArtifacts, scenarios, importSummary, identityFlow, importSources, importNormalization, importReview, generatedImportScenarios, provenanceIndex, governorWorkspace, historicalWorkspace, whatIfStatus] = await Promise.all([
     getJson("/api/workspace"),
     fetchStoryArtifacts(),
@@ -673,6 +674,13 @@ async function loadWorkspace() {
     const activeName = workspace?.manifest?.active_scenario || scenarios[0].name;
     document.getElementById("scenario-select").value = activeName;
     await loadScenario(activeName);
+  }
+  const historicalFocusKey = state.historicalWorkspace?.branch_event_id || "";
+  if (!historicalFocusKey) {
+    state.historicalAutoFocusKey = "";
+  } else if (historicalFocusKey !== previousHistoricalFocusKey) {
+    state.historicalAutoFocusKey = historicalFocusKey;
+    jumpToCompanySection("company-historical", { behavior: "auto" });
   }
 }
 

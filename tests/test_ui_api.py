@@ -75,6 +75,28 @@ def test_ui_skin_aliases_resolve_to_studio(tmp_path: Path) -> None:
     assert response.json() == {"skin": "studio"}
 
 
+def test_ui_index_contains_company_subnav_and_whatif_steps(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    client = TestClient(ui_api.create_ui_app(root))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.text
+    assert 'id="studio-view-helper"' in body
+    assert 'id="company-subnav"' in body
+    assert 'data-company-target="company-historical"' in body
+    assert "Step 1" in body
+    assert "Find Decision" in body
+    assert "Compare Moves" in body
+    assert "Review Forecast" in body
+
+
 def _write_rosetta_fixture(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     metadata_rows = [

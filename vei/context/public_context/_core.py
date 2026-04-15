@@ -368,8 +368,8 @@ def public_context_has_items(context: WhatIfPublicContext | None) -> bool:
 def public_context_prompt_lines(
     context: WhatIfPublicContext | None,
     *,
-    max_financial: int = 3,
-    max_news: int = 3,
+    max_financial: int = 4,
+    max_news: int = 4,
 ) -> list[str]:
     if not public_context_has_items(context):
         return []
