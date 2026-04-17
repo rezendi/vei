@@ -11,7 +11,7 @@ SETUP_FULL_EXTRAS := dev,llm,sse,ui,test,rl
 COVERAGE_FAIL_UNDER ?= $(or $(shell awk 'BEGIN { section = 0 } $$1 == "coverage:" { section = 1; next } section && $$1 == "global:" { print int($$2 * 100); exit }' $(AGENTS_FILE) 2>/dev/null),80)
 PIPAPI_PYTHON := $(abspath $(VENV_BIN)/python)
 
-.PHONY: setup bootstrap setup-full check test dynamics-eval llm-live deps-audit enron-example all clean clean-workspace
+.PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval llm-live deps-audit enron-example all clean clean-workspace clean-workspace-dry-run
 
 $(VENV)/bin/activate:
 	$(PYTHON) -m venv $(VENV)
@@ -41,11 +41,14 @@ check: $(SETUP_FULL_STAMP)
 	$(VENV_BIN)/python -m black --check vei tests
 	$(VENV_BIN)/python -m ruff check vei tests
 	$(VENV_BIN)/python scripts/run_mypy_targets.py
+	@echo "--- import boundary check ---"
+	$(VENV_BIN)/python scripts/check_import_boundaries.py --max-violations 0
+	$(VENV_BIN)/python scripts/run_local_security_checks.py
+
+check-full: check
 	$(VENV_BIN)/python -m bandit -q -r vei -ll
 	@mkdir -p .artifacts
 	$(VENV_BIN)/detect-secrets scan $$(git ls-files) > .artifacts/detect-secrets.json
-	@echo "--- import boundary check ---"
-	$(VENV_BIN)/python scripts/check_import_boundaries.py --max-violations 0
 	@if [ -f .secrets.baseline ]; then \
 		$(VENV_BIN)/detect-secrets-hook --baseline .secrets.baseline $$(git ls-files); \
 	else \
@@ -53,6 +56,9 @@ check: $(SETUP_FULL_STAMP)
 	fi
 
 test: $(SETUP_FULL_STAMP)
+	VEI_RUN_LLM_SMOKE=0 $(VENV_BIN)/python -m pytest -q -m "not slow" --maxfail=1
+
+test-full: $(SETUP_FULL_STAMP)
 	VEI_RUN_LLM_SMOKE=0 $(VENV_BIN)/python -m pytest --cov=vei --cov-report=term-missing --cov-fail-under=$(COVERAGE_FAIL_UNDER)
 
 llm-live: $(SETUP_FULL_STAMP)
@@ -100,14 +106,13 @@ enron-example: $(SETUP_FULL_STAMP)
 	$(VENV_BIN)/python scripts/package_enron_master_agreement_example.py
 	$(VENV_BIN)/python scripts/validate_whatif_artifacts.py docs/examples/enron-master-agreement-public-context
 
-all: check test dynamics-eval llm-live deps-audit
+all: check-full test-full dynamics-eval llm-live deps-audit
 
 clean-workspace:
-	rm -rf .artifacts .coverage .coverage.* .mypy_cache .pytest_cache ".pytest_cache 2" .ruff_cache vei.egg-info pyvei.egg-info
-	find . -name '.DS_Store' -delete
-	@mkdir -p _vei_out/llm_live _vei_out/datasets
-	find _vei_out -mindepth 1 -maxdepth 1 ! -name llm_live ! -name datasets -exec rm -rf {} +
-	find _vei_out/llm_live -mindepth 1 -maxdepth 1 ! -name latest -exec rm -rf {} +
+	$(PYTHON) scripts/clean_workspace.py
+
+clean-workspace-dry-run:
+	$(PYTHON) scripts/clean_workspace.py --dry-run
 
 clean:
 	rm -rf $(VENV) $(SETUP_STAMP) $(SETUP_FULL_STAMP)

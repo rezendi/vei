@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 from typer.testing import CliRunner
 
 from vei.cli.vei import app as cli_app
@@ -334,6 +335,7 @@ def test_list_objective_packs_and_score_shape_cover_all_ranked_objectives() -> N
         assert len(score.evidence) >= 3
 
 
+@pytest.mark.slow
 def test_vei_whatif_cli_experiment(tmp_path: Path, monkeypatch) -> None:
     rosetta_dir = tmp_path / "rosetta"
     _write_rosetta_fixture(rosetta_dir)

@@ -513,6 +513,7 @@ def test_product_cli_vertical_showcase_builds_demo_bundle(tmp_path: Path) -> Non
     assert "RL environment" in overview
 
 
+@pytest.mark.slow
 def test_product_cli_vertical_variant_commands_and_matrix(tmp_path: Path) -> None:
     runner = typer.testing.CliRunner()
     root = tmp_path / "harbor-point"
