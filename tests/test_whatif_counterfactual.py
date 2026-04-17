@@ -290,6 +290,7 @@ def _make_forecast_result(
     )
 
 
+@pytest.mark.slow
 def test_llm_and_forecast_counterfactual_paths_write_artifacts(
     tmp_path: Path,
     monkeypatch,

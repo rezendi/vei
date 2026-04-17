@@ -4,7 +4,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
+
+@pytest.mark.slow
 def test_rl_train_runs(tmp_path: Path) -> None:
     out_dir = tmp_path / "run"
     cmd = [

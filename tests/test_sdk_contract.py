@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
+import pytest
 from vei.router.tool_providers import PrefixToolProvider
 from vei.router.tool_registry import ToolSpec
 from vei.sdk import (
@@ -339,6 +340,7 @@ def test_sdk_vertical_pack_helpers_prepare_demo_workspaces(tmp_path: Path) -> No
     assert showcase.demos[0].manifest.name == "storage_solutions"
 
 
+@pytest.mark.slow
 def test_sdk_vertical_variant_helpers_and_matrix(tmp_path: Path) -> None:
     scenario_variants = list_vertical_scenario_variant_entries("real_estate_management")
     contract_variants = list_vertical_contract_variant_entries("real_estate_management")

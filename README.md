@@ -237,10 +237,13 @@ The canonical files are:
 ```bash
 make check
 make test
+make check-full
+make test-full
 make llm-live
+make clean-workspace
 ```
 
-`make llm-live` needs live keys. The other two are the normal local gates.
+`make check` and `make test` are the fast local loop. `make test` skips tests marked `slow`. `make check-full` and `make test-full` match the stricter CI path with whole-repo security scans, the full slow suite, and coverage. `make llm-live` needs live keys. `make clean-workspace` clears local generated clutter such as `_vei_out/` runs, repo-root `.artifacts/`, build folders, caches, and bytecode. It keeps `_vei_out/datasets/` and `_vei_out/llm_live/latest/` when those are present. Use `make clean-workspace-dry-run` when you want to preview the delete list.
 
 ## Docs
 
