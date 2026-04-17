@@ -5,6 +5,7 @@ import os
 import sys
 from typing import Any
 
+import pytest
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -21,6 +22,7 @@ def _normalize_result(res: Any) -> dict[str, Any]:
     raise AssertionError(f"Unexpected MCP result shape: {res!r}")
 
 
+@pytest.mark.slow
 def test_mcp_tools_expose_orientation_and_capability_graphs() -> None:
     asyncio.run(_exercise_mcp_discovery_tools())
 

@@ -27,13 +27,13 @@ jobs:
         run: make setup-full
 
       - name: Check
-        run: make check
+        run: make check-full
 
       - name: Git Dependency Smoke
         run: bash ./tools/git_dependency_smoke.sh "$GITHUB_WORKSPACE"
 
       - name: Test
-        run: make test
+        run: make test-full
 
       - name: LLM Live
         env:

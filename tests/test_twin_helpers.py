@@ -934,6 +934,7 @@ def test_twin_gateway_helper_functions_cover_payload_transforms(
     assert agent is not None and agent.name == "Scout"
 
 
+@pytest.mark.slow
 def test_twin_gateway_exposes_additional_provider_routes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
