@@ -303,7 +303,9 @@ Scoring is multi-layered: raw task success → policy compliance → domain-spec
 
 ### Build, Test, and Dev Commands
 - Install (with extras): `pip install -e ".[llm,browser,sse]"`
-- Repo validation: `make check && make test`
+- Fast local validation: `make check && make test`
+- Full CI-shaped validation: `make check-full && make test-full`
+- Local generated-output cleanup: `make clean-workspace`
 - Run tests: `pytest -q`
 - Transport smoke (no API key): `vei smoke run --transport stdio --timeout-s 30`
 - LLM evaluation: `vei llm-test run --provider openai --model gpt-5 --artifacts ./_vei_out/llm_eval`
@@ -320,6 +322,7 @@ Scoring is multi-layered: raw task success → policy compliance → domain-spec
 
 ### Security & Config Tips
 - Artifacts: `_vei_out/`, `**/artifacts/**`, and `**/trace.jsonl` are gitignored—do not add them to commits.
+- Run `make clean-workspace` after large local eval, what-if, or knowledge-authoring runs when `_vei_out/` and cache folders are no longer useful.
 - Local MCP client config: `mcp.json` defines stdio transport (`python -m vei.router`).
 
 ### Architecture Overview

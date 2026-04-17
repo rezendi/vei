@@ -6,6 +6,7 @@ from time import monotonic, sleep
 from threading import Event, Thread
 
 from fastapi.testclient import TestClient
+import pytest
 
 from vei.context.models import ContextSnapshot, ContextSourceResult
 from vei.governor import GovernorAgentSpec, default_governor_workspace_config
@@ -823,6 +824,7 @@ def test_proxy_requests_require_registered_agent_id(
     assert response.json() == {"ok": False, "error": "mirror.agent_id_required"}
 
 
+@pytest.mark.slow
 def test_workspace_mirror_marks_autoplay_stopped_after_demo_finishes(
     tmp_path: Path,
 ) -> None:
