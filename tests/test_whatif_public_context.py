@@ -8,6 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from vei.context.public_context import _core as public_context_core
+from vei.context.public_context import _fetchers as public_context_fetchers
 from vei.whatif import (
     build_branch_point_benchmark,
     build_saved_decision_scene,
@@ -33,7 +34,33 @@ from vei.context.api import (
     load_enron_public_context,
     public_context_prompt_lines,
     slice_public_context_to_branch,
+    WhatIfPublicCreditEvent,
+    WhatIfPublicRegulatoryEvent,
+    WhatIfPublicStockHistoryRow,
 )
+
+
+def test_cached_fetch_recovers_from_corrupt_cache_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("VEI_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+    cache_root = tmp_path / "artifacts" / "public_context_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cache_key = "cache-recovery"
+    cache_file = cache_root / f"{cache_key}.json"
+    cache_file.write_text('{"stale": true}{"extra": true}', encoding="utf-8")
+    fetch_calls = 0
+
+    def fetcher() -> dict[str, str]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        return {"status": "fresh"}
+
+    recovered = public_context_fetchers._cached_fetch(cache_key, fetcher, ttl_hours=24)
+    cached = public_context_fetchers._cached_fetch(cache_key, fetcher, ttl_hours=24)
+
+    assert recovered == {"status": "fresh"}
+    assert cached == {"status": "fresh"}
+    assert fetch_calls == 1
+    assert json.loads(cache_file.read_text(encoding="utf-8")) == {"status": "fresh"}
 
 
 def _write_public_context_rosetta_fixture(root: Path) -> None:
@@ -200,8 +227,14 @@ def test_load_enron_public_context_slices_world_window() -> None:
         "q1_2001_earnings_release"
     ]
     assert [event.event_id for event in context.public_news_events] == [
-        "cliff_baxter_resignation"
+        "pge_chapter_11",
+        "cliff_baxter_resignation",
     ]
+    assert len(context.stock_history) == 42
+    assert context.stock_history[0].as_of == "2001-04-02T00:00:00Z"
+    assert context.stock_history[-1].as_of == "2001-05-31T00:00:00Z"
+    assert context.credit_history == []
+    assert context.ferc_history == []
 
 
 def test_load_enron_public_context_soft_fails_when_fixture_is_unavailable(
@@ -223,6 +256,9 @@ def test_load_enron_public_context_soft_fails_when_fixture_is_unavailable(
     assert context.pack_name == "enron_public_context"
     assert context.financial_snapshots == []
     assert context.public_news_events == []
+    assert context.stock_history == []
+    assert context.credit_history == []
+    assert context.ferc_history == []
     record = next(
         record
         for record in caplog.records
@@ -401,6 +437,63 @@ def test_public_context_branch_slice_sorts_items_before_prompt_truncation() -> N
                 summary="Earlier news summary.",
             ),
         ],
+        stock_history=[
+            WhatIfPublicStockHistoryRow(
+                as_of="2001-05-03T00:00:00Z",
+                label="Same-day market checkpoint",
+                close=49.12,
+                volume=100.0,
+                summary="Same-day market summary.",
+            ),
+            WhatIfPublicStockHistoryRow(
+                as_of="2001-05-02T00:00:00Z",
+                label="Later market checkpoint",
+                close=52.91,
+                volume=100.0,
+                summary="Later market summary.",
+            ),
+            WhatIfPublicStockHistoryRow(
+                as_of="2001-04-30T00:00:00Z",
+                label="Earlier market checkpoint",
+                close=62.72,
+                volume=100.0,
+                summary="Earlier market summary.",
+            ),
+        ],
+        credit_history=[
+            WhatIfPublicCreditEvent(
+                event_id="later_credit",
+                as_of="2001-05-03T00:00:00Z",
+                agency="S&P",
+                to_rating="BBB+",
+                headline="Later credit checkpoint",
+                summary="Later credit summary.",
+            ),
+            WhatIfPublicCreditEvent(
+                event_id="earlier_credit",
+                as_of="2001-04-17T00:00:00Z",
+                agency="S&P",
+                to_rating="A-",
+                headline="Earlier credit checkpoint",
+                summary="Earlier credit summary.",
+            ),
+        ],
+        ferc_history=[
+            WhatIfPublicRegulatoryEvent(
+                event_id="later_ferc",
+                timestamp="2001-05-03T00:00:00Z",
+                category="ferc",
+                headline="Later regulatory checkpoint",
+                summary="Later regulatory summary.",
+            ),
+            WhatIfPublicRegulatoryEvent(
+                event_id="earlier_ferc",
+                timestamp="2001-04-17T00:00:00Z",
+                category="ferc",
+                headline="Earlier regulatory checkpoint",
+                summary="Earlier regulatory summary.",
+            ),
+        ],
     )
 
     sliced = slice_public_context_to_branch(
@@ -416,6 +509,18 @@ def test_public_context_branch_slice_sorts_items_before_prompt_truncation() -> N
         "earlier_news",
         "later_news",
     ]
+    assert [row.as_of for row in sliced.stock_history] == [
+        "2001-04-30T00:00:00Z",
+        "2001-05-02T00:00:00Z",
+    ]
+    assert [event.event_id for event in sliced.credit_history] == [
+        "earlier_credit",
+        "later_credit",
+    ]
+    assert [event.event_id for event in sliced.ferc_history] == [
+        "earlier_ferc",
+        "later_ferc",
+    ]
 
     prompt_lines = public_context_prompt_lines(
         sliced,
@@ -427,6 +532,51 @@ def test_public_context_branch_slice_sorts_items_before_prompt_truncation() -> N
     assert not any("Earlier financial checkpoint" in line for line in prompt_lines)
     assert any("Later news checkpoint" in line for line in prompt_lines)
     assert not any("Earlier news checkpoint" in line for line in prompt_lines)
+    assert any("Market checkpoints:" == line for line in prompt_lines)
+    assert any("2001-05-02 close 52.91" in line for line in prompt_lines)
+    assert not any("2001-04-30 close 62.72" in line for line in prompt_lines)
+    assert not any("2001-05-03 close 49.12" in line for line in prompt_lines)
+    assert any("Credit checkpoints:" == line for line in prompt_lines)
+    assert any("Later credit checkpoint" in line for line in prompt_lines)
+    assert not any("Earlier credit checkpoint" in line for line in prompt_lines)
+    assert any("Regulatory checkpoints:" == line for line in prompt_lines)
+    assert any("Later regulatory checkpoint" in line for line in prompt_lines)
+    assert not any("Earlier regulatory checkpoint" in line for line in prompt_lines)
+
+
+def test_public_context_branch_slice_includes_same_day_stock_after_market_close() -> (
+    None
+):
+    context = WhatIfPublicContext(
+        pack_name="enron_public_context",
+        stock_history=[
+            WhatIfPublicStockHistoryRow(
+                as_of="2001-05-03T00:00:00Z",
+                label="Same-day market checkpoint",
+                close=49.12,
+                volume=100.0,
+                summary="Same-day market summary.",
+            ),
+            WhatIfPublicStockHistoryRow(
+                as_of="2001-05-02T00:00:00Z",
+                label="Earlier market checkpoint",
+                close=52.91,
+                volume=100.0,
+                summary="Earlier market summary.",
+            ),
+        ],
+    )
+
+    sliced = slice_public_context_to_branch(
+        context,
+        branch_timestamp="2001-05-03T21:30:00Z",
+    )
+
+    assert sliced is not None
+    assert [row.as_of for row in sliced.stock_history] == [
+        "2001-05-02T00:00:00Z",
+        "2001-05-03T00:00:00Z",
+    ]
 
 
 def test_load_world_materialize_episode_and_saved_scene_round_trip_public_context(
@@ -454,6 +604,9 @@ def test_load_world_materialize_episode_and_saved_scene_round_trip_public_contex
     assert [event.event_id for event in world.public_context.public_news_events] == [
         "cliff_baxter_resignation"
     ]
+    assert len(world.public_context.stock_history) == 13
+    assert world.public_context.stock_history[0].as_of == "2001-04-17T00:00:00Z"
+    assert world.public_context.stock_history[-1].as_of == "2001-05-03T00:00:00Z"
     assert manifest.public_context is not None
     assert [
         snapshot.snapshot_id for snapshot in manifest.public_context.financial_snapshots
@@ -461,13 +614,25 @@ def test_load_world_materialize_episode_and_saved_scene_round_trip_public_contex
     assert [event.event_id for event in manifest.public_context.public_news_events] == [
         "cliff_baxter_resignation"
     ]
+    assert len(manifest.public_context.stock_history) == 12
+    assert manifest.public_context.stock_history[0].as_of == "2001-04-17T00:00:00Z"
+    assert manifest.public_context.stock_history[-1].as_of == "2001-05-02T00:00:00Z"
     assert scene.public_context is not None
     assert [event.event_id for event in scene.public_context.public_news_events] == [
         "cliff_baxter_resignation"
     ]
+    assert len(scene.public_context.stock_history) == 12
+    assert scene.public_context.stock_history[0].as_of == "2001-04-17T00:00:00Z"
+    assert scene.public_context.stock_history[-1].as_of == "2001-05-02T00:00:00Z"
     assert manifest.historical_business_state is not None
     assert scene.historical_business_state is not None
     assert scene.historical_business_state.summary
+    assert (
+        snapshot_payload["metadata"]["whatif"]["public_context"]["stock_history"][0][
+            "as_of"
+        ]
+        == "2001-04-17T00:00:00Z"
+    )
     assert (
         snapshot_payload["metadata"]["whatif"]["public_context"]["public_news_events"][
             0
@@ -510,8 +675,10 @@ def test_llm_prompt_only_includes_public_facts_known_by_branch_date(
 
     assert "Q1 2001 earnings release" in prompt
     assert "Vice chairman Cliff Baxter resigned" in prompt
+    assert "2001-04-30 close 62.72" in prompt
     assert "Q2 2001 earnings release" not in prompt
     assert "third-quarter loss" not in prompt
+    assert "PG&E entered Chapter 11" not in prompt
 
 
 def test_benchmark_dossier_includes_branch_filtered_public_context(
@@ -544,6 +711,7 @@ def test_benchmark_dossier_includes_branch_filtered_public_context(
     assert "## Public Company Context" in dossier
     assert "Q1 2001 earnings release" in dossier
     assert "Vice chairman Cliff Baxter resigned" in dossier
+    assert "2001-04-30 close 62.72" in dossier
     assert "Q2 2001 earnings release" not in dossier
 
 
