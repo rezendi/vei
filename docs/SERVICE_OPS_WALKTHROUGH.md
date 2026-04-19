@@ -46,7 +46,32 @@ vei whatif experiment --source company_history \
   --mode heuristic_baseline
 ```
 
+That export now writes `canonical_events.jsonl` and `canonical_event_index.json` beside the snapshot, so the Company Timeline view and the readiness commands can read the same file-backed history immediately.
+
 No API keys required for `heuristic_baseline` mode. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` to `.env` and use `--mode both` for LLM-driven counterfactual continuations alongside the forecast.
+
+### Repo-owned synthetic bundles
+
+The repo now includes three saved Clearwater bundles under `docs/examples/`:
+
+- `clearwater-dispatch-recovery`
+- `clearwater-billing-dispute-reopened`
+- `clearwater-technician-no-show`
+
+Open one directly in Studio:
+
+```bash
+vei ui serve \
+  --root docs/examples/clearwater-dispatch-recovery/workspace \
+  --host 127.0.0.1 \
+  --port 3056
+```
+
+Rebuild the tracked synthetic bundles:
+
+```bash
+make service-ops-example
+```
 
 ---
 

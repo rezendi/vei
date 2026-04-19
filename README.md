@@ -169,6 +169,12 @@ python scripts/check_tenant_world_model.py --root /path/to/context_snapshot.json
 
 Clearwater stays in the repo as a synthetic control-room rig. It is the right place to test the kernel, the governor flow, and replay tooling without bringing in outside company data. Use Enron when you want the flagship real-history learned path.
 
+The repo now also ships three saved Clearwater what-if bundles so the same file-backed timeline and saved forecast flow can be checked across multiple synthetic service-ops cases:
+
+- `clearwater-dispatch-recovery`
+- `clearwater-billing-dispute-reopened`
+- `clearwater-technician-no-show`
+
 Spin up the built-in `service_ops` workspace with governor mode and run the same what-if loop:
 
 ```bash
@@ -187,6 +193,21 @@ vei whatif experiment --source company_history \
 ```
 
 `--mode heuristic_baseline` runs without any LLM key. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` to `.env` and use `--mode both` for LLM-driven counterfactual continuations alongside the forecast.
+
+Open one of the saved synthetic bundles directly:
+
+```bash
+vei ui serve \
+  --root docs/examples/clearwater-dispatch-recovery/workspace \
+  --host 127.0.0.1 \
+  --port 3056
+```
+
+Rebuild the tracked synthetic bundles:
+
+```bash
+make service-ops-example
+```
 
 See [docs/SERVICE_OPS_WALKTHROUGH.md](docs/SERVICE_OPS_WALKTHROUGH.md) for the full Studio walkthrough. Use Enron for the flagship real-history example.
 
@@ -321,6 +342,7 @@ make clean-workspace
 - [docs/WHATIF.md](docs/WHATIF.md) for the historical replay and comparison flow
 - [docs/OVERVIEW.md](docs/OVERVIEW.md) for the product framing, including the knowledge brain layer
 - [docs/examples/enron-master-agreement-public-context/README.md](docs/examples/enron-master-agreement-public-context/README.md) for the repo-owned Enron example
+- [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md) for a repo-owned synthetic Clearwater example
 - [docs/SERVICE_OPS_WALKTHROUGH.md](docs/SERVICE_OPS_WALKTHROUGH.md) for the Studio and control-room path
 
 ## License
