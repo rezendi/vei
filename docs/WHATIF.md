@@ -197,7 +197,7 @@ vei whatif export --workspace _vei_out/quickstart \
   --output _vei_out/quickstart/context_snapshot.json
 ```
 
-The output is a multi-source `context_snapshot.json` that can be passed to `vei whatif events`, `vei whatif open`, and `vei whatif experiment` via `--source company_history --source-dir <path>`.
+The output is a multi-source `context_snapshot.json` plus `canonical_events.jsonl` and `canonical_event_index.json`. Those three files can be passed to `vei whatif events`, `vei whatif open`, and `vei whatif experiment` via `--source company_history --source-dir <path>`, and the same sidecars now drive the Company Timeline view and the readiness commands.
 
 The normalized company history is the event layer. Put real time-ordered activity there for mail, chat, tickets, and any other surface that can branch or replay. Put state-only sources such as documents or CRM records there too when you want them to show up as linked case context around the branch.
 
@@ -206,6 +206,12 @@ The source-bundle public-context sidecar is optional. If it is missing, VEI stil
 The saved workspace sidecar is always written as `workspace/whatif_public_context.json`, even when the public slice is empty, so saved-workspace validation stays stable.
 
 The history bundle still needs at least one healthy event surface. VEI ignores raw providers that captured with `status: "error"` when it decides whether a bundle is usable for branching and replay.
+
+The repo now also carries three saved synthetic Clearwater bundles built through this same export path:
+
+- `docs/examples/clearwater-dispatch-recovery`
+- `docs/examples/clearwater-billing-dispute-reopened`
+- `docs/examples/clearwater-technician-no-show`
 
 ```bash
 # Run a branch experiment on a generic company history bundle
