@@ -11,8 +11,11 @@ import pytest
 from vei.context.api import capture_context
 from vei.context.models import ContextProviderConfig
 from vei.context.providers import get_provider, list_providers
+from vei.context.providers.clickup import ClickUpContextProvider
 from vei.context.providers.crm import capture_from_export as capture_crm_export
 from vei.context.providers.gmail import GmailContextProvider
+from vei.context.providers.github import GitHubContextProvider
+from vei.context.providers.gitlab import GitLabContextProvider
 from vei.context.providers.google import GoogleContextProvider
 from vei.context.providers.google import capture_from_export as capture_google_export
 from vei.context.providers.jira import JiraContextProvider
@@ -32,9 +35,19 @@ def _mock_urlopen(payload: Any):
     return resp
 
 
-def test_list_providers_returns_all_six() -> None:
+def test_list_providers_returns_supported_context_sources() -> None:
     names = list_providers()
-    for expected in ("slack", "jira", "google", "okta", "gmail", "teams"):
+    for expected in (
+        "slack",
+        "jira",
+        "google",
+        "okta",
+        "gmail",
+        "teams",
+        "github",
+        "gitlab",
+        "clickup",
+    ):
         assert expected in names
 
 
@@ -201,6 +214,207 @@ def test_google_provider_captures_users_and_docs(
     assert result.record_counts["users"] == 1
     assert result.record_counts["documents"] == 1
     assert result.data["users"][0]["email"] == "alice@example.com"
+
+
+def test_github_provider_captures_issues_and_pull_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VEI_GITHUB_TOKEN", "ghp-test-token")
+
+    repository_resp = {
+        "id": 1,
+        "full_name": "acme/platform",
+        "html_url": "https://github.com/acme/platform",
+    }
+    issues_resp = [
+        {
+            "id": 10,
+            "number": 7,
+            "title": "Fix LEGAL-7 rollover",
+            "body": "Review blocker",
+            "state": "open",
+            "user": {"login": "maya"},
+            "created_at": "2026-03-01T10:00:00Z",
+            "updated_at": "2026-03-01T11:00:00Z",
+            "comments": 1,
+            "comments_url": "https://api.github.com/repos/acme/platform/issues/7/comments",
+        },
+        {
+            "id": 11,
+            "number": 8,
+            "title": "Merge renewal controls",
+            "body": "Implements contract hold",
+            "state": "closed",
+            "user": {"login": "riley"},
+            "created_at": "2026-03-01T12:00:00Z",
+            "updated_at": "2026-03-01T13:00:00Z",
+            "comments": 0,
+            "comments_url": "https://api.github.com/repos/acme/platform/issues/8/comments",
+            "pull_request": {
+                "url": "https://api.github.com/repos/acme/platform/pulls/8"
+            },
+        },
+    ]
+    comments_resp = [
+        {
+            "id": 99,
+            "body": "Needs finance signoff.",
+            "created_at": "2026-03-01T11:30:00Z",
+            "user": {"login": "legal"},
+        }
+    ]
+
+    call_count = {"n": 0}
+
+    def side_effect(*_args, **_kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return _mock_urlopen(repository_resp)
+        if call_count["n"] == 2:
+            return _mock_urlopen(issues_resp)
+        return _mock_urlopen(comments_resp)
+
+    with patch("vei.context.providers.base.urlopen", side_effect=side_effect):
+        provider = GitHubContextProvider()
+        result = provider.capture(
+            ContextProviderConfig(
+                provider="github",
+                token_env="VEI_GITHUB_TOKEN",
+                filters={"repo": "acme/platform"},
+            )
+        )
+
+    assert result.status == "ok"
+    assert result.record_counts["repositories"] == 1
+    assert result.record_counts["issues"] == 1
+    assert result.record_counts["pull_requests"] == 1
+    assert result.data["issues"][0]["comments"][0]["author"] == "legal"
+
+
+def test_gitlab_provider_captures_issues_and_merge_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VEI_GITLAB_TOKEN", "glpat-test-token")
+
+    project_resp = {
+        "id": 22,
+        "path_with_namespace": "acme/platform",
+    }
+    issues_resp = [
+        {
+            "id": 31,
+            "iid": 5,
+            "title": "Fix support incident",
+            "description": "INC-9 follow-up",
+            "state": "opened",
+            "author": {"username": "maya"},
+            "created_at": "2026-03-01T10:00:00Z",
+            "updated_at": "2026-03-01T11:00:00Z",
+            "_links": {
+                "notes": "https://gitlab.example/api/v4/projects/22/issues/5/notes"
+            },
+        }
+    ]
+    merge_requests_resp = [
+        {
+            "id": 32,
+            "iid": 6,
+            "title": "Merge support fix",
+            "description": "Implements INC-9 fix",
+            "state": "merged",
+            "author": {"username": "riley"},
+            "created_at": "2026-03-01T12:00:00Z",
+            "updated_at": "2026-03-01T13:00:00Z",
+            "web_url": "https://gitlab.example/acme/platform/-/merge_requests/6",
+            "_links": {
+                "notes": "https://gitlab.example/api/v4/projects/22/merge_requests/6/notes"
+            },
+        }
+    ]
+    notes_resp = [
+        {
+            "id": 44,
+            "body": "Loop finance into review.",
+            "created_at": "2026-03-01T13:10:00Z",
+            "author": {"username": "legal"},
+        }
+    ]
+
+    call_count = {"n": 0}
+
+    def side_effect(*_args, **_kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return _mock_urlopen(project_resp)
+        if call_count["n"] == 2:
+            return _mock_urlopen(issues_resp)
+        if call_count["n"] == 3:
+            return _mock_urlopen(merge_requests_resp)
+        return _mock_urlopen(notes_resp)
+
+    with patch("vei.context.providers.base.urlopen", side_effect=side_effect):
+        provider = GitLabContextProvider()
+        result = provider.capture(
+            ContextProviderConfig(
+                provider="gitlab",
+                token_env="VEI_GITLAB_TOKEN",
+                filters={"project": "acme/platform"},
+            )
+        )
+
+    assert result.status == "ok"
+    assert result.record_counts["projects"] == 1
+    assert result.record_counts["issues"] == 1
+    assert result.record_counts["merge_requests"] == 1
+    assert result.data["merge_requests"][0]["comments"][0]["author"] == "legal"
+
+
+def test_clickup_provider_captures_lists_and_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VEI_CLICKUP_TOKEN", "pk_test_clickup")
+
+    list_resp = {
+        "id": "list-1",
+        "name": "Escalations",
+    }
+    tasks_resp = {
+        "tasks": [
+            {
+                "id": "task-1",
+                "name": "Review enterprise renewal",
+                "description": "Need pricing signoff",
+                "status": {"status": "in review"},
+                "creator": {"email": "maya@acme.example.com"},
+                "assignees": [{"email": "legal@acme.example.com"}],
+                "date_created": "1772329200000",
+                "date_updated": "1772329560000",
+            }
+        ]
+    }
+
+    call_count = {"n": 0}
+
+    def side_effect(*_args, **_kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return _mock_urlopen(list_resp)
+        return _mock_urlopen(tasks_resp)
+
+    with patch("vei.context.providers.base.urlopen", side_effect=side_effect):
+        provider = ClickUpContextProvider()
+        result = provider.capture(
+            ContextProviderConfig(
+                provider="clickup",
+                token_env="VEI_CLICKUP_TOKEN",
+                filters={"list_id": "list-1"},
+            )
+        )
+
+    assert result.status == "ok"
+    assert result.record_counts["lists"] == 1
+    assert result.record_counts["tasks"] == 1
+    assert result.data["tasks"][0]["assignee"] == "legal@acme.example.com"
 
 
 def test_google_export_directory_merges_docs_and_share_files(tmp_path: Path) -> None:

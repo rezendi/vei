@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from vei.cli.vei import app
 from vei.cli import vei_twin
+from vei.context.api import CanonicalHistoryReadinessReport
 from vei.context.models import ContextSnapshot, ContextSourceResult
 from vei.twin.models import (
     TwinLaunchManifest,
@@ -147,6 +148,99 @@ def test_twin_cli_lifecycle_commands_use_shared_runtime_surface(
         "finalize",
         "sync",
     ]
+
+
+def test_twin_cli_onboard_builds_provider_configs_and_reports_timeline(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    root = tmp_path / "onboarded"
+
+    captured: dict[str, object] = {}
+
+    def _fake_build_customer_twin(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        bundle = CustomerTwinBundle.model_validate(
+            {
+                "version": "1",
+                "workspace_root": str(root),
+                "workspace_name": "onboarded",
+                "organization_name": "Acme",
+                "organization_domain": "acme.ai",
+                "mold": {"archetype": "b2b_saas"},
+                "context_snapshot_path": "context_snapshot.json",
+                "blueprint_asset_path": "sources/blueprint_asset.json",
+                "gateway": {
+                    "host": "127.0.0.1",
+                    "port": 3020,
+                    "auth_token": "token-123",
+                    "surfaces": [
+                        {"name": "slack", "title": "Slack", "base_path": "/slack/api"}
+                    ],
+                    "ui_command": None,
+                },
+                "summary": "Acme twin",
+                "metadata": {},
+            }
+        )
+        return bundle
+
+    monkeypatch.setattr(vei_twin, "build_customer_twin", _fake_build_customer_twin)
+    monkeypatch.setattr(
+        vei_twin,
+        "build_canonical_history_readiness",
+        lambda _path: CanonicalHistoryReadinessReport(
+            available=True,
+            organization_name="Acme",
+            organization_domain="acme.ai",
+            source_providers=["github", "clickup"],
+            event_count=180,
+            case_count=9,
+            surface_count=2,
+            exact_timestamp_count=170,
+            stitched_event_count=160,
+            high_confidence_stitch_count=120,
+            surface_counts={"tickets": 120, "docs": 60},
+            readiness_label="ready",
+            ready_for_world_modeling=True,
+            notes=["ready"],
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "twin",
+            "onboard",
+            "--root",
+            str(root),
+            "--org",
+            "Acme",
+            "--domain",
+            "acme.ai",
+            "--provider",
+            "github",
+            "--provider",
+            "clickup",
+            "--filter",
+            "github:repo=acme/platform",
+            "--filter",
+            "clickup:list_id=list-1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["timeline"]["readiness"]["ready_for_world_modeling"] is True
+    assert payload["capture"]["providers"][0]["filters"]["repo"] == "acme/platform"
+    kwargs = captured["kwargs"]
+    assert kwargs["organization_name"] == "Acme"
+    configs = kwargs["provider_configs"]
+    assert len(configs) == 2
+    assert configs[0].provider == "github"
+    assert configs[1].filters["list_id"] == "list-1"
 
 
 def _sample_snapshot() -> ContextSnapshot:
