@@ -31,6 +31,12 @@ CANONICAL_EVENT_INDEX_FILE = "canonical_event_index.json"
 _CASE_TOKEN_PATTERN = re.compile(r"\b[A-Z][A-Z0-9]{1,12}-\d{1,8}\b")
 _DOC_TOKEN_PATTERN = re.compile(r"\bDOC[A-Z0-9-]{2,}\b")
 _DEAL_TOKEN_PATTERN = re.compile(r"\bDEAL-[A-Z0-9-]{2,}\b")
+_IGNORED_ANCHOR_TOKENS = {
+    "DOCTYPE",
+    "UTF-8",
+    "UTF-16",
+    "UTF-32",
+}
 _NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
@@ -1732,7 +1738,8 @@ def _anchor_tokens(values: Sequence[str]) -> list[str]:
         *[item.upper() for item in _DOC_TOKEN_PATTERN.findall(joined)],
         *[item.upper() for item in _DEAL_TOKEN_PATTERN.findall(joined)],
     ]
-    return _dedupe(tokens)
+    filtered = [token for token in tokens if token not in _IGNORED_ANCHOR_TOKENS]
+    return _dedupe(filtered)
 
 
 def _normalize_subject(value: str) -> str:

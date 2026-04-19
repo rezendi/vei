@@ -188,6 +188,25 @@ vei twin onboard \
   --filter clickup:list_id=123456
 ```
 
+For offline exports, point the same entrypoint at local archive paths:
+
+```bash
+vei twin onboard \
+  --root _vei_out/newco/twin \
+  --org "NewCo" \
+  --domain newco.example \
+  --provider gmail \
+  --provider notion \
+  --base-url gmail=/path/to/gmail-takeout.zip \
+  --base-url notion=/path/to/notion-export.zip
+```
+
+The repo also includes a local-only helper for the real Dispatch startup archives. It auto-detects `~/Downloads/dispatch-gmail.zip` and `~/Downloads/dispatch-notion.zip`, builds a private workspace under `_vei_out/dispatch-real-example`, and writes a readiness plus timeline summary beside it:
+
+```bash
+python scripts/build_dispatch_local_example.py
+```
+
 ### From a quickstart / playable workspace
 
 If you already have a quickstart or vertical workspace (e.g. `vei quickstart run --world service_ops --governor-demo`), the company graph is in the blueprint asset, not in a `context_snapshot.json`. Project it into the canonical shape with one command:
