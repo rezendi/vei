@@ -165,6 +165,25 @@ vei context readiness --root /path/to/context_snapshot.json --format plain
 python scripts/check_tenant_world_model.py --root /path/to/context_snapshot.json
 ```
 
+Build a local real-company example from offline exports through the same path:
+
+```bash
+vei twin onboard \
+  --root _vei_out/newco/twin \
+  --org "NewCo" \
+  --domain newco.example \
+  --provider gmail \
+  --provider notion \
+  --base-url gmail=/path/to/gmail-takeout.zip \
+  --base-url notion=/path/to/notion-export.zip
+```
+
+For the real Dispatch startup data kept on your machine, run:
+
+```bash
+python scripts/build_dispatch_local_example.py
+```
+
 ## Synthetic Clearwater Rig
 
 Clearwater stays in the repo as a synthetic control-room rig. It is the right place to test the kernel, the governor flow, and replay tooling without bringing in outside company data. Use Enron when you want the flagship real-history learned path.

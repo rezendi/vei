@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import zipfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -47,6 +48,7 @@ def test_list_providers_returns_supported_context_sources() -> None:
         "github",
         "gitlab",
         "clickup",
+        "notion",
     ):
         assert expected in names
 
@@ -902,6 +904,114 @@ def test_gmail_mbox_api_integration(tmp_path: Path) -> None:
     assert source is not None
     assert source.status == "ok"
     assert source.record_counts["messages"] == 1
+
+
+def test_gmail_provider_reads_takeout_zip_via_base_url(tmp_path: Path) -> None:
+    mbox_data = _build_mbox_content(
+        [
+            {
+                "from": "founder@dispatch.ai",
+                "to": "team@dispatch.ai",
+                "subject": "Weekly sync",
+                "message_id": "<dispatch-1@dispatch.ai>",
+                "body": "Notes from the week.",
+            },
+            {
+                "from": "team@dispatch.ai",
+                "to": "founder@dispatch.ai",
+                "subject": "Re: Weekly sync",
+                "message_id": "<dispatch-2@dispatch.ai>",
+                "in_reply_to": "<dispatch-1@dispatch.ai>",
+                "references": "<dispatch-1@dispatch.ai>",
+                "body": "Follow-up actions.",
+            },
+        ]
+    )
+    export_root = tmp_path / "Takeout" / "Mail"
+    export_root.mkdir(parents=True)
+    (export_root / "All mail Including Spam and Trash.mbox").write_text(
+        mbox_data,
+        encoding="utf-8",
+    )
+    archive_path = tmp_path / "dispatch-gmail.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.write(
+            export_root / "All mail Including Spam and Trash.mbox",
+            arcname="Takeout/Mail/All mail Including Spam and Trash.mbox",
+        )
+
+    provider = GmailContextProvider()
+    result = provider.capture(
+        ContextProviderConfig(provider="gmail", base_url=str(archive_path), limit=10)
+    )
+
+    assert result.status == "ok"
+    assert result.record_counts["messages"] == 2
+    assert result.record_counts["threads"] == 1
+    assert result.data["threads"][0]["subject"] == "Weekly sync"
+
+
+def test_notion_provider_reads_nested_export_zip(tmp_path: Path) -> None:
+    from vei.context.providers.notion import capture_from_export
+
+    inner_root = tmp_path / "inner"
+    notes_root = inner_root / "Private & Shared" / "Central Dispatch"
+    notes_root.mkdir(parents=True)
+    (notes_root / "Weekly priorities 74fdd6b1c536473aa670c3373f5e7f89.md").write_text(
+        "\n".join(
+            [
+                "# Weekly priorities - 2024-05-06T16:30:00Z",
+                "",
+                "Owner: Zapier",
+                "Last edited time: May 6, 2024 9:57 AM",
+                "Created time: May 6, 2024 9:57 AM",
+                "",
+                "Transcript starts here.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (notes_root / "Internal Ops Tasks 3d140d68e2a842b582878efb0c8be893.csv").write_text(
+        "\n".join(
+            [
+                "Name,Assign,Status",
+                "Weekly cron for LLM reports based on GH,Robb Chen-Ware,Done",
+                "New Demo Video,,Not started",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    part_zip = tmp_path / "ExportBlock-Part-1.zip"
+    with zipfile.ZipFile(part_zip, "w") as archive:
+        for file_path in sorted(inner_root.rglob("*")):
+            if not file_path.is_file():
+                continue
+            archive.write(file_path, arcname=str(file_path.relative_to(inner_root)))
+
+    middle_zip = tmp_path / "Dispatch-Export.zip"
+    with zipfile.ZipFile(middle_zip, "w") as archive:
+        archive.write(part_zip, arcname="ExportBlock-Part-1.zip")
+
+    outer_zip = tmp_path / "dispatch-notion.zip"
+    with zipfile.ZipFile(outer_zip, "w") as archive:
+        archive.write(middle_zip, arcname="Dispatch-Export.zip")
+
+    result = capture_from_export(outer_zip)
+
+    assert result.status == "ok"
+    assert result.record_counts["pages"] == 2
+    page_titles = {page["title"] for page in result.data["pages"]}
+    assert "Weekly priorities - 2024-05-06T16:30:00Z" in page_titles
+    assert "Internal Ops Tasks" in page_titles
+
+    meeting_page = next(
+        page
+        for page in result.data["pages"]
+        if page["title"] == "Weekly priorities - 2024-05-06T16:30:00Z"
+    )
+    assert meeting_page["owner"] == "Zapier"
+    assert meeting_page["updated"] == "May 6, 2024 9:57 AM"
 
 
 # ---------------------------------------------------------------------------

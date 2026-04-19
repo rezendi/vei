@@ -231,10 +231,10 @@ def ingest_gmail_export(
     organization_domain: str = "",
     message_limit: int = 200,
 ) -> ContextSnapshot:
-    """Ingest a Gmail Takeout MBOX file into a ContextSnapshot."""
-    from .providers.gmail import capture_from_mbox
+    """Ingest a Gmail Takeout export path into a ContextSnapshot."""
+    from .providers.gmail import capture_from_export
 
-    result = capture_from_mbox(
+    result = capture_from_export(
         mbox_path,
         message_limit=message_limit,
     )
