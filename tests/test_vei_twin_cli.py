@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import zipfile
 
 import pytest
 from typer.testing import CliRunner
@@ -243,6 +244,80 @@ def test_twin_cli_onboard_builds_provider_configs_and_reports_timeline(
     assert configs[1].filters["list_id"] == "list-1"
 
 
+def test_twin_cli_onboard_smoke_writes_canonical_timeline_sidecars(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    root = tmp_path / "dispatch_onboarded"
+    gmail_zip = tmp_path / "dispatch-gmail.zip"
+    notion_zip = tmp_path / "dispatch-notion.zip"
+
+    _write_gmail_takeout_zip(gmail_zip)
+    _write_notion_export_zip(notion_zip)
+
+    result = runner.invoke(
+        app,
+        [
+            "twin",
+            "onboard",
+            "--root",
+            str(root),
+            "--org",
+            "Dispatch",
+            "--domain",
+            "dispatch.ai",
+            "--provider",
+            "gmail",
+            "--provider",
+            "notion",
+            "--base-url",
+            f"gmail={gmail_zip}",
+            "--base-url",
+            f"notion={notion_zip}",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["bundle"]["organization_name"] == "Dispatch"
+    assert payload["timeline"]["readiness"]["available"] is True
+    assert payload["timeline"]["readiness"]["event_count"] >= 3
+    assert (root / "context_snapshot.json").exists()
+    assert (root / "canonical_events.jsonl").exists()
+    assert (root / "canonical_event_index.json").exists()
+
+    timeline_result = runner.invoke(
+        app,
+        [
+            "context",
+            "timeline",
+            "--root",
+            str(root),
+            "--limit",
+            "5",
+            "--format",
+            "plain",
+        ],
+    )
+    assert timeline_result.exit_code == 0, timeline_result.output
+    assert "Dispatch" in timeline_result.output
+
+    readiness_result = runner.invoke(
+        app,
+        [
+            "context",
+            "readiness",
+            "--root",
+            str(root),
+            "--format",
+            "plain",
+        ],
+    )
+    assert readiness_result.exit_code == 0, readiness_result.output
+    assert "Readiness:" in readiness_result.output
+    assert "World model:" in readiness_result.output
+
+
 def _sample_snapshot() -> ContextSnapshot:
     return ContextSnapshot(
         organization_name="Acme Cloud",
@@ -310,6 +385,90 @@ def _sample_snapshot() -> ContextSnapshot:
             ),
         ],
     )
+
+
+def _write_gmail_takeout_zip(path: Path) -> None:
+    export_root = path.parent / "gmail_export" / "Takeout" / "Mail"
+    export_root.mkdir(parents=True)
+    mbox_path = export_root / "All mail Including Spam and Trash.mbox"
+    mbox_path.write_text(
+        "\n".join(
+            [
+                "From founder@dispatch.ai Mon Mar 10 10:00:00 2025",
+                "From: founder@dispatch.ai",
+                "To: ops@dispatch.ai",
+                "Subject: Weekly sync",
+                "Date: Mon, 10 Mar 2025 10:00:00 +0000",
+                "Message-ID: <dispatch-1@dispatch.ai>",
+                "",
+                "Weekly notes.",
+                "",
+                "From ops@dispatch.ai Mon Mar 10 11:00:00 2025",
+                "From: ops@dispatch.ai",
+                "To: founder@dispatch.ai",
+                "Subject: Re: Weekly sync",
+                "Date: Mon, 10 Mar 2025 11:00:00 +0000",
+                "Message-ID: <dispatch-2@dispatch.ai>",
+                "In-Reply-To: <dispatch-1@dispatch.ai>",
+                "References: <dispatch-1@dispatch.ai>",
+                "",
+                "Follow-up actions.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.write(
+            mbox_path,
+            arcname="Takeout/Mail/All mail Including Spam and Trash.mbox",
+        )
+
+
+def _write_notion_export_zip(path: Path) -> None:
+    notion_root = (
+        path.parent / "notion_export" / "Private & Shared" / "Central Dispatch"
+    )
+    notion_root.mkdir(parents=True)
+    (notion_root / "Weekly priorities 74fdd6b1c536473aa670c3373f5e7f89.md").write_text(
+        "\n".join(
+            [
+                "# Weekly priorities - 2024-05-06T16:30:00Z",
+                "",
+                "Owner: Dispatch Ops",
+                "Last edited time: May 6, 2024 9:57 AM",
+                "Created time: May 6, 2024 9:57 AM",
+                "",
+                "Transcript starts here.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (
+        notion_root / "Internal Ops Tasks 3d140d68e2a842b582878efb0c8be893.csv"
+    ).write_text(
+        "\n".join(
+            [
+                "Name,Assign,Status",
+                "Weekly cron for LLM reports based on GH,Robb Chen-Ware,Done",
+                "New Demo Video,,Not started",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    inner_zip = path.parent / "dispatch_inner.zip"
+    with zipfile.ZipFile(inner_zip, "w") as archive:
+        for file_path in sorted((path.parent / "notion_export").rglob("*")):
+            if not file_path.is_file():
+                continue
+            archive.write(
+                file_path,
+                arcname=str(file_path.relative_to(path.parent / "notion_export")),
+            )
+
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.write(inner_zip, arcname="Dispatch-Export.zip")
 
 
 def _sample_pilot_status(root: Path) -> TwinLaunchStatus:

@@ -50,6 +50,11 @@ def test_all_repo_owned_enron_bundles_have_saved_forecast_and_ranked_comparison(
             (bundle_root / filename).exists()
             for filename in STUDIO_SAVED_FORECAST_FILES
         ), bundle_root
+        assert (bundle_root / "enron_story_manifest.json").exists(), bundle_root
+        assert (bundle_root / "enron_story_overview.md").exists(), bundle_root
+        assert (bundle_root / "enron_exports_preview.json").exists(), bundle_root
+        assert (bundle_root / "enron_presentation_manifest.json").exists(), bundle_root
+        assert (bundle_root / "enron_presentation_guide.md").exists(), bundle_root
 
 
 def test_all_repo_owned_enron_bundles_use_reference_forecast_and_sidecars() -> None:
@@ -107,3 +112,26 @@ def test_all_repo_owned_enron_bundles_have_rich_prior_timelines() -> None:
             )
         }
         assert len(source_families) >= 3, (bundle_root, sorted(source_families))
+
+
+def test_all_repo_owned_enron_bundles_ship_demo_story_metadata() -> None:
+    for bundle_root in _bundle_roots():
+        story_manifest = json.loads(
+            (bundle_root / "enron_story_manifest.json").read_text(encoding="utf-8")
+        )
+        presentation_manifest = json.loads(
+            (bundle_root / "enron_presentation_manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        exports_preview = json.loads(
+            (bundle_root / "enron_exports_preview.json").read_text(encoding="utf-8")
+        )
+
+        assert story_manifest["source_mode"] == "real_history"
+        assert story_manifest["benchmark_role"] == "headline"
+        assert story_manifest["history_event_count"] >= 30
+        assert len(story_manifest["source_families"]) >= 3
+        assert story_manifest["forecast_file"] == REFERENCE_FORECAST_FILE
+        assert len(presentation_manifest["beats"]) == 7
+        assert len(exports_preview) == 3

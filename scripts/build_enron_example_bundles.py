@@ -4,6 +4,7 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from vei.context.api import (
     build_canonical_history_bundle_from_rows,
@@ -92,6 +93,11 @@ ENRON_FIXTURE_WINDOW = (
     "1998-01-01T00:00:00Z",
     "2001-12-31T23:59:59Z",
 )
+ENRON_STORY_OVERVIEW_FILE = "enron_story_overview.md"
+ENRON_STORY_MANIFEST_FILE = "enron_story_manifest.json"
+ENRON_EXPORTS_PREVIEW_FILE = "enron_exports_preview.json"
+ENRON_PRESENTATION_MANIFEST_FILE = "enron_presentation_manifest.json"
+ENRON_PRESENTATION_GUIDE_FILE = "enron_presentation_guide.md"
 
 
 def _event_id_map() -> dict[str, str]:
@@ -235,7 +241,18 @@ def _context_counts(
     )
 
 
-def _write_bundle_readme(spec, bundle_root: Path) -> None:
+def _bundle_ui_command(bundle_root: Path) -> str:
+    return "\n".join(
+        [
+            "vei ui serve \\",
+            f"  --root {bundle_root / WORKSPACE_DIRECTORY} \\",
+            "  --host 127.0.0.1 \\",
+            "  --port 3055",
+        ]
+    )
+
+
+def _bundle_story_context(spec, bundle_root: Path) -> dict[str, Any]:
     workspace_root = bundle_root / WORKSPACE_DIRECTORY
     manifest_payload = json.loads(
         (workspace_root / EPISODE_MANIFEST_FILE).read_text(encoding="utf-8")
@@ -277,6 +294,49 @@ def _write_bundle_readme(spec, bundle_root: Path) -> None:
         branch_event_id=branch_event_id,
         branch_ts_ms=branch_ts_ms,
     )
+    return {
+        "workspace_root": workspace_root,
+        "history_count": history_count,
+        "future_count": future_count,
+        "branch_timestamp": branch_timestamp,
+        "branch_ts_ms": branch_ts_ms,
+        "branch_event_id": branch_event_id,
+        "forecast_payload": forecast_payload,
+        "business_change": business_change,
+        "top_candidate": top_candidate,
+        "forecast_filename": forecast_filename,
+        "financial_count": financial_count,
+        "news_count": news_count,
+        "stock_count": stock_count,
+        "credit_count": credit_count,
+        "ferc_count": ferc_count,
+        "source_family_labels": source_family_labels,
+        "domain_labels": domain_labels,
+        "ui_command": _bundle_ui_command(bundle_root),
+    }
+
+
+def _write_bundle_readme(
+    spec,
+    bundle_root: Path,
+    *,
+    context: dict[str, Any] | None = None,
+) -> None:
+    bundle_context = context or _bundle_story_context(spec, bundle_root)
+    history_count = int(bundle_context["history_count"])
+    future_count = int(bundle_context["future_count"])
+    branch_timestamp = str(bundle_context["branch_timestamp"])
+    financial_count = int(bundle_context["financial_count"])
+    news_count = int(bundle_context["news_count"])
+    stock_count = int(bundle_context["stock_count"])
+    credit_count = int(bundle_context["credit_count"])
+    ferc_count = int(bundle_context["ferc_count"])
+    source_family_labels = list(bundle_context["source_family_labels"])
+    domain_labels = list(bundle_context["domain_labels"])
+    forecast_filename = str(bundle_context["forecast_filename"])
+    forecast_payload = dict(bundle_context["forecast_payload"])
+    business_change = dict(bundle_context["business_change"])
+    top_candidate = dict(bundle_context["top_candidate"])
     sibling_lines = [
         f"- [{other.title}](../{other.bundle_slug}/README.md)"
         for other in bundle_specs()
@@ -302,10 +362,7 @@ def _write_bundle_readme(spec, bundle_root: Path) -> None:
             "## Open It In Studio",
             "",
             "```bash",
-            "vei ui serve \\",
-            f"  --root {spec.output_root / WORKSPACE_DIRECTORY} \\",
-            "  --host 127.0.0.1 \\",
-            "  --port 3055",
+            str(bundle_context["ui_command"]),
             "```",
             "",
             "Open `http://127.0.0.1:3055`.",
@@ -361,6 +418,11 @@ def _write_bundle_readme(spec, bundle_root: Path) -> None:
             f"- `{forecast_filename}`: saved forecast result",
             "- `whatif_business_state_comparison.md`: ranked comparison in business language",
             "- `whatif_business_state_comparison.json`: structured comparison payload",
+            f"- `{ENRON_STORY_OVERVIEW_FILE}`: presenter-facing branch summary",
+            f"- `{ENRON_STORY_MANIFEST_FILE}`: structured demo manifest",
+            f"- `{ENRON_EXPORTS_PREVIEW_FILE}`: export preview for timeline and forecast artifacts",
+            f"- `{ENRON_PRESENTATION_MANIFEST_FILE}`: presentation beat manifest",
+            f"- `{ENRON_PRESENTATION_GUIDE_FILE}`: operator guide for bundle demos",
             "",
             "## Other Enron Examples",
             "",
@@ -393,6 +455,311 @@ def _write_bundle_readme(spec, bundle_root: Path) -> None:
         ]
     )
     (bundle_root / "README.md").write_text(readme + "\n", encoding="utf-8")
+
+
+def _bundle_exports_preview(context: dict[str, Any]) -> list[dict[str, object]]:
+    return [
+        {
+            "name": "Canonical Timeline Export",
+            "summary": (
+                f"{context['history_count']} prior canonical events from "
+                f"{', '.join(context['source_family_labels'])} before the branch point."
+            ),
+            "paths": [
+                "workspace/context_snapshot.json",
+                "workspace/canonical_events.jsonl",
+                "workspace/canonical_event_index.json",
+            ],
+        },
+        {
+            "name": "Learned Forecast Export",
+            "summary": (
+                f"Saved reference forecast in {context['forecast_filename']} plus the "
+                "combined what-if experiment result."
+            ),
+            "paths": [
+                "whatif_experiment_result.json",
+                str(context["forecast_filename"]),
+                "whatif_business_state_comparison.json",
+            ],
+        },
+        {
+            "name": "Public Context Export",
+            "summary": (
+                f"Dated public-company slice with {context['financial_count']} financial, "
+                f"{context['news_count']} news, {context['stock_count']} market, "
+                f"{context['credit_count']} credit, and {context['ferc_count']} "
+                "regulatory checkpoints."
+            ),
+            "paths": ["workspace/whatif_public_context.json", "timeline_arc.md"],
+        },
+    ]
+
+
+def _bundle_story_manifest(
+    spec, bundle_root: Path, context: dict[str, Any]
+) -> dict[str, object]:
+    return {
+        "manifest_version": 1,
+        "bundle_slug": spec.bundle_slug,
+        "title": spec.title,
+        "organization_name": "Enron Corporation",
+        "source_mode": "real_history",
+        "benchmark_role": "headline",
+        "lead": spec.lead,
+        "branch_point": spec.branch_point,
+        "branch_timestamp": context["branch_timestamp"],
+        "history_event_count": context["history_count"],
+        "future_event_count": context["future_count"],
+        "source_families": list(context["source_family_labels"]),
+        "domains": list(context["domain_labels"]),
+        "forecast_file": context["forecast_filename"],
+        "top_candidate": dict(context["top_candidate"]).get("label") or "",
+        "workspace_root": str((bundle_root / WORKSPACE_DIRECTORY).resolve()),
+        "ui_command": str(context["ui_command"]),
+        "files": {
+            "overview": ENRON_STORY_OVERVIEW_FILE,
+            "exports_preview": ENRON_EXPORTS_PREVIEW_FILE,
+            "presentation_manifest": ENRON_PRESENTATION_MANIFEST_FILE,
+            "presentation_guide": ENRON_PRESENTATION_GUIDE_FILE,
+        },
+    }
+
+
+def _bundle_presentation_manifest(
+    spec,
+    bundle_root: Path,
+    context: dict[str, Any],
+) -> dict[str, object]:
+    top_candidate = (
+        dict(context["top_candidate"]).get("label") or "the saved top-ranked action"
+    )
+    return {
+        "opening_hook": (
+            "Open a real Enron branch with the mail thread, the dated public-company "
+            "timeline, and the learned reference forecast already lined up."
+        ),
+        "demo_goal": (
+            "Show that the Enron flagship is a real-history, multi-source what-if bundle "
+            "on the shared canonical timeline."
+        ),
+        "presenter_setup": {
+            "organization_name": "Enron Corporation",
+            "bundle_slug": spec.bundle_slug,
+            "workspace_root": str((bundle_root / WORKSPACE_DIRECTORY).resolve()),
+            "ui_command": str(context["ui_command"]),
+        },
+        "primitives": [
+            {
+                "name": "Historical Branch",
+                "current_value": spec.branch_point,
+                "what_it_means": "One real dated branch point from the Enron archive.",
+            },
+            {
+                "name": "Timeline",
+                "current_value": ", ".join(context["source_family_labels"]),
+                "what_it_means": "Mail plus dated public-company context on one shared chronology.",
+            },
+            {
+                "name": "Forecast",
+                "current_value": context["forecast_filename"],
+                "what_it_means": "Repo-owned learned reference result that ships with the bundle.",
+            },
+        ],
+        "beats": [
+            {
+                "title": "Open the saved bundle",
+                "studio_view": "whatif",
+                "operator_action": "Start in Studio with the saved Enron workspace open.",
+                "read_it_as": "This is a repo-owned real-history branch, not a synthetic script.",
+            },
+            {
+                "title": "Show the mixed timeline",
+                "studio_view": "timeline",
+                "operator_action": "Filter the Company Timeline and point out mail plus public-context rows before the branch.",
+                "read_it_as": "The branch lives inside one shared chronology rather than beside detached side panels.",
+            },
+            {
+                "title": "Anchor the real decision",
+                "studio_view": "whatif",
+                "operator_action": "Read the branch point and why this thread matters.",
+                "read_it_as": "The choice is concrete and dated, and the saved bundle keeps the real lead-up in view.",
+            },
+            {
+                "title": "Show the candidate ranking",
+                "studio_view": "whatif",
+                "operator_action": "Open the ranked comparison and call out the current top candidate.",
+                "read_it_as": f"The current saved winner is {top_candidate}.",
+            },
+            {
+                "title": "Show the learned forecast",
+                "studio_view": "whatif",
+                "operator_action": "Open the saved forecast panel and keep the reference backend visible.",
+                "read_it_as": "The shipped learned path is the default saved result for this bundle.",
+            },
+            {
+                "title": "Keep the macro claims narrow",
+                "studio_view": "whatif",
+                "operator_action": "Point at the public-company slice and note the current calibration caveat.",
+                "read_it_as": "The macro fields stay advisory context beside the real thread evidence.",
+            },
+            {
+                "title": "Close on the shared product surface",
+                "studio_view": "whatif",
+                "operator_action": "End on the bundle files and export preview.",
+                "read_it_as": "The same saved bundle now carries the branch, the chronology, the forecast, and the demo guide in one place.",
+            },
+        ],
+        "closing_argument": (
+            "Enron is the real-history flagship because the bundle now opens as one "
+            "coherent branch scene with the chronology, the learned forecast, and the "
+            "dated public context already attached."
+        ),
+        "operator_commands": [
+            str(context["ui_command"]),
+            f"python scripts/build_enron_example_bundles.py --bundle {spec.bundle_slug}",
+            f"python scripts/validate_enron_example_bundles.py --root {bundle_root.parent}",
+        ],
+    }
+
+
+def _render_enron_story_overview(
+    spec,
+    context: dict[str, Any],
+    story_manifest: dict[str, object],
+    presentation_manifest: dict[str, object],
+) -> str:
+    source_families = ", ".join(context["source_family_labels"]) or "unknown"
+    domains = ", ".join(context["domain_labels"]) or "unknown"
+    top_candidate = dict(context["top_candidate"]).get("label") or "(none)"
+    return "\n".join(
+        [
+            "# VEI Story · Enron Corporation",
+            "",
+            "VEI is one shared timeline and replay surface. This bundle shows the real-history path: one dated Enron decision, the prior branch-local chronology, the public-company side data, and the shipped learned forecast in one saved package.",
+            "",
+            "## Bundle",
+            "",
+            f"- Title: `{spec.title}`",
+            f"- Bundle slug: `{spec.bundle_slug}`",
+            f"- Branch point: {spec.branch_point}",
+            f"- Branch date: `{context['branch_timestamp']}`",
+            f"- Prior events: `{context['history_count']}`",
+            f"- Recorded future events: `{context['future_count']}`",
+            f"- Source families: `{source_families}`",
+            f"- Domains: `{domains}`",
+            f"- Saved forecast file: `{context['forecast_filename']}`",
+            f"- Top ranked candidate: `{top_candidate}`",
+            "",
+            "## Why it matters",
+            "",
+            *[line for paragraph in spec.story_lines for line in (paragraph, "")],
+            "## Open it",
+            "",
+            "```bash",
+            str(context["ui_command"]),
+            "```",
+            "",
+            "## Demo files",
+            "",
+            f"- Story manifest: `{ENRON_STORY_MANIFEST_FILE}`",
+            f"- Exports preview: `{ENRON_EXPORTS_PREVIEW_FILE}`",
+            f"- Presentation manifest: `{ENRON_PRESENTATION_MANIFEST_FILE}`",
+            f"- Presentation guide: `{ENRON_PRESENTATION_GUIDE_FILE}`",
+            "",
+            "## Structured notes",
+            "",
+            f"- Story manifest role: `{story_manifest['benchmark_role']}`",
+            f"- Presentation beats: `{len(presentation_manifest['beats'])}`",
+            "",
+        ]
+    )
+
+
+def _render_enron_presentation_guide(
+    presentation_manifest: dict[str, object],
+) -> str:
+    lines = [
+        "# VEI World Briefing Guide · Enron Corporation",
+        "",
+        "This guide walks one real-history Enron bundle from the shared chronology to the saved learned forecast.",
+        "",
+        "## Opening Hook",
+        "",
+        str(presentation_manifest["opening_hook"]),
+        "",
+        "## Demo Goal",
+        "",
+        str(presentation_manifest["demo_goal"]),
+        "",
+        "## Walkthrough Flow",
+        "",
+    ]
+    for index, beat in enumerate(presentation_manifest["beats"], start=1):
+        lines.extend(
+            [
+                f"### Step {index} · {beat['title']}",
+                "",
+                f"- Studio view: `{beat['studio_view']}`",
+                f"- Operator action: {beat['operator_action']}",
+                f"- Read it as: {beat['read_it_as']}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Closing Argument",
+            "",
+            str(presentation_manifest["closing_argument"]),
+            "",
+            "## Operator Commands",
+            "",
+        ]
+    )
+    for command in presentation_manifest["operator_commands"]:
+        lines.append(f"- `{command}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _write_bundle_story_files(
+    spec,
+    bundle_root: Path,
+    *,
+    context: dict[str, Any] | None = None,
+) -> None:
+    bundle_context = context or _bundle_story_context(spec, bundle_root)
+    story_manifest = _bundle_story_manifest(spec, bundle_root, bundle_context)
+    exports_preview = _bundle_exports_preview(bundle_context)
+    presentation_manifest = _bundle_presentation_manifest(
+        spec, bundle_root, bundle_context
+    )
+
+    (bundle_root / ENRON_STORY_MANIFEST_FILE).write_text(
+        json.dumps(story_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (bundle_root / ENRON_EXPORTS_PREVIEW_FILE).write_text(
+        json.dumps(exports_preview, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (bundle_root / ENRON_PRESENTATION_MANIFEST_FILE).write_text(
+        json.dumps(presentation_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (bundle_root / ENRON_STORY_OVERVIEW_FILE).write_text(
+        _render_enron_story_overview(
+            spec,
+            bundle_context,
+            story_manifest,
+            presentation_manifest,
+        ),
+        encoding="utf-8",
+    )
+    (bundle_root / ENRON_PRESENTATION_GUIDE_FILE).write_text(
+        _render_enron_presentation_guide(presentation_manifest),
+        encoding="utf-8",
+    )
 
 
 def _history_dimension_labels(
@@ -473,7 +840,9 @@ def build_bundle(
             for candidate in spec.candidates
         ],
     )
-    _write_bundle_readme(spec, output_root)
+    bundle_context = _bundle_story_context(spec, output_root)
+    _write_bundle_readme(spec, output_root, context=bundle_context)
+    _write_bundle_story_files(spec, output_root, context=bundle_context)
     issues = validate_packaged_example_bundle(output_root)
     forecast_filename = _forecast_filename(output_root)
     if forecast_filename != REFERENCE_FORECAST_FILE:

@@ -33,6 +33,9 @@ _DOC_TOKEN_PATTERN = re.compile(r"\bDOC[A-Z0-9-]{2,}\b")
 _DEAL_TOKEN_PATTERN = re.compile(r"\bDEAL-[A-Z0-9-]{2,}\b")
 _IGNORED_ANCHOR_TOKENS = {
     "DOCTYPE",
+    "GPT-3",
+    "GPT-4",
+    "GPT-5",
     "UTF-8",
     "UTF-16",
     "UTF-32",

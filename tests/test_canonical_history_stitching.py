@@ -7,7 +7,7 @@ from vei.context.api import (
 )
 
 
-def test_canonical_history_ignores_encoding_and_doctype_tokens_for_case_ids() -> None:
+def test_canonical_history_ignores_junk_tokens_for_case_ids() -> None:
     snapshot = ContextSnapshot(
         organization_name="Dispatch",
         organization_domain="thedispatch.ai",
@@ -46,6 +46,20 @@ def test_canonical_history_ignores_encoding_and_doctype_tokens_for_case_ids() ->
                                 }
                             ],
                         },
+                        {
+                            "thread_id": "thread-gpt4",
+                            "subject": "GPT-4 rollout notes",
+                            "messages": [
+                                {
+                                    "message_id": "<gpt4@dispatch.ai>",
+                                    "from": "ops@thedispatch.ai",
+                                    "to": "jon@thedispatch.ai",
+                                    "subject": "GPT-4 rollout notes",
+                                    "date": "Tue, 09 Jan 2024 22:30:00 +0000",
+                                    "snippet": "GPT-4 notes attached.",
+                                }
+                            ],
+                        },
                     ],
                     "profile": {},
                 },
@@ -58,3 +72,4 @@ def test_canonical_history_ignores_encoding_and_doctype_tokens_for_case_ids() ->
 
     assert "case:UTF-8" not in case_ids
     assert "case:DOCTYPE" not in case_ids
+    assert "case:GPT-4" not in case_ids
