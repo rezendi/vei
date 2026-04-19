@@ -15,6 +15,13 @@ from vei.whatif.filenames import (
 )
 
 DEFAULT_ROOT = Path("docs/examples")
+REQUIRED_DEMO_FILES = (
+    "enron_story_overview.md",
+    "enron_story_manifest.json",
+    "enron_exports_preview.json",
+    "enron_presentation_manifest.json",
+    "enron_presentation_guide.md",
+)
 
 
 def _bundle_roots(root: Path) -> list[Path]:
@@ -79,6 +86,10 @@ def _enron_bundle_issues(bundle_root: Path) -> list[str]:
         issues.append(f"missing bundle artifact: {history_paths.events_path}")
     if not history_paths.index_path.exists():
         issues.append(f"missing bundle artifact: {history_paths.index_path}")
+    for filename in REQUIRED_DEMO_FILES:
+        path = bundle_root / filename
+        if not path.exists():
+            issues.append(f"missing bundle artifact: {path}")
     issues.extend(_bundle_history_issues(bundle_root))
     return issues
 
@@ -91,7 +102,9 @@ def _bundle_history_issues(bundle_root: Path) -> list[str]:
     )
     branch_event_id = str(manifest_payload.get("branch_event_id") or "").strip()
     branch_timestamp = str(manifest_payload.get("branch_timestamp") or "").strip()
-    history_bundle = load_canonical_history_bundle(workspace_root / "context_snapshot.json")
+    history_bundle = load_canonical_history_bundle(
+        workspace_root / "context_snapshot.json"
+    )
     if history_bundle is None:
         return ["missing canonical history bundle"]
 

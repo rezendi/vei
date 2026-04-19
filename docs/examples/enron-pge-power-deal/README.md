@@ -6,7 +6,7 @@ This example ties a commercial legal thread to the widening credit story around 
 
 ```bash
 vei ui serve \
-  --root docs/examples/enron-pge-power-deal/workspace \
+  --root /Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/docs/examples/enron-pge-power-deal/workspace \
   --host 127.0.0.1 \
   --port 3055
 ```
@@ -44,6 +44,11 @@ The stock, credit, and bankruptcy fixtures add context around the deal date. The
 - `whatif_reference_result.json`: saved forecast result
 - `whatif_business_state_comparison.md`: ranked comparison in business language
 - `whatif_business_state_comparison.json`: structured comparison payload
+- `enron_story_overview.md`: presenter-facing branch summary
+- `enron_story_manifest.json`: structured demo manifest
+- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
+- `enron_presentation_manifest.json`: presentation beat manifest
+- `enron_presentation_guide.md`: operator guide for bundle demos
 
 ## Other Enron Examples
 
