@@ -1,7 +1,7 @@
 {
   "version": "2",
   "model_id": "full_context_transformer",
-  "dataset_root": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dataset",
+  "dataset_root": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dataset",
   "observed_metrics": {
     "auroc_any_external_spread": 0.787817,
     "brier_any_external_spread": 0.332025,
@@ -660,11 +660,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/master_agreement/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -12425,11 +12425,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/btu_weekly/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -25911,11 +25911,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/draft_position_paper/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -35098,11 +35098,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/vendor_policy_mailing/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -43834,11 +43834,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_derivatives_confidentiality/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -53182,11 +53182,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/arbitration_guidance/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -62528,11 +62528,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/kwb_power_contract/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -67884,11 +67884,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/hlp_swap_agreement/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -73605,11 +73605,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/pg_e_power_deal/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -80630,11 +80630,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_internal/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -87798,11 +87798,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/cargill_contract/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -95187,11 +95187,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/credit_suisse_products/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -102592,11 +102592,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ferc_weekly_report/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -111805,11 +111805,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/urgent_etol_swap/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -117525,11 +117525,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/risk_management_policy/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -124745,11 +124745,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/market_descriptions_review/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -132851,11 +132851,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/restructured_transaction/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -140220,11 +140220,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nordic_master_agreement/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -147635,11 +147635,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/nerc_review/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -155180,11 +155180,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/confirmations_policy/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -163757,11 +163757,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_time/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -171192,11 +171192,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/performance_review_portz/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -178755,11 +178755,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/paralegal_position/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -184719,11 +184719,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/interview_senior_counsel/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -191593,11 +191593,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/watkins_followup_questions/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -206914,11 +206914,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/california_crisis_order/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -219275,11 +219275,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/baxter_press_release/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -233050,11 +233050,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/q3_disclosure_review/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -248391,11 +248391,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/ees_preholiday_update/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -260855,11 +260855,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/braveheart_forward/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -273287,11 +273287,11 @@
           }
         ],
         "objective_dossier_paths": {
-          "minimize_enterprise_risk": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/minimize_enterprise_risk.md",
-          "protect_commercial_position": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/protect_commercial_position.md",
-          "reduce_org_strain": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/reduce_org_strain.md",
-          "preserve_stakeholder_trust": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/preserve_stakeholder_trust.md",
-          "maintain_execution_velocity": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/maintain_execution_velocity.md"
+          "minimize_enterprise_risk": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/minimize_enterprise_risk.md",
+          "protect_commercial_position": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/protect_commercial_position.md",
+          "reduce_org_strain": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/reduce_org_strain.md",
+          "preserve_stakeholder_trust": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/preserve_stakeholder_trust.md",
+          "maintain_execution_velocity": "_vei_out/reference_backend_enron_benchmark/enron_reference_backend_v1/dossiers/skilling_resignation_materials/maintain_execution_velocity.md"
         },
         "candidates": [
           {
@@ -287331,8 +287331,8 @@
     "heldout_cases=31"
   ],
   "artifacts": {
-    "root": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/data/enron/reference_backend",
-    "eval_result_path": "/Users/rohit/Documents/Workspace/Coding/digital-enterprise-twin/data/enron/reference_backend/eval_result.json",
+    "root": "data/enron/reference_backend",
+    "eval_result_path": "data/enron/reference_backend/eval_result.json",
     "prediction_jsonl_path": ""
   }
 }
