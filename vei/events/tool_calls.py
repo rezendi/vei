@@ -6,7 +6,7 @@ import json
 from hashlib import sha256
 from typing import Any, Literal
 
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .api import build_event, emit_event
 from .context import EventContext, merge_event_context
@@ -22,6 +22,38 @@ from .models import (
 )
 
 ToolCallErrorClass = Literal["timeout", "validation", "permission", "infra", "unknown"]
+ToolOperationClass = Literal["read", "write_safe", "write_risky", "unknown"]
+ToolAccessMode = Literal["read", "write", "delete", "execute", "unknown"]
+ToolDestinationClass = Literal["internal", "external", "customer", "public", "unknown"]
+ToolTenantBoundary = Literal["same_tenant", "cross_tenant", "unknown"]
+
+_OPERATION_CLASSES = {"read", "write_safe", "write_risky", "unknown"}
+_ACCESS_MODES = {"read", "write", "delete", "execute", "unknown"}
+_DESTINATION_CLASSES = {"internal", "external", "customer", "public", "unknown"}
+_TENANT_BOUNDARIES = {"same_tenant", "cross_tenant", "unknown"}
+
+
+class ToolPolicyMetadata(BaseModel):
+    """Safe policy/replay metadata that avoids raw tool payload bodies."""
+
+    operation_class: ToolOperationClass = "unknown"
+    access_mode: ToolAccessMode = "unknown"
+    destination_class: ToolDestinationClass = "unknown"
+    sensitivity_tags: list[str] = Field(default_factory=list)
+    object_classification: str = ""
+    externality: str = ""
+    destructive_write: bool | None = None
+    policy_profile_id: str = ""
+    approval_required: bool | None = None
+    tenant_boundary: ToolTenantBoundary = "unknown"
+
+    def compact(self) -> dict[str, Any]:
+        data = self.model_dump(mode="json")
+        return {
+            key: value
+            for key, value in data.items()
+            if not _empty_policy_value(value) and value != "unknown"
+        }
 
 
 def classify_tool_call_failure(exc: BaseException) -> ToolCallErrorClass:
@@ -144,6 +176,17 @@ def build_tool_call_event(
     context: EventContext | dict[str, Any] | None = None,
     inline_payload: bool = False,
     error_class: ToolCallErrorClass | None = None,
+    policy_metadata: ToolPolicyMetadata | dict[str, Any] | None = None,
+    operation_class: str = "",
+    access_mode: str = "",
+    destination_class: str = "",
+    sensitivity_tags: list[str] | None = None,
+    object_classification: str = "",
+    externality: str = "",
+    destructive_write: bool | None = None,
+    policy_profile_id: str = "",
+    approval_required: bool | None = None,
+    tenant_boundary: str = "",
 ) -> CanonicalEvent:
     delta_data: dict[str, Any] = {
         "tool_name": tool_name,
@@ -156,6 +199,38 @@ def build_tool_call_event(
         delta_data["latency_ms"] = latency_ms
     if error_class:
         delta_data["error_class"] = error_class
+    metadata = _coerce_policy_metadata(
+        policy_metadata,
+        operation_class=operation_class,
+        access_mode=access_mode,
+        destination_class=destination_class,
+        sensitivity_tags=sensitivity_tags,
+        object_classification=object_classification,
+        externality=externality,
+        destructive_write=destructive_write,
+        policy_profile_id=policy_profile_id,
+        approval_required=approval_required,
+        tenant_boundary=tenant_boundary,
+    )
+    if metadata:
+        delta_data["policy_metadata"] = metadata
+        delta_data.update(
+            {
+                key: value
+                for key, value in metadata.items()
+                if key
+                in {
+                    "operation_class",
+                    "access_mode",
+                    "destination_class",
+                    "sensitivity_tags",
+                    "object_classification",
+                    "policy_profile_id",
+                    "approval_required",
+                    "tenant_boundary",
+                }
+            }
+        )
     if inline_payload:
         delta_data["args"] = args
         delta_data["response"] = response
@@ -188,6 +263,92 @@ def build_tool_call_event(
         text_handle=payload_handle(args, store_uri=f"payload://{source_id}/args"),
         delta_data=delta_data,
     ).with_hash()
+
+
+def _coerce_policy_metadata(
+    metadata: ToolPolicyMetadata | dict[str, Any] | None,
+    *,
+    operation_class: str = "",
+    access_mode: str = "",
+    destination_class: str = "",
+    sensitivity_tags: list[str] | None = None,
+    object_classification: str = "",
+    externality: str = "",
+    destructive_write: bool | None = None,
+    policy_profile_id: str = "",
+    approval_required: bool | None = None,
+    tenant_boundary: str = "",
+) -> dict[str, Any]:
+    raw: dict[str, Any] = {}
+    if isinstance(metadata, ToolPolicyMetadata):
+        raw.update(metadata.model_dump(mode="json"))
+    elif isinstance(metadata, dict):
+        raw.update(metadata)
+    raw.update(
+        {
+            key: value
+            for key, value in {
+                "operation_class": operation_class,
+                "access_mode": access_mode,
+                "destination_class": destination_class,
+                "sensitivity_tags": sensitivity_tags or None,
+                "object_classification": object_classification,
+                "externality": externality,
+                "destructive_write": destructive_write,
+                "policy_profile_id": policy_profile_id,
+                "approval_required": approval_required,
+                "tenant_boundary": tenant_boundary,
+            }.items()
+            if not _empty_policy_value(value)
+        }
+    )
+    raw = _sanitize_policy_metadata(raw)
+    return ToolPolicyMetadata.model_validate(raw).compact() if raw else {}
+
+
+def _empty_policy_value(value: Any) -> bool:
+    return value is None or value == "" or value == []
+
+
+def _sanitize_policy_metadata(raw: dict[str, Any]) -> dict[str, Any]:
+    sanitized = dict(raw)
+    for key, allowed in (
+        ("operation_class", _OPERATION_CLASSES),
+        ("access_mode", _ACCESS_MODES),
+        ("destination_class", _DESTINATION_CLASSES),
+        ("tenant_boundary", _TENANT_BOUNDARIES),
+    ):
+        value = str(sanitized.get(key) or "").strip()
+        sanitized[key] = value if value in allowed else "unknown"
+    tags = sanitized.get("sensitivity_tags")
+    if isinstance(tags, str):
+        sanitized["sensitivity_tags"] = [
+            item.strip() for item in tags.split(",") if item.strip()
+        ]
+    elif isinstance(tags, (list, tuple, set)):
+        sanitized["sensitivity_tags"] = [
+            str(item).strip() for item in tags if str(item).strip()
+        ]
+    else:
+        sanitized["sensitivity_tags"] = []
+    for key in ("destructive_write", "approval_required"):
+        bool_value = sanitized.get(key)
+        if bool_value not in {None, True, False}:
+            sanitized[key] = _coerce_bool(bool_value)
+    for key in ("object_classification", "externality", "policy_profile_id"):
+        if key in sanitized:
+            sanitized[key] = str(sanitized.get(key) or "").strip()
+    return sanitized
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+    return bool(value)
 
 
 def emit_tool_requested(**kwargs: Any) -> CanonicalEvent:

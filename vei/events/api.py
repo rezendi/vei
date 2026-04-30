@@ -193,6 +193,7 @@ from .llm_calls import (  # noqa: E402
 )
 from .tool_calls import (  # noqa: E402
     ToolCallErrorClass,
+    ToolPolicyMetadata,
     build_tool_call_event,
     classify_tool_call_failure,
     emit_tool_completed,
@@ -219,6 +220,7 @@ __all__ = [
     "StateDelta",
     "TextHandle",
     "ToolCallErrorClass",
+    "ToolPolicyMetadata",
     "WorkspaceEventStore",
     "build_event",
     "build_llm_call_event",

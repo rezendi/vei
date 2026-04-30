@@ -37,6 +37,8 @@ def _attrs(event: CanonicalEvent) -> dict[str, Any]:
         "run_id",
         "agent_id",
         "human_user_id",
+        "service_principal",
+        "delegated_credential_id",
         "mcp_session_id",
         "mcp_client_id",
         "mcp_server_id",
@@ -63,6 +65,20 @@ def _attrs(event: CanonicalEvent) -> dict[str, Any]:
         attrs["mcp.protocol.version"] = context.get("mcp_protocol_version", "")
         attrs["network.transport"] = context.get("mcp_transport", "")
         attrs["mcp.tool.status"] = data.get("status", "")
+        policy_metadata = data.get("policy_metadata", {})
+        if isinstance(policy_metadata, dict):
+            for key in (
+                "operation_class",
+                "access_mode",
+                "destination_class",
+                "object_classification",
+                "policy_profile_id",
+                "approval_required",
+                "tenant_boundary",
+                "destructive_write",
+            ):
+                if policy_metadata.get(key) not in {None, ""}:
+                    attrs[f"vei.policy_metadata.{key}"] = policy_metadata[key]
     if event.kind.startswith("governance."):
         attrs["vei.policy.decision"] = data.get("decision", "")
         attrs["vei.policy.reason"] = data.get("reason", "")

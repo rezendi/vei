@@ -83,6 +83,8 @@ class AccessItem(BaseModel):
     id: str
     label: str = ""
     source: str = ""
+    classification: str = ""
+    tags: list[str] = Field(default_factory=list)
     event_ids: list[str] = Field(default_factory=list)
 
 
