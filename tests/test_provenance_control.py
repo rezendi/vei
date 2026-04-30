@@ -149,6 +149,28 @@ def test_workspace_event_store_reads_workspace_spine(tmp_path: Path) -> None:
     assert store.get(event.event_id) is not None
 
 
+def test_workspace_event_store_rewrites_legacy_manifest_on_duplicate_append(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    store = WorkspaceEventStore(workspace, source="router", batch_id="test")
+    event = build_tool_call_event(
+        kind="tool.call.completed",
+        tool_name="docs.read",
+        source_id="unit",
+    )
+    store.append(event)
+    legacy_manifest = json.loads(store.manifest_path.read_text(encoding="utf-8"))
+    legacy_manifest.pop("manifest_hash", None)
+    store.manifest_path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
+
+    store.append(event)
+
+    repaired_manifest = json.loads(store.manifest_path.read_text(encoding="utf-8"))
+    assert repaired_manifest["manifest_hash"]
+    assert verify_provenance(workspace).issue_count == 0
+
+
 def test_provenance_verify_reports_clean_manifest_chain(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     store = WorkspaceEventStore(workspace, source="unit", batch_id="batch-1")

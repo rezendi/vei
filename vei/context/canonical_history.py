@@ -1490,11 +1490,14 @@ def _index_row_from_entry(
 ) -> CanonicalHistoryIndexRow:
     event_id = _stable_event_id(
         entry.provider,
+        entry.kind,
         entry.thread_ref,
         str(entry.ts_ms),
         entry.actor_id,
+        entry.target_id,
         entry.subject,
         entry.snippet,
+        *entry.provider_object_refs,
     )
     return CanonicalHistoryIndexRow(
         event_id=event_id,

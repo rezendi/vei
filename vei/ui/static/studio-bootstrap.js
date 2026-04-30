@@ -338,7 +338,7 @@ function initializeStudioMode() {
 }
 
 function applyStudioChrome() {
-  const labels = ["Public History", "Company", "Crisis", "Outcome", "Audit"];
+  const labels = ["Public History", "Company", "Crisis", "Outcome", "Control", "Audit"];
   const buttons = document.querySelectorAll("#studio-nav .studio-nav-button");
   buttons.forEach((btn, i) => {
     if (labels[i]) btn.textContent = labels[i];

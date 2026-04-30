@@ -94,11 +94,28 @@ def test_ui_index_contains_company_subnav_and_whatif_steps(tmp_path: Path) -> No
     assert 'id="public-demo-score-btn"' in body
     assert 'id="studio-view-helper"' in body
     assert 'id="company-subnav"' in body
+    assert 'data-studio-view="control">Control</button>' in body
+    assert 'data-studio-view="audit">Audit</button>' in body
     assert 'data-company-target="company-historical"' in body
     assert "Step 1" in body
     assert "Find Decision" in body
     assert "Compare Moves" in body
     assert "Review Forecast" in body
+
+
+def test_studio_bootstrap_preserves_control_nav_label() -> None:
+    bootstrap = (
+        Path(__file__).resolve().parents[1]
+        / "vei"
+        / "ui"
+        / "static"
+        / "studio-bootstrap.js"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        '["Public History", "Company", "Crisis", "Outcome", "Control", "Audit"]'
+        in bootstrap
+    )
 
 
 def _write_rosetta_fixture(root: Path) -> None:
