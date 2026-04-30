@@ -57,6 +57,8 @@ class ExecutionPrincipal(BaseModel):
     service_principal: str = ""
     delegated_credential_id: str = ""
     auth_subject: str = ""
+    policy_profile_id: str = ""
+    human_sponsor_id: str = ""
     source: str = "sim"
     mcp_session_id: str = ""
     mcp_client_id: str = ""
@@ -78,40 +80,95 @@ class ExecutionPrincipal(BaseModel):
             service_principal=os.environ.get("VEI_SERVICE_PRINCIPAL", ""),
             delegated_credential_id=os.environ.get("VEI_DELEGATED_CREDENTIAL_ID", ""),
             auth_subject=os.environ.get("VEI_AUTH_SUBJECT", ""),
+            policy_profile_id=os.environ.get("VEI_POLICY_PROFILE_ID", ""),
+            human_sponsor_id=os.environ.get("VEI_HUMAN_SPONSOR_ID", ""),
             source=source or os.environ.get("VEI_EXECUTION_SOURCE", "sim"),
             mcp_session_id=os.environ.get("VEI_MCP_SESSION_ID", ""),
             mcp_client_id=os.environ.get("VEI_MCP_CLIENT_ID", ""),
             mcp_server_id=os.environ.get("VEI_MCP_SERVER_ID", ""),
             mcp_protocol_version=os.environ.get("VEI_MCP_PROTOCOL_VERSION", ""),
             mcp_transport=os.environ.get("VEI_MCP_TRANSPORT", ""),
+            extra={
+                key: value
+                for key, value in {
+                    "policy_profile_id": os.environ.get("VEI_POLICY_PROFILE_ID", ""),
+                    "human_sponsor_id": os.environ.get("VEI_HUMAN_SPONSOR_ID", ""),
+                }.items()
+                if value
+            },
         )
 
     @classmethod
     def from_mapping(
         cls, payload: dict[str, Any] | None, *, source: str = "import"
     ) -> "ExecutionPrincipal":
-        data = payload or {}
+        data = _normalize_mapping(payload or {})
         return cls(
             tenant_id=_string(data, "tenant_id", "tenant"),
             workspace_id=_string(data, "workspace_id", "workspace"),
-            human_user_id=_string(data, "human_user_id", "user_id", "owner_user_id"),
-            agent_id=_string(data, "agent_id", "actor_id", "client_id"),
-            agent_version=_string(data, "agent_version", "agent_revision"),
+            human_user_id=_string(
+                data,
+                "human_user_id",
+                "user_id",
+                "owner_user_id",
+                "x-vei-human-user-id",
+                "x-user-id",
+            ),
+            agent_id=_string(
+                data,
+                "agent_id",
+                "actor_id",
+                "client_id",
+                "x-vei-agent-id",
+                "x-agent-id",
+            ),
+            agent_version=_string(
+                data,
+                "agent_version",
+                "agent_revision",
+                "x-vei-agent-version",
+                "x-agent-version",
+            ),
             service_principal=_string(
-                data, "service_principal", "service_principal_id"
+                data,
+                "service_principal",
+                "service_principal_id",
+                "x-vei-service-principal",
             ),
             delegated_credential_id=_string(
-                data, "delegated_credential_id", "credential_id"
+                data,
+                "delegated_credential_id",
+                "credential_id",
+                "x-vei-delegated-credential-id",
             ),
-            auth_subject=_string(data, "auth_subject", "subject", "sub"),
+            auth_subject=_string(
+                data, "auth_subject", "subject", "sub", "authorization_subject"
+            ),
+            policy_profile_id=_string(
+                data, "policy_profile_id", "policy_profile", "x-vei-policy-profile-id"
+            ),
+            human_sponsor_id=_string(
+                data, "human_sponsor_id", "sponsor_id", "x-vei-human-sponsor-id"
+            ),
             source=source,
-            mcp_session_id=_string(data, "mcp_session_id", "session_id"),
-            mcp_client_id=_string(data, "mcp_client_id", "client_id"),
-            mcp_server_id=_string(data, "mcp_server_id", "server_id"),
-            mcp_protocol_version=_string(
-                data, "mcp_protocol_version", "protocol_version"
+            mcp_session_id=_string(
+                data, "mcp_session_id", "session_id", "x-mcp-session-id"
             ),
-            mcp_transport=_string(data, "mcp_transport", "transport"),
+            mcp_client_id=_string(
+                data, "mcp_client_id", "client_id", "x-mcp-client-id"
+            ),
+            mcp_server_id=_string(
+                data, "mcp_server_id", "server_id", "x-mcp-server-id"
+            ),
+            mcp_protocol_version=_string(
+                data,
+                "mcp_protocol_version",
+                "protocol_version",
+                "x-mcp-protocol-version",
+            ),
+            mcp_transport=_string(
+                data, "mcp_transport", "transport", "x-mcp-transport"
+            ),
             mcp_method_name=_string(data, "mcp_method_name", "method"),
             jsonrpc_request_id=_string(data, "jsonrpc_request_id", "jsonrpc_id", "id"),
             extra={
@@ -119,6 +176,10 @@ class ExecutionPrincipal(BaseModel):
                 for key, value in {
                     "source": source,
                     "auth_subject": data.get("auth_subject") or data.get("subject"),
+                    "policy_profile_id": data.get("policy_profile_id")
+                    or data.get("policy_profile"),
+                    "human_sponsor_id": data.get("human_sponsor_id")
+                    or data.get("sponsor_id"),
                 }.items()
                 if value not in {None, ""}
             },
@@ -170,6 +231,16 @@ def _string(data: dict[str, Any], *keys: str) -> str:
         if value not in {None, ""}:
             return str(value)
     return ""
+
+
+def _normalize_mapping(data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(data)
+    headers = normalized.get("headers")
+    if isinstance(headers, dict):
+        for key, value in headers.items():
+            normalized.setdefault(str(key).lower(), value)
+            normalized.setdefault(str(key), value)
+    return normalized
 
 
 def merge_event_context(

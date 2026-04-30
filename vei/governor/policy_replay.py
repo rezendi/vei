@@ -82,12 +82,23 @@ def replay_policy_with_evaluator(
         if replay_agent is None:
             warnings.add(f"{event.event_id}: no replay agent config for {agent_id}")
             continue
+        policy_metadata = data.get("policy_metadata", {})
+        if not isinstance(policy_metadata, dict):
+            policy_metadata = {}
         replay_event = GovernorIngestEvent(
             event_id=event.event_id,
             agent_id=agent_id,
             external_tool=tool_name,
             resolved_tool=tool_name,
             args=dict(data.get("args") or {}),
+            payload={
+                "policy_metadata": policy_metadata,
+                "operation_class": policy_metadata.get("operation_class")
+                or data.get("operation_class"),
+                "object_refs": [
+                    item.model_dump(mode="json") for item in event.object_refs
+                ],
+            },
         )
         evaluation = evaluator.evaluate(event=replay_event, agent=replay_agent)
         if evaluation.decision != "allow":

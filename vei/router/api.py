@@ -32,7 +32,14 @@ class RouterAPI(Protocol):
 
     def observe(self, focus_hint: Optional[str] = None) -> ObservationLike: ...
 
-    def call_and_step(self, tool: str, args: Dict[str, Any]) -> Dict[str, Any]: ...
+    def call_and_step(
+        self,
+        tool: str,
+        args: Dict[str, Any],
+        *,
+        principal: Any = None,
+        request_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]: ...
 
     def act_and_observe(self, tool: str, args: Dict[str, Any]) -> Dict[str, Any]: ...
 

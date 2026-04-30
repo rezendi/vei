@@ -87,6 +87,9 @@ Studio's Control tab uses the same provenance APIs as the CLI/MCP surface:
 agent inventory, access review, selected-event blast radius, policy replay, and
 compact evidence packs all read from the canonical event spine rather than a
 separate dashboard state.
+When a routed agent call supplies request identity, VEI records that principal
+chain on the same evidence event and keeps policy-replay metadata structured
+without embedding raw prompts, tool args, or tool results.
 
 The runnable company path starts from a built-in world or a captured company snapshot. VEI compiles that into one deterministic world session with connected surfaces such as mail, chat, tickets, docs, CRM, identity, and knowledge assets. Agents and humans act through VEI tools and routes. VEI records what happened, scores the run, and lets you replay or branch it.
 

@@ -123,6 +123,17 @@ Related events use typed `StateDelta.data.links` records, with legacy
 `link_refs` still written for older readers, while `case_id` clusters decision
 chains. Large or sensitive payloads use `TextHandle`.
 
+Live router calls can carry an explicit `ExecutionPrincipal` or request
+metadata from MCP/HTTP boundaries. The router maps those fields into
+`EventContext` so routed evidence can preserve agent, human user, service
+principal, delegated credential, MCP session/client/server, and trace identity
+when the caller supplies them; environment-derived identity remains a local/dev
+fallback. Tool events also carry safe replay metadata in
+`StateDelta.data.policy_metadata` such as operation class, access mode,
+destination class, sensitivity tags, object classification, policy profile,
+approval requirement, tenant boundary, and destructive-write hints. Raw args and
+responses still stay behind payload handles by default.
+
 Runtime provenance writes through a small `CanonicalEventSink` /
 `CanonicalEventStore` boundary. The local implementation is still append-only
 JSONL in the workspace; the in-process spine remains a compatibility collector,

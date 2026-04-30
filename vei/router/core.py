@@ -588,13 +588,22 @@ class Router:
     def help_payload(self) -> Dict[str, Any]:
         return build_help_payload(self)
 
-    def call_and_step(self, tool: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    def call_and_step(
+        self,
+        tool: str,
+        args: Dict[str, Any],
+        *,
+        principal: Any = None,
+        request_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Execute a tool call, deliver any due event, advance time, and persist trace.
 
         This keeps the simulation deterministic and ensures artifacts are flushed
         so downstream scoring can consume trace.jsonl during tests.
         """
-        result = self._execute(tool, args)
+        result = self._execute(
+            tool, args, principal=principal, request_metadata=request_metadata
+        )
         self._record_tool_call(tool, args, result)
         self.trace.record_call(tool, args, result, time_ms=self.bus.clock_ms)
         evt = self.bus.next_if_due()
@@ -610,8 +619,21 @@ class Router:
 
     _GUARDED_PREFIXES = GUARDED_PREFIXES
 
-    def _execute(self, tool: str, args: Dict[str, Any]) -> Any:
-        return RouterDispatch.execute(self, tool, args)
+    def _execute(
+        self,
+        tool: str,
+        args: Dict[str, Any],
+        *,
+        principal: Any = None,
+        request_metadata: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        return RouterDispatch.execute(
+            self,
+            tool,
+            args,
+            principal=principal,
+            request_metadata=request_metadata,
+        )
 
     def snapshot_observation(self, focus_hint: Optional[str] = None) -> Observation:
         """Build an Observation without advancing time or delivering events.

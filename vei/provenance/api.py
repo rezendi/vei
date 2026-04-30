@@ -418,7 +418,7 @@ def access_review(
         observed_access=observed,
         configured_access=configured,
         reachable_sensitive_assets=[
-            item for item in configured if "sensitive" in item.label.lower()
+            item for item in configured if _access_item_sensitive(item)
         ],
         unused_permissions=recommended if configured else [],
         new_access_since_last_review=new_access if configured else observed,
@@ -673,6 +673,43 @@ def _configured_access_item(item: dict | AccessItem) -> AccessItem:
         id=item_id,
         label=str(item.get("label") or item.get("display_name") or item_id),
         source=str(item.get("source") or "configured"),
+        classification=str(
+            item.get("classification")
+            or item.get("object_classification")
+            or item.get("sensitivity")
+            or ""
+        ),
+        tags=[
+            str(value)
+            for value in (
+                item.get("tags")
+                or item.get("sensitivity_tags")
+                or item.get("policy_tags")
+                or []
+            )
+            if str(value).strip()
+        ],
+    )
+
+
+def _access_item_sensitive(item: AccessItem) -> bool:
+    haystack = " ".join(
+        [
+            item.label,
+            item.classification,
+            *item.tags,
+        ]
+    ).lower()
+    return any(
+        token in haystack
+        for token in (
+            "sensitive",
+            "restricted",
+            "confidential",
+            "customer_data",
+            "pii",
+            "secret",
+        )
     )
 
 
@@ -686,10 +723,16 @@ def _configured_access_entries(agent: dict) -> list[dict]:
         ("scopes", "scope"),
         ("oauth_scopes", "scope"),
         ("permissions", "permission"),
+        ("sensitive_assets", "object"),
+        ("reachable_sensitive_assets", "object"),
     ):
         values = agent.get(key)
         if isinstance(values, list):
-            entries.extend({"kind": kind, "id": str(value)} for value in values)
+            for value in values:
+                if isinstance(value, dict):
+                    entries.append({"kind": kind, **value})
+                else:
+                    entries.append({"kind": kind, "id": str(value)})
     return entries
 
 

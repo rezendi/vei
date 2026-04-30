@@ -49,8 +49,22 @@ class PolicyEvaluator:
         tool_name = str(event.resolved_tool or event.external_tool or "")
         surface = event_surface(event)
         operation_class = mirror_operation_class(tool_name)
+        policy_metadata = event.payload.get("policy_metadata", {})
+        if not isinstance(policy_metadata, dict):
+            policy_metadata = {}
+        metadata_operation_class = str(
+            policy_metadata.get("operation_class")
+            or event.payload.get("operation_class")
+            or ""
+        )
         if operation_class is None and action == "inject":
             operation_class = "write_safe"
+        if operation_class is None and metadata_operation_class in {
+            "read",
+            "write_safe",
+            "write_risky",
+        }:
+            operation_class = metadata_operation_class
         if operation_class is None:
             return PolicyEvaluation(
                 action=action,

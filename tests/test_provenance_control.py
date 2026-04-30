@@ -413,6 +413,56 @@ def test_router_dispatch_persists_workspace_events(tmp_path: Path) -> None:
     assert created["doc_id"] in review.touched_objects
 
 
+def test_router_dispatch_uses_request_principal_and_safe_policy_metadata(
+    tmp_path: Path,
+) -> None:
+    drain_spine()
+    router = create_router(seed=1, artifacts_dir=str(tmp_path))
+    created = router.call_and_step(
+        "docs.create", {"title": "Restricted Plan", "body": "Body", "tags": ["test"]}
+    )
+    router.call_and_step(
+        "docs.read",
+        {"doc_id": str(created["doc_id"])},
+        principal={
+            "tenant_id": "tenant-1",
+            "agent_id": "agent-7",
+            "human_user_id": "human-3",
+            "service_principal": "svc-2",
+            "delegated_credential_id": "cred-9",
+            "policy_profile_id": "observer",
+            "mcp_session_id": "sess-1",
+        },
+        request_metadata={
+            "headers": {"x-mcp-client-id": "cursor-agent"},
+            "policy_metadata": {
+                "object_classification": "restricted",
+                "sensitivity_tags": ["restricted"],
+            },
+        },
+    )
+
+    events = load_workspace_canonical_events(tmp_path)
+    requested = [event for event in events if event.kind == "tool.call.requested"][-1]
+    data = requested.delta.data or {}
+    context = data["context"]
+    policy_metadata = data["policy_metadata"]
+
+    assert requested.actor_ref is not None
+    assert requested.actor_ref.actor_id == "agent-7"
+    assert context["agent_id"] == "agent-7"
+    assert context["human_user_id"] == "human-3"
+    assert context["service_principal"] == "svc-2"
+    assert context["delegated_credential_id"] == "cred-9"
+    assert context["mcp_client_id"] == "cursor-agent"
+    assert policy_metadata["operation_class"] == "read"
+    assert policy_metadata["access_mode"] == "read"
+    assert policy_metadata["object_classification"] == "restricted"
+    assert policy_metadata["policy_profile_id"] == "observer"
+    assert "restricted" in policy_metadata["sensitivity_tags"]
+    assert "args" not in data
+
+
 def test_policy_replay_uses_policy_evaluator_when_reconstructable() -> None:
     event = build_tool_call_event(
         kind="tool.call.requested",
@@ -467,6 +517,56 @@ def test_policy_replay_accepts_policy_model() -> None:
     assert report.hits[0].replay_decision == "deny"
 
 
+def test_policy_replay_uses_safe_operation_metadata_for_unknown_tools() -> None:
+    event = build_tool_call_event(
+        kind="tool.call.requested",
+        tool_name="vendor.custom_mutate",
+        actor_ref=ActorRef(actor_id="agent-1"),
+        source_id="unit",
+        policy_metadata={"operation_class": "write_risky", "access_mode": "write"},
+    )
+    report = replay_policy(
+        [event],
+        policy={
+            "name": "metadata-replay",
+            "governor": {
+                "config": {"connector_mode": "sim"},
+                "agents": [
+                    {
+                        "agent_id": "agent-1",
+                        "name": "Agent One",
+                        "policy_profile_id": "observer",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert report.hit_count == 1
+    assert report.hits[0].replay_decision == "deny"
+    assert "write risky" in report.hits[0].reason
+
+
+def test_tool_policy_metadata_sanitizes_unknown_external_values() -> None:
+    event = build_tool_call_event(
+        kind="tool.call.requested",
+        tool_name="vendor.custom",
+        source_id="unit",
+        policy_metadata={
+            "operation_class": "mutate_everything",
+            "access_mode": "superuser",
+            "sensitivity_tags": "Restricted, Customer Data",
+            "approval_required": "false",
+        },
+    )
+
+    metadata = (event.delta.data or {})["policy_metadata"]
+    assert "operation_class" not in metadata
+    assert "access_mode" not in metadata
+    assert metadata["approval_required"] is False
+    assert metadata["sensitivity_tags"] == ["Restricted", "Customer Data"]
+
+
 def test_otel_export_preserves_vei_ids() -> None:
     event = build_tool_call_event(
         kind="tool.call.completed",
@@ -478,7 +578,10 @@ def test_otel_export_preserves_vei_ids() -> None:
             parent_event_id="evt-parent",
             jsonrpc_request_id="1",
             mcp_session_id="sess-1",
+            service_principal="svc-1",
+            delegated_credential_id="cred-1",
         ),
+        policy_metadata={"operation_class": "read", "access_mode": "read"},
     )
     exported = export_otel_genai([event])
     span = exported["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
@@ -493,6 +596,8 @@ def test_otel_export_preserves_vei_ids() -> None:
     assert attrs["gen_ai.operation.name"] == "execute_tool"
     assert attrs["gen_ai.tool.name"] == "mail.search"
     assert attrs["jsonrpc.request.id"] == "1"
+    assert attrs["vei.context.service_principal"] == "svc-1"
+    assert attrs["vei.policy_metadata.operation_class"] == "read"
 
 
 def test_execution_principal_maps_identity_to_event_context() -> None:
@@ -575,6 +680,13 @@ def test_access_review_v2_observed_configured_and_evidence_quality() -> None:
         configured_access=[
             {"kind": "tool", "id": "docs.read"},
             {"kind": "tool", "id": "slack.post_message"},
+            {
+                "kind": "object",
+                "id": "doc_graph:document:doc-secret",
+                "label": "Board plan",
+                "classification": "restricted",
+                "tags": ["customer_data"],
+            },
         ],
     )
 
@@ -586,6 +698,8 @@ def test_access_review_v2_observed_configured_and_evidence_quality() -> None:
         (item.kind, item.id) for item in report.unused_permissions
     }
     assert report.recommended_revocations
+    assert report.reachable_sensitive_assets
+    assert report.reachable_sensitive_assets[0].classification == "restricted"
     assert report.evidence_quality[0].identity_confidence == "verified"
 
 
