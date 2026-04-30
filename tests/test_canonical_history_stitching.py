@@ -73,3 +73,49 @@ def test_canonical_history_ignores_junk_tokens_for_case_ids() -> None:
     assert "case:UTF-8" not in case_ids
     assert "case:DOCTYPE" not in case_ids
     assert "case:GPT-4" not in case_ids
+
+
+def test_canonical_history_event_ids_include_provider_object_refs() -> None:
+    snapshot = ContextSnapshot(
+        organization_name="Enron Sample",
+        organization_domain="enron.com",
+        sources=[
+            ContextSourceResult(
+                provider="mail_archive",
+                captured_at="2026-04-30T00:00:00Z",
+                status="ok",
+                data={
+                    "threads": [
+                        {
+                            "thread_id": "thread-1",
+                            "subject": "Repeated notice",
+                            "messages": [
+                                {
+                                    "message_id": "msg-1",
+                                    "from": "ops@enron.com",
+                                    "to": ["legal@enron.com"],
+                                    "date": "Tue, 09 Jan 2024 21:36:03 +0000",
+                                    "subject": "Repeated notice",
+                                    "body": "Keep this preservation notice.",
+                                },
+                                {
+                                    "message_id": "msg-2",
+                                    "from": "ops@enron.com",
+                                    "to": ["legal@enron.com"],
+                                    "date": "Tue, 09 Jan 2024 21:36:03 +0000",
+                                    "subject": "Repeated notice",
+                                    "body": "Keep this preservation notice.",
+                                },
+                            ],
+                        }
+                    ],
+                    "profile": {},
+                },
+            )
+        ],
+    )
+
+    bundle = build_canonical_history_bundle(snapshot)
+    event_ids = [event.event_id for event in bundle.events]
+
+    assert len(event_ids) == len(set(event_ids))

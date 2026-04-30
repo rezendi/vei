@@ -156,14 +156,20 @@ def _timeline_payload(root: Path, bundle: CustomerTwinBundle) -> dict[str, Any]:
 
 def _twin_status_payload(root: Path) -> dict[str, Any]:
     workspace_root = root.expanduser().resolve()
-    bundle = load_customer_twin(workspace_root)
-    live_governor = _gateway_json(bundle, "/api/governor")
-    live_workforce = _gateway_json(bundle, "/api/workforce")
-    workspace_status = build_workspace_governor_status(
-        workspace_root,
-        governor_payload=live_governor,
-        workforce_payload=live_workforce,
-    )
+    try:
+        bundle = load_customer_twin(workspace_root)
+    except FileNotFoundError:
+        bundle = None
+    live_governor = _gateway_json(bundle, "/api/governor") if bundle else None
+    live_workforce = _gateway_json(bundle, "/api/workforce") if bundle else None
+    try:
+        workspace_status = build_workspace_governor_status(
+            workspace_root,
+            governor_payload=live_governor,
+            workforce_payload=live_workforce,
+        )
+    except FileNotFoundError:
+        workspace_status = None
 
     service_status: dict[str, Any] = {}
     try:
@@ -181,21 +187,28 @@ def _twin_status_payload(root: Path) -> dict[str, Any]:
         }
 
     return {
-        "bundle": bundle.model_dump(mode="json"),
+        "bundle": bundle.model_dump(mode="json") if bundle else None,
+        "bundle_available": bundle is not None,
         "status": {
             **service_status,
-            "active_run": workspace_status.active_run,
-            "twin_status": workspace_status.twin_status,
-            "request_count": workspace_status.request_count,
-            "services_ready": workspace_status.services_ready,
-            "active_agents": workspace_status.active_agents,
-            "activity": workspace_status.activity,
-            "outcome": workspace_status.outcome,
-            "orchestrator": workspace_status.orchestrator,
-            "orchestrator_sync": workspace_status.orchestrator_sync,
-            "governor": workspace_status.governor,
-            "workforce": workspace_status.workforce,
-            "exercise": workspace_status.exercise,
+            "active_run": workspace_status.active_run if workspace_status else None,
+            "twin_status": (
+                workspace_status.twin_status if workspace_status else "stopped"
+            ),
+            "request_count": workspace_status.request_count if workspace_status else 0,
+            "services_ready": (
+                workspace_status.services_ready if workspace_status else False
+            ),
+            "active_agents": workspace_status.active_agents if workspace_status else [],
+            "activity": workspace_status.activity if workspace_status else [],
+            "outcome": workspace_status.outcome if workspace_status else {},
+            "orchestrator": workspace_status.orchestrator if workspace_status else None,
+            "orchestrator_sync": (
+                workspace_status.orchestrator_sync if workspace_status else None
+            ),
+            "governor": workspace_status.governor if workspace_status else {},
+            "workforce": workspace_status.workforce if workspace_status else {},
+            "exercise": workspace_status.exercise if workspace_status else {},
         },
     }
 

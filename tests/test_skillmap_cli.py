@@ -16,6 +16,11 @@ def test_skillmap_cli_builds_outputs_and_validates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_skillmap_cli_llm(monkeypatch)
+    dotenv_calls: list[bool] = []
+    monkeypatch.setattr(
+        "vei.cli.vei_skillmap.load_dotenv",
+        lambda *args, **kwargs: dotenv_calls.append(bool(kwargs.get("override"))),
+    )
     snapshot_path = _write_cli_snapshot(tmp_path)
     output_dir = tmp_path / "skillmap"
     runner = CliRunner()
@@ -34,6 +39,7 @@ def test_skillmap_cli_builds_outputs_and_validates(
     )
 
     assert build_result.exit_code == 0, build_result.output
+    assert dotenv_calls == [False]
     map_path = output_dir / "company_skill_map.json"
     assert map_path.exists()
     assert (output_dir / "company_skills.md").exists()

@@ -51,6 +51,7 @@ class WorkspaceEventStore:
         hashed = event.with_hash()
         existing = self._event_id_index()
         if hashed.event_id in existing:
+            self._write_manifest()
             return hashed
         with self.events_path.open("a", encoding="utf-8") as fh:
             fh.write(hashed.model_dump_json() + "\n")

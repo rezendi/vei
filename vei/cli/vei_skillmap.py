@@ -12,6 +12,14 @@ from vei.skillmap.api import (
     write_company_skill_map_outputs,
 )
 
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional dependency fallback
+
+    def load_dotenv(*args: object, **kwargs: object) -> None:
+        return None
+
+
 app = typer.Typer(add_completion=False)
 
 
@@ -66,6 +74,7 @@ def build(
     ),
 ) -> None:
     """Build an evidence-backed company skill map from a context bundle."""
+    load_dotenv(override=False)
     skill_map = build_company_skill_map_from_context_path(
         source_dir,
         limit=limit,

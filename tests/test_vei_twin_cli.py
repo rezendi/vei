@@ -69,6 +69,20 @@ def test_twin_cli_builds_and_reports_status(tmp_path: Path) -> None:
     assert status_payload["bundle"]["gateway"]["surfaces"][0]["name"] == "slack"
 
 
+def test_twin_status_reports_workspace_without_twin_bundle(tmp_path: Path) -> None:
+    runner = CliRunner()
+    root = tmp_path / "workspace_only"
+    root.mkdir()
+
+    status_result = runner.invoke(app, ["twin", "status", "--root", str(root)])
+
+    assert status_result.exit_code == 0, status_result.output
+    status_payload = json.loads(status_result.output)
+    assert status_payload["bundle"] is None
+    assert status_payload["bundle_available"] is False
+    assert status_payload["status"]["twin_status"] == "stopped"
+
+
 def test_twin_cli_lifecycle_commands_use_shared_runtime_surface(
     tmp_path: Path,
     monkeypatch,
