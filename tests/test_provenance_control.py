@@ -100,6 +100,7 @@ def test_agent_activity_jsonl_ingest_is_idempotent_and_reportable(
             {
                 "id": "rec-1",
                 "ts_ms": 100,
+                "case_id": "CASE-123",
                 "actor_id": "agent-1",
                 "tool": "docs.read",
                 "args": {"doc_id": "doc-1"},
@@ -121,6 +122,7 @@ def test_agent_activity_jsonl_ingest_is_idempotent_and_reportable(
     assert second.skipped_duplicate_count == 1
     events = load_workspace_canonical_events(workspace)
     assert len(events) == 1
+    assert events[0].case_id == "CASE-123"
     graph = build_activity_graph(events)
     assert graph.node_count >= 2
     review = access_review(events, agent_id="agent-1")

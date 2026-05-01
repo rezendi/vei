@@ -6,6 +6,16 @@ For the general command reference, use [WHATIF.md](WHATIF.md).
 
 ---
 
+## VEI Control to Skill Map
+
+The [Control skill-map refresh example](examples/control-skillmap-live-map/README.md)
+shows a small workspace with company context plus captured agent activity. It
+imports the activity into the workspace evidence spine and runs
+`vei skillmap refresh` so the living company map updates from real captured
+behavior rather than only the static context bundle.
+
+---
+
 ## Enron (real company history)
 
 Enron is the repo-owned public company example. Use it when you want a

@@ -87,6 +87,7 @@ function whatIfHasPendingRequest() {
       state.whatIfOpenPending ||
       state.whatIfRunPending ||
       state.whatIfRankPending ||
+      state.whatIfChatPending ||
       state.whatIfSceneLoading,
   );
 }
@@ -130,6 +131,12 @@ function updateWhatIfActionButtons() {
       pending: state.whatIfRankPending,
       idleLabel: "Score this decision",
       busyLabel: "Scoring",
+    },
+    {
+      id: "whatif-chat-btn",
+      pending: state.whatIfChatPending,
+      idleLabel: "Ask",
+      busyLabel: "Asking",
     },
   ];
   actionConfig.forEach((item) => {
@@ -815,6 +822,103 @@ function renderWhatIfHistoryEvents(events, { current = false } = {}) {
   `;
 }
 
+function renderWhatIfChat() {
+  const chatNode = document.getElementById("whatif-chat-log");
+  if (!chatNode) {
+    return;
+  }
+  const usingSavedBundle = Boolean(state.whatIfStatus?.saved_bundle_active);
+  const messages = state.whatIfChat || [];
+  if (!usingSavedBundle) {
+    chatNode.innerHTML = `
+      <div class="public-demo-message is-assistant">
+        <span>VEI</span>
+        <p>Saved branch chat is available when Studio is opened on a saved historical what-if workspace.</p>
+      </div>
+    `;
+    return;
+  }
+  if (!messages.length) {
+    chatNode.innerHTML = `
+      <div class="public-demo-message is-assistant">
+        <span>VEI</span>
+        <p>I can answer from pre-branch evidence, then separately cite the saved branch and forecast artifacts.</p>
+      </div>
+    `;
+    return;
+  }
+  chatNode.innerHTML = messages
+    .map(
+      (message) => `
+        <div class="public-demo-message is-${escapeHtml(message.role)}">
+          <span>${escapeHtml(message.role === "user" ? "You" : "VEI")}</span>
+          <p>${escapeHtml(message.text)}</p>
+          ${
+            Array.isArray(message.citations) && message.citations.length
+              ? `<div class="public-demo-citations">${message.citations
+                  .map(
+                    (citation) => `
+                      <code>${escapeHtml(citation.scope || "")} ${escapeHtml((citation.timestamp || "").slice(0, 10))} ${escapeHtml(citation.title || citation.citation_id || "")}</code>
+                    `,
+                  )
+                  .join("")}</div>`
+              : ""
+          }
+        </div>
+      `,
+    )
+    .join("");
+  chatNode.scrollTop = chatNode.scrollHeight;
+}
+
+async function askWhatIfChat() {
+  if (whatIfHasPendingRequest()) {
+    return;
+  }
+  const input = document.getElementById("whatif-chat-input");
+  const message = input?.value?.trim() || "";
+  if (!message) {
+    return;
+  }
+  const event = whatIfSelectedEventPayload() || state.historicalWorkspace?.branch_event;
+  state.whatIfChat = [...(state.whatIfChat || []), { role: "user", text: message }];
+  state.whatIfChatPending = true;
+  updateWhatIfActionButtons();
+  renderWhatIfChat();
+  try {
+    const response = await getJson("/api/workspace/whatif/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: whatIfSourceId(),
+        event_id: event?.event_id || state.historicalWorkspace?.branch_event_id || null,
+        thread_id: event?.thread_id || state.historicalWorkspace?.thread_id || null,
+        message,
+      }),
+    });
+    state.whatIfChat = [
+      ...(state.whatIfChat || []),
+      {
+        role: "assistant",
+        text: response.assistant_text || "",
+        citations: response.citations || [],
+      },
+    ];
+    if (input) {
+      input.value = "";
+    }
+  } catch (error) {
+    state.whatIfChat = [
+      ...(state.whatIfChat || []),
+      { role: "assistant", text: `Saved what-if chat failed: ${error?.message || error}` },
+    ];
+  } finally {
+    state.whatIfChatPending = false;
+    updateWhatIfActionButtons();
+  }
+  renderWhatIfChat();
+}
+
 function syncWhatIfSelectionAfterCustomEdit() {
   if (state.whatIfChosenOptionLabel !== WHATIF_CUSTOM_MOVE_LABEL) {
     return;
@@ -1183,6 +1287,7 @@ function renderWhatIfStudio() {
     ${llmNotice}
     ${validationNotice}
   `;
+  renderWhatIfChat();
 
   if (objectiveSelect) {
     const packs = whatIfObjectivePacks();
@@ -1787,6 +1892,7 @@ async function primeWhatIfSceneFromHistoricalWorkspace() {
 window.renderWhatIfStudio = renderWhatIfStudio;
 window.searchWhatIfEvents = searchWhatIfEvents;
 window.loadWhatIfDecisionScene = loadWhatIfDecisionScene;
+window.askWhatIfChat = askWhatIfChat;
 window.materializeWhatIfEpisode = materializeWhatIfEpisode;
 window.runWhatIfExperimentFromUI = runWhatIfExperimentFromUI;
 window.runRankedWhatIfFromUI = runRankedWhatIfFromUI;

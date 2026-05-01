@@ -94,6 +94,8 @@ def test_ui_index_contains_company_subnav_and_whatif_steps(tmp_path: Path) -> No
     assert 'id="public-demo-score-btn"' in body
     assert 'id="studio-view-helper"' in body
     assert 'id="company-subnav"' in body
+    assert 'id="whatif-chat-log"' in body
+    assert 'id="whatif-chat-btn"' in body
     assert 'data-studio-view="control">Control</button>' in body
     assert 'data-studio-view="audit">Audit</button>' in body
     assert 'data-company-target="company-historical"' in body

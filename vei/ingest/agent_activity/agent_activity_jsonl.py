@@ -65,6 +65,7 @@ class AgentActivityJsonlAdapter:
 
     def to_canonical_events(self, raw: RawAgentActivity) -> Iterable[CanonicalEvent]:
         payload = dict(raw.payload)
+        case_id = str(payload.get("case_id") or "").strip() or None
         actor = (
             ActorRef(
                 actor_id=raw.actor_id,
@@ -112,6 +113,7 @@ class AgentActivityJsonlAdapter:
                 kind=kind,
                 event_id=stable_event_id(source_id, kind),
                 tenant_id=self.tenant_id,
+                case_id=case_id,
                 ts_ms=raw.ts_ms,
                 actor_ref=actor,
                 tool_name=raw.tool_name,
@@ -145,6 +147,7 @@ class AgentActivityJsonlAdapter:
             kind="llm.call.completed",
             event_id=stable_event_id(source_id, "llm.call.completed"),
             tenant_id=self.tenant_id,
+            case_id=case_id,
             ts_ms=raw.ts_ms,
             actor_ref=actor,
             provider=raw.provider or "unknown",

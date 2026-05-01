@@ -85,6 +85,7 @@ vei quickstart run
 vei eval benchmark --runner workflow --family security_containment
 vei skillmap build --source-dir _vei_out/<tenant>/context_snapshot.json --output _vei_out/<tenant>/skill_map
 vei ingest agent-activity --source agent_activity_jsonl --path ./logs --workspace _vei_out/<tenant>
+vei skillmap refresh --workspace _vei_out/<tenant> --output _vei_out/<tenant>/skill_map
 vei provenance access-review --agent-id <agent-id> --workspace _vei_out/<tenant>
 vei provenance verify --workspace _vei_out/<tenant>
 vei provenance export --format evidence-pack --workspace _vei_out/<tenant> --output _vei_out/<tenant>/evidence_pack.json

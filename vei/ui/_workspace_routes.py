@@ -13,6 +13,9 @@ from fastapi.responses import JSONResponse
 
 from vei.project_settings import default_model_for_provider
 from vei.whatif.api import (
+    WhatIfAuditRecord,
+    WhatIfCandidateIntervention,
+    WhatIfJudgedPairwiseComparison,
     build_decision_scene,
     build_saved_decision_scene,
     build_saved_ranked_result_payload,
@@ -28,11 +31,6 @@ from vei.whatif.api import (
     search_events,
 )
 from vei.whatif.filenames import EXPERIMENT_RESULT_FILE
-from vei.whatif.api import (
-    WhatIfAuditRecord,
-    WhatIfCandidateIntervention,
-    WhatIfJudgedPairwiseComparison,
-)
 from vei.verticals import (
     load_workspace_exports_preview,
     load_workspace_presentation,
@@ -62,6 +60,7 @@ from ._whatif_helpers import (
     saved_workspace_validation_issues as _saved_workspace_validation_issues,
     saved_workspace_source_matches_request as _saved_workspace_source_matches_request,
 )
+from ._whatif_chat_routes import register_workspace_whatif_chat_route
 from ._root_mode import load_ui_workspace_summary
 
 
@@ -106,6 +105,8 @@ def register_workspace_routes(app: FastAPI, root: Path, *, deps: Any) -> None:
 
     def _iso_now() -> str:
         return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+    register_workspace_whatif_chat_route(app, root)
 
     @app.get("/api/workspace")
     def api_workspace() -> JSONResponse:

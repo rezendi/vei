@@ -2436,6 +2436,15 @@ body.developer-mode .studio-nav-button.developer-only {
   padding: var(--space-4);
 }
 
+.whatif-chat-shell {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: var(--space-4);
+}
+
 .whatif-step-head {
   display: flex;
   align-items: center;
@@ -2471,6 +2480,58 @@ body.developer-mode .studio-nav-button.developer-only {
 .whatif-experiment-result {
   display: grid;
   gap: 12px;
+}
+
+.whatif-chat-log {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.whatif-chat-log .public-demo-message {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.whatif-chat-log .public-demo-message span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.whatif-chat-log .public-demo-message p {
+  margin: 0;
+  max-width: 82ch;
+  line-height: 1.5;
+}
+
+.whatif-chat-log .public-demo-message.is-user p {
+  font-weight: 700;
+}
+
+.whatif-chat-log .public-demo-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.whatif-chat-log .public-demo-citations code {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(17, 34, 53, 0.04);
+  color: var(--ink);
+  font-size: 0.72rem;
+  padding: 3px 6px;
+}
+
+.whatif-chat-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
 }
 
 .whatif-status-pill,
@@ -7453,7 +7514,8 @@ body[data-vei-tone="casebook"] .move-log-shell summary {
   }
 
   .whatif-scene-facts,
-  .whatif-delta-strip {
+  .whatif-delta-strip,
+  .whatif-chat-controls {
     grid-template-columns: 1fr;
   }
 }

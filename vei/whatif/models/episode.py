@@ -118,10 +118,51 @@ class WhatIfDecisionScene(BaseModel):
     historical_business_state: WhatIfBusinessStateAssessment | None = None
 
 
+class WhatIfHistoricalChatCitation(BaseModel):
+    citation_id: str
+    scope: Literal[
+        "pre_branch",
+        "branch_point",
+        "post_branch_saved",
+        "saved_artifact",
+    ]
+    source_type: Literal[
+        "event",
+        "public_context",
+        "saved_artifact",
+        "forecast",
+        "ranking",
+    ]
+    title: str
+    summary: str = ""
+    timestamp: str = ""
+    event_id: str = ""
+    artifact_path: str = ""
+    source_ids: list[str] = Field(default_factory=list)
+
+
+class WhatIfHistoricalChatResponse(BaseModel):
+    source: WhatIfSourceName = "enron"
+    organization_name: str
+    thread_id: str
+    thread_subject: str
+    branch_event_id: str
+    branch_timestamp: str
+    assistant_text: str
+    before_branch_summary: str = ""
+    after_branch_summary: str = ""
+    cited_event_ids: list[str] = Field(default_factory=list)
+    citations: list[WhatIfHistoricalChatCitation] = Field(default_factory=list)
+    used_saved_artifacts: list[str] = Field(default_factory=list)
+    caveat: str = ""
+
+
 __all__ = [
     "WhatIfDecisionOption",
     "WhatIfDecisionScene",
     "WhatIfEpisodeManifest",
     "WhatIfEpisodeMaterialization",
+    "WhatIfHistoricalChatCitation",
+    "WhatIfHistoricalChatResponse",
     "WhatIfReplaySummary",
 ]

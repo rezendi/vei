@@ -53,6 +53,8 @@ from .models import (
     WhatIfEventReference,
     WhatIfExperimentMode,
     WhatIfFutureStateHeads,
+    WhatIfHistoricalChatCitation,
+    WhatIfHistoricalChatResponse,
     WhatIfJudgedPairwiseComparison,
     WhatIfObjectivePackId,
     WhatIfObservedEvidenceHeads,
@@ -80,6 +82,7 @@ from .filenames import (
 )
 from .decision import build_decision_scene, build_saved_decision_scene
 from .ejepa import default_forecast_backend, run_ejepa_counterfactual
+from .historical_chat import answer_saved_historical_chat
 from .macro_outcomes import (
     MACRO_CALIBRATION_METRICS,
     MACRO_CALIBRATION_REPORT_PATH,
@@ -131,6 +134,8 @@ _BOUNDARY_EXPORTS = (
     WhatIfEventReference,
     WhatIfExperimentMode,
     WhatIfFutureStateHeads,
+    WhatIfHistoricalChatCitation,
+    WhatIfHistoricalChatResponse,
     WhatIfJudgedPairwiseComparison,
     WhatIfObjectivePackId,
     WhatIfObservedEvidenceHeads,
@@ -147,11 +152,14 @@ __all__ = [
     "build_news_state_point",
     "build_saved_decision_scene",
     "build_public_context",
+    "answer_saved_historical_chat",
     "NewsStatePointCandidateInput",
     "NewsStatePointRunResult",
     "WhatIfBusinessOutcomeHeads",
     "WhatIfEvent",
     "WhatIfFutureStateHeads",
+    "WhatIfHistoricalChatCitation",
+    "WhatIfHistoricalChatResponse",
     "WhatIfWorld",
     "MACRO_CALIBRATION_METRICS",
     "MACRO_CALIBRATION_REPORT_PATH",

@@ -61,6 +61,8 @@ const state = {
   whatIfOpenPending: false,
   whatIfRunPending: false,
   whatIfRankPending: false,
+  whatIfChatPending: false,
+  whatIfChat: [],
   whatIfSearchResult: null,
   whatIfSelectedEvent: null,
   whatIfScene: null,

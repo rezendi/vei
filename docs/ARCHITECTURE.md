@@ -319,6 +319,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
 - `vei.skillmap`
   - `models.py` carries the company skill-map literals and Pydantic payloads
   - `skill_pipeline.py` holds catalog/LLM extraction/replay/reporting; `api.py` re-exports the supported surface
+  - `skillmap refresh` merges workspace context events with imported VEI Control agent-activity events before drafting or refreshing the living company map
 - workflow runner / benchmark baselines
   - flagship workflows can now compile graph-native steps to `vei.graph_action` and resolve to concrete twins only at execution time
 - `vei.orientation`

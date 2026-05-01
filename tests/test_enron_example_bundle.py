@@ -607,6 +607,51 @@ def test_repo_owned_enron_example_workspace_loads_saved_scene() -> None:
     ]
 
 
+def test_repo_owned_enron_example_workspace_answers_saved_historical_chat_without_rosetta(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("VEI_WHATIF_ROSETTA_DIR", raising=False)
+    monkeypatch.delenv("VEI_WHATIF_SOURCE", raising=False)
+    monkeypatch.delenv("VEI_WHATIF_SOURCE_DIR", raising=False)
+    workspace_root = EXAMPLE_ROOT / "workspace"
+    client = TestClient(ui_api.create_ui_app(workspace_root))
+
+    status_payload = client.get("/api/workspace/whatif").json()
+    historical_payload = client.get("/api/workspace/historical").json()
+    response = client.post(
+        "/api/workspace/whatif/chat",
+        json={
+            "source": status_payload["source"],
+            "event_id": historical_payload["branch_event_id"],
+            "thread_id": historical_payload["thread_id"],
+            "message": "What was known about the master agreement before the branch, and what happened after?",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["branch_event_id"] == "enron_bcda1b925800af8c"
+    assert "Before branch (2000-09-27)" in payload["assistant_text"]
+    assert "After branch in saved artifacts" in payload["assistant_text"]
+    assert "not evidence available before the branch" in payload["assistant_text"]
+    assert payload["used_saved_artifacts"] == [
+        "workspace/episode_manifest.json",
+        "workspace/whatif_public_context.json",
+        "whatif_experiment_result.json",
+        "whatif_business_state_comparison.json",
+    ]
+    pre_branch = [
+        item for item in payload["citations"] if item["scope"] == "pre_branch"
+    ]
+    assert pre_branch
+    assert all(item["timestamp"] < payload["branch_timestamp"] for item in pre_branch)
+    assert any("Master Agreement" in item["title"] for item in pre_branch)
+    assert any(
+        item["artifact_path"] == "whatif_business_state_comparison.json"
+        for item in payload["citations"]
+    )
+
+
 def test_repo_owned_enron_example_workspace_uses_saved_experiment_without_rosetta(
     monkeypatch,
 ) -> None:

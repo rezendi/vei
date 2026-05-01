@@ -12,11 +12,17 @@ from typing import Any, cast
 
 
 from vei.context.api import (
+    CanonicalHistoryBundle,
+    CanonicalHistoryIndex,
+    CanonicalHistoryIndexRow,
     ContextSnapshot,
     build_canonical_history_bundle,
+    canonical_history_paths,
     hydrate_blueprint,
     load_canonical_history_bundle,
 )
+from vei.events.api import CanonicalEvent
+from vei.ingest.api import load_agent_activity_events
 from vei.llm.providers import plan_once_with_usage
 from vei.project_settings import resolve_llm_defaults
 from vei.structure.api import build_structure_view_from_canonical_events
@@ -65,6 +71,142 @@ def build_company_skill_map_from_context_path(
     bundle = load_canonical_history_bundle(snapshot_path)
     if bundle is None:
         bundle = build_canonical_history_bundle(snapshot)
+    skill_map = _build_company_skill_map_from_bundle(
+        snapshot=snapshot,
+        bundle=bundle,
+        source_ref=str(snapshot_path),
+        source_statuses=[source.model_dump(mode="json") for source in snapshot.sources],
+        metadata={
+            "builder": "context_bundle",
+            "bundle_role": str(snapshot.metadata.get("snapshot_role", "")),
+            "skill_source_policy": "context_bundle_only",
+            "skill_extractor": "llm",
+            "graph_plan_skills": "omitted_for_context_bundle_to_avoid_template_leakage",
+        },
+        limit=limit,
+        provider=provider,
+        model=model,
+        timeout_s=timeout_s,
+        catalog_shard_size=catalog_shard_size,
+    )
+    if include_replay:
+        replay_world, replay_error = _load_replay_world(snapshot_path)
+        if replay_world is not None:
+            _attach_replay_results(skill_map, replay_world, limit=limit)
+        else:
+            skill_map.gaps.append(
+                SkillMapGap(
+                    gap_id="gap:replay_world_unavailable",
+                    title="Replay world unavailable",
+                    severity="warning",
+                    reason=(
+                        "The skill map could not load a historical what-if world for shadow replay"
+                        + (f": {replay_error}" if replay_error else ".")
+                    ),
+                    recommendation="Ensure the context bundle has canonical history sidecars before using replay scores for activation.",
+                )
+            )
+    previous_map = _load_previous_skill_map(previous_map_path)
+    if previous_map is not None:
+        _apply_previous_skill_map(skill_map, previous_map)
+    return _finalize_skill_map(skill_map)
+
+
+def build_company_skill_map_from_workspace(
+    workspace: str | Path,
+    *,
+    context_path: str | Path | None = None,
+    limit: int = 12,
+    include_replay: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    previous_map_path: str | Path | None = None,
+    timeout_s: int = 240,
+    catalog_shard_size: int = 80,
+) -> CompanySkillMap:
+    """Build or refresh a company skill map from workspace context plus Control evidence."""
+    workspace_path = Path(workspace).expanduser().resolve()
+    snapshot_path = _resolve_snapshot_path(context_path or workspace_path)
+    snapshot = ContextSnapshot.model_validate_json(
+        snapshot_path.read_text(encoding="utf-8")
+    )
+    context_bundle = load_canonical_history_bundle(snapshot_path)
+    if context_bundle is None:
+        context_bundle = build_canonical_history_bundle(snapshot)
+    bundle, control_metadata = _merge_workspace_control_spine(
+        workspace_path=workspace_path,
+        snapshot_path=snapshot_path,
+        context_bundle=context_bundle,
+    )
+    source_statuses = [source.model_dump(mode="json") for source in snapshot.sources]
+    if control_metadata["control_event_count"]:
+        source_statuses.append(
+            {
+                "provider": "vei_control",
+                "status": "ok",
+                "record_counts": {
+                    "events": control_metadata["control_event_count"],
+                    "sources": len(control_metadata["control_source_providers"]),
+                },
+            }
+        )
+    skill_map = _build_company_skill_map_from_bundle(
+        snapshot=snapshot,
+        bundle=bundle,
+        source_ref=str(workspace_path),
+        source_statuses=source_statuses,
+        metadata={
+            "builder": "workspace_control",
+            "bundle_role": str(snapshot.metadata.get("snapshot_role", "")),
+            "skill_source_policy": "workspace_context_plus_control_spine",
+            "skill_extractor": "llm",
+            "graph_plan_skills": "omitted_for_workspace_control_to_avoid_template_leakage",
+            "workspace": str(workspace_path),
+            "context_snapshot": str(snapshot_path),
+            **control_metadata,
+        },
+        limit=limit,
+        provider=provider,
+        model=model,
+        timeout_s=timeout_s,
+        catalog_shard_size=catalog_shard_size,
+    )
+    if include_replay:
+        replay_world, replay_error = _load_replay_world(snapshot_path)
+        if replay_world is not None:
+            _attach_replay_results(skill_map, replay_world, limit=limit)
+        else:
+            skill_map.gaps.append(
+                SkillMapGap(
+                    gap_id="gap:replay_world_unavailable",
+                    title="Replay world unavailable",
+                    severity="warning",
+                    reason=(
+                        "The skill map could not load a historical what-if world for shadow replay"
+                        + (f": {replay_error}" if replay_error else ".")
+                    ),
+                    recommendation="Ensure the context bundle has canonical history sidecars before using replay scores for activation.",
+                )
+            )
+    previous_map = _load_previous_skill_map(previous_map_path)
+    if previous_map is not None:
+        _apply_previous_skill_map(skill_map, previous_map)
+    return _finalize_skill_map(skill_map)
+
+
+def _build_company_skill_map_from_bundle(
+    *,
+    snapshot: ContextSnapshot,
+    bundle: CanonicalHistoryBundle,
+    source_ref: str,
+    source_statuses: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    limit: int,
+    provider: str | None,
+    model: str | None,
+    timeout_s: int,
+    catalog_shard_size: int,
+) -> CompanySkillMap:
     structure_view = build_structure_view_from_canonical_events(
         bundle.events,
         source_mode="canonical_history",
@@ -112,51 +254,243 @@ def build_company_skill_map_from_context_path(
         structure_payload=structure_payload,
         graphs_payload=graphs_payload,
         event_index=event_index,
-        source_statuses=[source.model_dump(mode="json") for source in snapshot.sources],
+        source_statuses=source_statuses,
         canonical_event_count=len(bundle.events),
         skills=skills,
     )
     gaps.extend(extraction_gaps)
-    skill_map = CompanySkillMap(
+    return CompanySkillMap(
         organization_name=snapshot.organization_name or "Unknown organization",
         organization_domain=snapshot.organization_domain,
         generated_at=_utc_now_iso(),
-        source_ref=str(snapshot_path),
+        source_ref=source_ref,
         source_providers=_unique(list(bundle.index.source_providers)),
         canonical_event_count=len(bundle.events),
         skill_count=len(skills),
         skills=skills,
         gaps=gaps,
-        metadata={
-            "builder": "context_bundle",
-            "bundle_role": str(snapshot.metadata.get("snapshot_role", "")),
-            "skill_source_policy": "context_bundle_only",
-            "skill_extractor": "llm",
-            "graph_plan_skills": "omitted_for_context_bundle_to_avoid_template_leakage",
-            **extraction_metadata,
+        metadata={**metadata, **extraction_metadata},
+    )
+
+
+def _merge_workspace_control_spine(
+    *,
+    workspace_path: Path,
+    snapshot_path: Path,
+    context_bundle: CanonicalHistoryBundle,
+) -> tuple[CanonicalHistoryBundle, dict[str, Any]]:
+    workspace_events = load_agent_activity_events(str(workspace_path))
+    rows_by_id = {row.event_id: row for row in context_bundle.index.rows}
+    events_by_id = {event.event_id: event for event in context_bundle.events}
+    control_event_ids: list[str] = []
+    control_source_providers: list[str] = []
+
+    for event in workspace_events:
+        if event.event_id in events_by_id:
+            continue
+        events_by_id[event.event_id] = event
+        rows_by_id[event.event_id] = _canonical_event_to_index_row(event)
+        control_event_ids.append(event.event_id)
+        control_source_providers.append(_event_source_provider(event))
+
+    rows = sorted(rows_by_id.values(), key=lambda item: (item.ts_ms, item.event_id))
+    events = sorted(
+        events_by_id.values(), key=lambda item: (int(item.ts_ms), item.event_id)
+    )
+    source_providers = _unique(
+        list(context_bundle.index.source_providers) + control_source_providers
+    )
+    case_ids = {row.case_id for row in rows if str(row.case_id or "").strip()}
+    surface_counts: dict[str, int] = {}
+    for row in rows:
+        if row.surface:
+            surface_counts[row.surface] = surface_counts.get(row.surface, 0) + 1
+    index = CanonicalHistoryIndex(
+        organization_name=context_bundle.index.organization_name,
+        organization_domain=context_bundle.index.organization_domain,
+        captured_at=context_bundle.index.captured_at,
+        snapshot_role=context_bundle.index.snapshot_role,
+        source_providers=source_providers,
+        event_count=len(rows),
+        case_count=len(case_ids),
+        surface_counts=surface_counts,
+        rows=rows,
+    )
+    bundle = CanonicalHistoryBundle(
+        paths=canonical_history_paths(snapshot_path),
+        events=events,
+        index=index,
+    )
+    return (
+        bundle,
+        {
+            "context_event_count": len(context_bundle.events),
+            "workspace_spine_event_count": len(workspace_events),
+            "control_event_count": len(control_event_ids),
+            "control_source_providers": _unique(control_source_providers),
+            "control_event_ids_sample": control_event_ids[:20],
         },
     )
-    if include_replay:
-        replay_world, replay_error = _load_replay_world(snapshot_path)
-        if replay_world is not None:
-            _attach_replay_results(skill_map, replay_world, limit=limit)
-        else:
-            skill_map.gaps.append(
-                SkillMapGap(
-                    gap_id="gap:replay_world_unavailable",
-                    title="Replay world unavailable",
-                    severity="warning",
-                    reason=(
-                        "The skill map could not load a historical what-if world for shadow replay"
-                        + (f": {replay_error}" if replay_error else ".")
-                    ),
-                    recommendation="Ensure the context bundle has canonical history sidecars before using replay scores for activation.",
+
+
+def _canonical_event_to_index_row(event: CanonicalEvent) -> CanonicalHistoryIndexRow:
+    delta = _model_dump(event.delta.data if event.delta is not None else {})
+    provider = _event_source_provider(event)
+    surface = _event_surface(event, delta)
+    timestamp = _event_timestamp(event)
+    actor_id = event.actor_ref.actor_id if event.actor_ref is not None else ""
+    participant_ids = [item.actor_id for item in event.participants if item.actor_id]
+    object_refs = [item.object_id for item in event.object_refs if item.object_id]
+    target_id = object_refs[0] if object_refs else ""
+    subject = _event_subject(event, delta)
+    snippet = _event_snippet(event, delta)
+    case_id = str(event.case_id or delta.get("case_id") or "").strip()
+    thread_ref = str(
+        delta.get("thread_ref")
+        or delta.get("thread_id")
+        or delta.get("conversation_anchor")
+        or target_id
+        or case_id
+    )
+    return CanonicalHistoryIndexRow(
+        event_id=event.event_id,
+        timestamp=timestamp,
+        ts_ms=int(event.ts_ms or 0),
+        timestamp_quality="exact" if event.ts_ms else "unknown",
+        surface=surface,
+        provider=provider,
+        kind=event.kind,
+        domain=str(
+            event.domain.value if hasattr(event.domain, "value") else event.domain
+        ),
+        case_id=case_id,
+        thread_ref=thread_ref,
+        conversation_anchor=str(delta.get("conversation_anchor") or thread_ref),
+        actor_id=actor_id,
+        target_id=target_id,
+        participant_ids=participant_ids,
+        subject=subject,
+        normalized_subject=_slug(subject),
+        snippet=snippet,
+        search_terms=_unique(
+            _tokenize(
+                " ".join(
+                    [
+                        event.kind,
+                        provider,
+                        surface,
+                        actor_id,
+                        target_id,
+                        subject,
+                        snippet,
+                    ]
                 )
             )
-    previous_map = _load_previous_skill_map(previous_map_path)
-    if previous_map is not None:
-        _apply_previous_skill_map(skill_map, previous_map)
-    return _finalize_skill_map(skill_map)
+        )[:20],
+        provider_object_refs=object_refs,
+        stitch_confidence=1.0 if case_id else (0.65 if thread_ref else 0.0),
+        stitch_basis=(
+            "explicit_case_id" if case_id else ("object_ref" if thread_ref else "")
+        ),
+        internal_external=str(
+            event.internal_external.value
+            if hasattr(event.internal_external, "value")
+            else event.internal_external
+        ),
+        metadata={
+            "source_id": event.provenance.source_id,
+            "source_granularity": str(delta.get("source_granularity") or ""),
+            "tool_name": str(delta.get("tool_name") or ""),
+            "policy_metadata": _model_dump(delta.get("policy_metadata")),
+        },
+    )
+
+
+def _event_source_provider(event: CanonicalEvent) -> str:
+    source_id = str(event.provenance.source_id or "").strip()
+    if source_id:
+        return source_id.split(":", 1)[0]
+    origin = event.provenance.origin
+    return str(origin.value if hasattr(origin, "value") else origin or "canonical")
+
+
+def _event_surface(event: CanonicalEvent, delta: dict[str, Any]) -> str:
+    tool_name = str(delta.get("tool_name") or "")
+    if tool_name:
+        return tool_name.split(".", 1)[0]
+    for key in ("surface", "target", "provider"):
+        value = str(delta.get(key) or "").strip()
+        if value:
+            return value.split(".", 1)[0]
+    if event.object_refs:
+        ref = event.object_refs[0]
+        return str(ref.kind or ref.domain or event.domain.value)
+    return str(event.domain.value if hasattr(event.domain, "value") else event.domain)
+
+
+def _event_timestamp(event: CanonicalEvent) -> str:
+    if not event.ts_ms:
+        return ""
+    return (
+        datetime.fromtimestamp(int(event.ts_ms) / 1000, UTC)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _event_subject(event: CanonicalEvent, delta: dict[str, Any]) -> str:
+    for key in ("subject", "title", "label"):
+        value = str(delta.get(key) or "").strip()
+        if value:
+            return value
+    tool_name = str(delta.get("tool_name") or "").strip()
+    status = str(delta.get("status") or "").strip()
+    if tool_name:
+        return " ".join(item for item in [tool_name, status] if item)
+    provider = str(delta.get("provider") or "").strip()
+    model = str(delta.get("model") or "").strip()
+    if provider or model:
+        return "/".join(item for item in [provider, model] if item)
+    if event.object_refs:
+        return str(event.object_refs[0].label or event.object_refs[0].object_id)
+    return event.kind
+
+
+def _event_snippet(event: CanonicalEvent, delta: dict[str, Any]) -> str:
+    value = str(delta.get("snippet") or delta.get("summary") or "").strip()
+    if value:
+        return _truncate_text(value, 500)
+    pieces: list[str] = []
+    actor_id = event.actor_ref.actor_id if event.actor_ref is not None else ""
+    if actor_id:
+        pieces.append(f"actor={actor_id}")
+    tool_name = str(delta.get("tool_name") or "").strip()
+    if tool_name:
+        pieces.append(f"tool={tool_name}")
+    status = str(delta.get("status") or "").strip()
+    if status:
+        pieces.append(f"status={status}")
+    granularity = str(delta.get("source_granularity") or "").strip()
+    if granularity:
+        pieces.append(f"evidence={granularity}")
+    if event.object_refs:
+        labels = [
+            str(ref.label or ref.object_id)
+            for ref in event.object_refs[:4]
+            if ref.object_id or ref.label
+        ]
+        if labels:
+            pieces.append(f"objects={', '.join(labels)}")
+    policy = _model_dump(delta.get("policy_metadata"))
+    if policy:
+        policy_bits = [
+            f"{key}={value}"
+            for key, value in policy.items()
+            if value not in {None, "", []}
+        ]
+        if policy_bits:
+            pieces.append("policy=" + ", ".join(policy_bits[:4]))
+    return _truncate_text("; ".join(pieces) or event.kind, 500)
 
 
 def build_company_skill_map_from_session(
