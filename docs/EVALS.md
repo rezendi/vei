@@ -1,40 +1,13 @@
 # Evaluation and Calibration
 
-VEI evaluation has three layers. Each layer answers a different question and produces a different kind of artifact. The layers are designed to work together but can run independently.
+VEI evaluation has three layers that feed each other: **Layer 1** (factual forecast metrics) checks the model against observed history — no humans, no LLM calls. **Layer 2** (LLM judge) ranks counterfactual candidates via structured pairwise comparisons. **Layer 3** (human audit) calibrates the automated layers through blind-then-reveal ranking and produces independent training data. Together they close the calibration triangle: model vs. reality, model vs. judge, judge vs. human, model vs. human.
 
 Use `docs/ENRON_EXAMPLE.md` for the specific Enron benchmark setup. This
 document covers the evaluation framework itself.
 
 ## What Is and Isn't Learned
 
-VEI today is a deterministic enterprise simulator, governed twin, replay
-platform, and learned forecasting workbench. It is not a finished universal CEO
-recommender. The reference backend (`vei.dynamics.backends.reference`) is a real
-PyTorch model trained on canonical event sequences. The heuristic baseline is a
-tag-driven heuristic, not a learned model. The repo-owned Enron benchmark is the
-shipped flagship learned path; the multi-tenant benchmark is the pooled
-world-model experiment. Clearwater workflow families stay in the repo as
-kernel and workflow smoke tests. See `docs/ARCHITECTURE.md` for the full
-breakdown.
-
-The world-model benchmark turns each company archive into timestamped events,
-then learns rows of the form:
-
-```text
-state up to time T + action at time T -> future state after T
-```
-
-The shipped Enron reference checkpoint currently reports factual next-event
-AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951`. Treat that
-as the public fresh-clone headline. Local pooled JEPA runs can add private
-company or news tenants, but those artifact-only results should be reported from
-their saved manifests rather than hard-coded here.
-
-The counterfactual product surface is strategic state points: an LLM or human
-proposes decision points and concrete candidate actions from pre-as-of evidence
-only, then JEPA/reference scoring predicts future heads for each candidate.
-Those rankings remain decision support unless backed by human audit,
-natural-experiment evidence, or stronger domain-specific validation.
+See [ARCHITECTURE.md](ARCHITECTURE.md) § What Is and Isn't Learned for the canonical breakdown of learned, heuristic, and external components. The shipped Enron reference checkpoint reports factual next-event AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951`.
 
 ## Layer 1: Factual forecast metrics
 

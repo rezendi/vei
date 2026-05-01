@@ -1,35 +1,32 @@
 # Clearwater Dispatch Recovery
 
-Synthetic Clearwater what-if bundle built from the repo-owned service-ops story workspace.
+Synthetic Clearwater what-if bundle built from the repo-owned service-ops story workspace. This example captures the moment when a VIP outage command thread has already triggered dispatch recovery work, and the team must decide whether to stabilize the full service loop or keep responding tactically.
+
+## Open in Studio
+
+```bash
+vei ui serve \
+  --root docs/examples/clearwater-dispatch-recovery/workspace \
+  --host 127.0.0.1 \
+  --port 3056
+```
+
+Open `http://127.0.0.1:3056`.
+
+## Branch Point
+
+The VIP outage command thread (`tickets:JRA-CFS-10`) branches after dispatch recovery work has started, under the `service_day_collision` scenario variant. The branch fires at event `history_1b8c4c0ac118f774` with 44 prior canonical events across google, jira, mail_archive, and slack source families.
 
 - Scenario variant: `service_day_collision`
 - Contract variant: `protect_sla`
-- Branch thread: `tickets:JRA-CFS-10`
-- Saved forecast file: `whatif_reference_result.json`
-- Prior canonical events in the saved timeline: `44`
-- Source families in the saved timeline: `google, jira, mail_archive, slack`
+- Recorded future events after the branch: 1
 
-## Branch
-Synthetic Clearwater branch on the VIP outage command thread after the dispatch recovery work has started.
+## What Actually Happened
 
-- Branch subject: VIP outage command thread
-- Branch event id: `history_1b8c4c0ac118f774`
-- Recorded future events: `1`
+The saved reference forecast completed. The top-ranked candidate action is "Stabilize the full service loop" — a move that stays close to the historical business path.
 
-## Saved forecast
-- Learned backend: `reference`
-- Forecast summary: reference forecast completed.
+## Saved Files
 
-## Saved ranked comparison
-- Top candidate: Stabilize the full service loop
-- Top business-state summary: This move stays close to the historical business path.
-
-## Open in Studio
-```bash
-vei ui serve --root docs/examples/clearwater-dispatch-recovery/workspace --host 127.0.0.1 --port 3056
-```
-
-## Bundle files
 - `workspace/context_snapshot.json`: saved workspace seed
 - `workspace/canonical_events.jsonl`: saved canonical timeline
 - `workspace/canonical_event_index.json`: saved searchable timeline index
@@ -37,3 +34,10 @@ vei ui serve --root docs/examples/clearwater-dispatch-recovery/workspace --host 
 - `whatif_reference_result.json`: saved learned forecast
 - `whatif_business_state_comparison.md`: saved candidate comparison
 - `clearwater_story_overview.md`: bundle-local story walkthrough
+
+## Refresh
+
+```bash
+python scripts/build_service_ops_example_bundles.py --bundle clearwater-dispatch-recovery
+python scripts/validate_whatif_artifacts.py docs/examples/clearwater-dispatch-recovery
+```

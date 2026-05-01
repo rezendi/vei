@@ -2,7 +2,7 @@
 
 This is the default long-tail technical proof case. It keeps the visible downstream mail tail while placing the contract choice inside the richer Enron company timeline.
 
-## Open It In Studio
+## Open in Studio
 
 ```bash
 vei ui serve \
@@ -24,6 +24,29 @@ Open `http://127.0.0.1:3055`.
 ## What Actually Happened
 
 - The draft went outside quickly, then the thread widened into a long reassignment and redline tail with no visible formal signoff.
+
+## Saved Files
+
+- `workspace/`: saved workspace you can open in Studio
+- `whatif_experiment_overview.md`: short human-readable run summary
+- `whatif_experiment_result.json`: saved combined result for the example bundle
+- `whatif_llm_result.json`: bounded message-path result
+- `whatif_reference_result.json`: saved forecast result
+- `whatif_business_state_comparison.md`: ranked comparison in business language
+- `whatif_business_state_comparison.json`: structured comparison payload
+- `enron_story_overview.md`: presenter-facing branch summary
+- `enron_story_manifest.json`: structured demo manifest
+- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
+- `enron_presentation_manifest.json`: presentation beat manifest
+- `enron_presentation_guide.md`: operator guide for bundle demos
+
+## Refresh
+
+```bash
+python scripts/build_enron_example_bundles.py --bundle enron-master-agreement-public-context
+python scripts/validate_whatif_artifacts.py docs/examples/enron-master-agreement-public-context
+python scripts/capture_enron_bundle_screenshots.py --bundle enron-master-agreement-public-context
+```
 
 ## Actions We Can Take
 
@@ -58,21 +81,6 @@ The company timeline around it is thicker now, so the branch reads as a company 
 - Saved LLM path: Keep the draft inside Enron, ask Gerald Nemec and Sara Shackleton for review, and hold the outside send.
 - Saved forecast file: `whatif_reference_result.json`
 
-## Saved Files
-
-- `workspace/`: saved workspace you can open in Studio
-- `whatif_experiment_overview.md`: short human-readable run summary
-- `whatif_experiment_result.json`: saved combined result for the example bundle
-- `whatif_llm_result.json`: bounded message-path result
-- `whatif_reference_result.json`: saved forecast result
-- `whatif_business_state_comparison.md`: ranked comparison in business language
-- `whatif_business_state_comparison.json`: structured comparison payload
-- `enron_story_overview.md`: presenter-facing branch summary
-- `enron_story_manifest.json`: structured demo manifest
-- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
-- `enron_presentation_manifest.json`: presentation beat manifest
-- `enron_presentation_guide.md`: operator guide for bundle demos
-
 ## Other Enron Examples
 
 - [Enron PG&E Power Deal Example](../enron-pge-power-deal/README.md)
@@ -86,14 +94,6 @@ The company timeline around it is thicker now, so the branch reads as a company 
 ## Bankruptcy Arc Timeline
 
 See [timeline_arc.md](timeline_arc.md) for the dated public timeline and [the rendered timeline image](../../assets/enron-whatif/enron-bankruptcy-arc-timeline.png) for the visual version that places this branch beside the PG&E, California, and Watkins follow-up examples.
-
-## Refresh
-
-```bash
-python scripts/build_enron_example_bundles.py --bundle enron-master-agreement-public-context
-python scripts/validate_whatif_artifacts.py docs/examples/enron-master-agreement-public-context
-python scripts/capture_enron_bundle_screenshots.py --bundle enron-master-agreement-public-context
-```
 
 ## Constraint
 

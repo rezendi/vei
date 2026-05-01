@@ -2,7 +2,7 @@
 
 This is the accounting-structure proof case. It is denser than the others, but it shows the system handling a real internal financing and disclosure fork.
 
-## Open It In Studio
+## Open in Studio
 
 ```bash
 vei ui serve \
@@ -24,6 +24,29 @@ Open `http://127.0.0.1:3055`.
 ## What Actually Happened
 
 - The thread kept moving through a narrow finance and legal chain tied to the larger broadband and structure story.
+
+## Saved Files
+
+- `workspace/`: saved workspace you can open in Studio
+- `whatif_experiment_overview.md`: short human-readable run summary
+- `whatif_experiment_result.json`: saved combined result for the example bundle
+- `whatif_llm_result.json`: bounded message-path result
+- `whatif_reference_result.json`: saved forecast result
+- `whatif_business_state_comparison.md`: ranked comparison in business language
+- `whatif_business_state_comparison.json`: structured comparison payload
+- `enron_story_overview.md`: presenter-facing branch summary
+- `enron_story_manifest.json`: structured demo manifest
+- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
+- `enron_presentation_manifest.json`: presentation beat manifest
+- `enron_presentation_guide.md`: operator guide for bundle demos
+
+## Refresh
+
+```bash
+python scripts/build_enron_example_bundles.py --bundle enron-braveheart-forward
+python scripts/validate_whatif_artifacts.py docs/examples/enron-braveheart-forward
+python scripts/capture_enron_bundle_screenshots.py --bundle enron-braveheart-forward
+```
 
 ## Actions We Can Take
 
@@ -58,21 +81,6 @@ It gives the proof set a hard accounting and disclosure branch that is not just 
 - Saved LLM path: Open an accounting review on Braveheart, preserve the working record, and require explicit disclosure review before the structure keeps moving.
 - Saved forecast file: `whatif_reference_result.json`
 
-## Saved Files
-
-- `workspace/`: saved workspace you can open in Studio
-- `whatif_experiment_overview.md`: short human-readable run summary
-- `whatif_experiment_result.json`: saved combined result for the example bundle
-- `whatif_llm_result.json`: bounded message-path result
-- `whatif_reference_result.json`: saved forecast result
-- `whatif_business_state_comparison.md`: ranked comparison in business language
-- `whatif_business_state_comparison.json`: structured comparison payload
-- `enron_story_overview.md`: presenter-facing branch summary
-- `enron_story_manifest.json`: structured demo manifest
-- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
-- `enron_presentation_manifest.json`: presentation beat manifest
-- `enron_presentation_guide.md`: operator guide for bundle demos
-
 ## Other Enron Examples
 
 - [Enron Master Agreement Example](../enron-master-agreement-public-context/README.md)
@@ -82,14 +90,6 @@ It gives the proof set a hard accounting and disclosure branch that is not just 
 - [Enron Watkins Follow-up Example](../enron-watkins-follow-up/README.md)
 - [Enron Q3 Disclosure Review Example](../enron-q3-disclosure-review/README.md)
 - [Enron Skilling Resignation Materials Example](../enron-skilling-resignation-materials/README.md)
-
-## Refresh
-
-```bash
-python scripts/build_enron_example_bundles.py --bundle enron-braveheart-forward
-python scripts/validate_whatif_artifacts.py docs/examples/enron-braveheart-forward
-python scripts/capture_enron_bundle_screenshots.py --bundle enron-braveheart-forward
-```
 
 ## Constraint
 

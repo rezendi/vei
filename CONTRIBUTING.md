@@ -8,7 +8,14 @@ Use Python 3.11 and the repo-managed virtual environment.
 make setup-full
 ```
 
+This also installs pre-commit hooks automatically.
+
 The repo reads local secrets from `.env`. Keep that file untracked.
+
+## Useful references
+
+- [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) — fast repo briefing and 10-minute checklist
+- [docs/GLOSSARY.md](docs/GLOSSARY.md) — every term of art defined in one place
 
 ## Daily loop
 
@@ -44,6 +51,8 @@ Run this check directly when you touch module boundaries:
 ```bash
 python scripts/check_import_boundaries.py --strict --max-violations 0
 ```
+
+This check is part of the `make check` interface contract target described in [AGENTS.md](AGENTS.md).
 
 ## Tests and artifacts
 
