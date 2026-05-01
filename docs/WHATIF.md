@@ -3,21 +3,34 @@
 This is the command and implementation reference for replay, forecasting, and
 strategic state-point runs. Use [ENRON_EXAMPLE.md](ENRON_EXAMPLE.md) for the
 public company example and [NEWS_EXAMPLE.md](NEWS_EXAMPLE.md) for the public
-news-timeline example.
+news-timeline example. See [GLOSSARY.md](GLOSSARY.md) for term definitions.
 
-VEI now supports a company-history historical what-if workflow for archive-backed datasets such as the Enron Rosetta event tables and normalized multi-source context snapshots.
+## TL;DR
 
-Install the learned runtime when you want the repo-owned Enron examples to open with the shipped reference forecast from a fresh clone:
+| Step | What happens | Key command |
+|---|---|---|
+| **1. Normalize** | Turn raw company records into a verified `context_snapshot.json` | `vei context normalize` |
+| **2. Branch** | Explore the whole history, pick one exact event as the branch point | `vei whatif events` / `vei whatif explore` |
+| **3. Materialize** | Build a strict historical workspace with `episode_manifest.json` | `vei whatif open` |
+| **4. Compare** | Run the baseline future against counterfactual paths | `vei whatif experiment` |
+| **5. Validate** | Verify the saved bundle | `python scripts/validate_whatif_artifacts.py` |
+
+## Setup
+
+Install the full development extras (includes worldmodel, JEPA, LLM, UI, and browser):
 
 ```bash
-pip install -e ".[worldmodel,llm,ui,browser]"
+make setup-full
 ```
 
-Install the optional JEPA backend from the same clone:
+Or install specific extras when you only need the learned runtime:
 
 ```bash
-pip install -e ".[jepa]"
+pip install -e ".[worldmodel,llm,ui,browser]"   # reference backend
+pip install -e ".[jepa]"                          # optional JEPA backend
 ```
+
+## Five-Step Flow
 
 The flow has five steps:
 
@@ -85,6 +98,8 @@ Both forecast paths now go through the shared `vei.dynamics` boundary. The what-
 On top of the forecast path, VEI now builds a shared business-state readout. That layer translates the forecast into decision language such as outside spread risk, internal handling load, execution delay, commercial position, and approval or escalation pressure. The saved workspace and the saved forecast bundle both carry that readout.
 
 ## CLI
+
+> **Flag guide:** `--source-dir` accepts either a directory (Rosetta-style archive) or a `context_snapshot.json` file (company-history bundle). `--rosetta-dir` is the legacy Enron-Rosetta-only form; prefer `--source company_history --source-dir <path>` for new company data.
 
 ```bash
 # Whole-history analysis
@@ -171,6 +186,8 @@ python scripts/check_tenant_world_model.py --root /path/to/newco/context_snapsho
 ```
 
 ## New company onboarding
+
+> This is the canonical walkthrough for bringing new company data into VEI. Use `--source company_history --source-dir <path/to/context_snapshot.json>` for all what-if commands against a company-history bundle.
 
 Bring a new company into the what-if system with three files:
 
@@ -615,7 +632,9 @@ Use `make clean-workspace-hard` to prune old generated runs while preserving
 `_vei_out/world_model_current/`, `_vei_out/datasets/`, and
 `_vei_out/llm_live/latest/`.
 
-### Current model state
+### Current model state (latest local results)
+
+> Exact numbers below are from local runs and may drift. The canonical source is the saved manifest in `_vei_out/world_model_current/`.
 
 The fresh-clone learned path is the shipped `full_context_transformer`
 reference backend under `data/enron/reference_backend/`. It reports factual

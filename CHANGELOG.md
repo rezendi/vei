@@ -7,7 +7,7 @@
 - Strengthened the repo-owned Enron dataset path with four saved bundles, richer public-company fixtures, repo-local Rosetta data, and macro outcome side data.
 - Cleaned up the Watkins saved example so it now points at the follow-up note that is actually present in the archive, and refreshed the Enron bundle docs and screenshots around that corpus-backed branch.
 
-## 0.3.0 - 2026-04-17
+## 0.3.0 — 2026-04-17
 
 ### Added
 
@@ -35,7 +35,7 @@
 - Replace any code that imported `vei.whatif_filenames` with `vei.whatif.filenames` or `vei.whatif.api`.
 - Expect only `whatif_ejepa_result.json` or `whatif_heuristic_baseline_result.json` forecast artifacts in saved what-if bundles.
 
-## 2026-03-10
+## Unversioned — 2026-03-10
 
 - Added a first-class `WorldSession` kernel and promoted `vei.world.api` as the stable platform boundary for full-world observe, snapshot, restore, branch, replay, inject, and event controls.
 - Reworked the benchmark/eval stack onto the kernel, including reusable benchmark families for security containment, onboarding/migration, and revenue incident response plus reusable enterprise scoring dimensions.
@@ -44,7 +44,7 @@
 - Consolidated the repo around `vei world`, deleted compatibility-only CLIs and legacy transport wrappers, and pruned committed eval artifacts plus historical planning docs.
 - Licensed the repository under Business Source License 1.1 and removed tracked local workflow state from version control.
 
-## 0.2.0a1 - 2026-02-06
+## 0.2.0a1 — 2026-02-06
 
 Mini-alpha stabilization for external embedding.
 

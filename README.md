@@ -1,606 +1,178 @@
 ## VEI
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Strange-Lab-AI/vei)
 
-VEI turns built-in scenarios or real company records into a runnable company world. You can use it to test an agent before it touches a real company, watch an outside agent through a governed twin, branch from a real historical decision and compare a different move, draft grounded knowledge artifacts, or compile company-specific agent skills from the same company state.
+**VEI** (Virtual Enterprise Internet) builds a runnable replica of a company from real records or built-in scenarios. You use it to test agents before they touch production systems, govern outside agents through a twin gateway, replay historical decisions and compare alternate moves, train agents on process compliance, and compile company-specific knowledge and skills from the same company state.
 
-The same engine powers every path: one world state, one event history, one replay model, and one CLI.
+One deterministic kernel powers every path: one world state, one event spine, one replay model, one CLI.
 
-VEI Control is the capture-first agent-evidence surface on that same spine. It
-does not require every existing agent to route through VEI on day one. Instead,
-it ingests existing agent/runtime logs, joins them with company-state context,
-and shows access review, blast radius, and policy replay. New agents can still
-be governed through the twin gateway when they are routed through VEI.
+```mermaid
+flowchart LR
+    A[Real or seeded\ncompany data] --> B[Canonical\nevent spine]
+    B --> C[WorldSession\nkernel]
+    C --> D[Test / Eval]
+    C --> E[Governor / Control]
+    C --> F["Sandbox / What-if"]
+    C --> G[Train / Data]
+    C --> H["Knowledge / Skill Map"]
+    D --> I[Scores, traces,\nreplays]
+    E --> I
+    F --> I
+    G --> I
+    H --> I
+```
 
-## Contents
+### Who is this for?
 
-- [Quick Start](#quick-start)
-- [Pick Your Entry Point](#pick-your-entry-point)
-- [How VEI Works](#how-vei-works)
-- [Walk Through The Enron Case](#walk-through-the-enron-case)
-- [Knowledge Authoring Demo](#knowledge-authoring-demo)
-- [Company Skill Map Demo](#company-skill-map-demo)
-- [Bring Your Own Company History](#bring-your-own-company-history)
-- [Repo Checks](#repo-checks)
-- [Docs](#docs)
+- **Agent builders** — benchmark and score agents against deterministic enterprise scenarios before live deployment.
+- **Governance and audit teams** — capture agent activity, review access, replay policy decisions, and export evidence packs.
+- **Researchers** — run historical what-if experiments, train world models on real company data, and compare counterfactual futures.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/Strange-Lab-AI/vei.git
-cd vei
-make setup
-vei doctor
-vei quickstart run
+cd vei                # or your checkout folder name
+make setup-full       # creates .venv, installs all extras
+vei doctor            # checks environment
+vei quickstart run    # launches Studio + Twin Gateway
 ```
 
-If your clone lives in a differently named folder (`digital-enterprise-twin`, a Git worktree,
-etc.), skip `cd vei` or replace it with `cd …` pointing at your checkout root—the tree layout is unchanged.
+`vei quickstart run` gives you:
 
-`vei quickstart run` gives you a ready world to inspect:
-
-- Studio on `http://127.0.0.1:3011`
-- Twin Gateway on `http://127.0.0.1:3012`
+- Studio at `http://127.0.0.1:3011`
+- Twin Gateway at `http://127.0.0.1:3012`
 - a seeded workspace with visible activity already in motion
 - connection details in `.vei/quickstart.json`
 
-Use these next:
+**Requirements:** Python 3.11, ports 3011 and 3012 free. `OPENAI_API_KEY` in `.env` only when you want live LLM runs. VEI also supports Anthropic, Google, OpenRouter, and local Codex CLI for live planning backends.
+
+### Try a saved example
+
+Open the flagship Enron what-if bundle from a fresh clone — no API key needed:
 
 ```bash
-vei twin status --root <workspace-root>
-vei project show --root <workspace-root>
-vei eval benchmark --runner workflow --family security_containment
+vei ui serve \
+  --root docs/examples/enron-master-agreement-public-context/workspace \
+  --host 127.0.0.1 --port 3055
 ```
 
-What you need:
+Open `http://127.0.0.1:3055` to see the branch point, the recorded future, the counterfactual comparison, and the ranked business readout.
 
-- Python `3.11`
-- a local virtual environment, which `make setup` creates at `.venv`
-- ports `3011` and `3012` available
-- `OPENAI_API_KEY` in `.env` only when you want live LLM runs
+![Decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-top.png)
 
-For live planning backends, VEI supports OpenAI, Anthropic, Google, OpenRouter, and local Codex CLI depending on your local auth and provider setup.
+See [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) for the full Enron walkthrough and all eight saved bundles. See [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md) for the synthetic service-ops example.
 
-## Pick Your Entry Point
+## The Five Surfaces
 
-- See the product: `vei quickstart run`
-- Connect an outside agent: start with quickstart, then use the Twin Gateway URLs and token from `.vei/quickstart.json`
-- Try the public history demo: `vei ui serve --root docs/examples/news-public-history-demo/workspace --host 127.0.0.1 --port 3055`
-- Replay a real historical decision: `vei ui serve --root docs/examples/enron-master-agreement-public-context/workspace --host 127.0.0.1 --port 3055`
-- Compile a company skill map: `vei skillmap build --source-dir _vei_out/<company>/context_snapshot.json --output _vei_out/<company>/skill_map`
-- Capture agent evidence: `vei ingest agent-activity --source agent_activity_jsonl --path ./logs --workspace _vei_out/<company>`
-- Review provenance: `vei provenance access-review --agent-id <agent-id> --workspace _vei_out/<company>`
-- Verify evidence: `vei provenance verify --workspace _vei_out/<company>`
-- Export an evidence pack: `vei provenance export --format evidence-pack --workspace _vei_out/<company> --output _vei_out/<company>/evidence_pack.json`
-- Run a benchmark: `vei eval benchmark --runner workflow --family security_containment`
+VEI exposes five product surfaces over the same kernel. Each surface uses the same world state, event spine, and replay model.
 
-## How VEI Works
+**1. Test / Eval** — Run a fixed company world and score an agent. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
 
-VEI has five first-class surfaces.
+**2. Governor / Control** — Place VEI between agents and enterprise systems. Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance. Export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
 
-The Control path is capture-first. VEI has two ingest classes: `vei context`
-captures company state, while `vei ingest agent-activity` captures agent
-behavior from JSONL landing zones, MCP transcripts, and coarse OpenAI org
-usage/audit evidence. Both land on the canonical spine, so reports can connect
-what an agent did to the company objects it touched. Aggregate sources stay
-marked as aggregate; VEI does not turn bucketed usage into fake per-call traces.
-Studio's Control tab uses the same provenance APIs as the CLI/MCP surface:
-agent inventory, access review, selected-event blast radius, policy replay, and
-compact evidence packs all read from the canonical event spine rather than a
-separate dashboard state.
-When a routed agent call supplies request identity, VEI records that principal
-chain on the same evidence event and keeps policy-replay metadata structured
-without embedding raw prompts, tool args, or tool results.
+**3. Sandbox / What-if** — Fork a world, change a policy or action, compare alternate futures. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
 
-The runnable company path starts from a built-in world or a captured company snapshot. VEI compiles that into one deterministic world session with connected surfaces such as mail, chat, tickets, docs, CRM, identity, and knowledge assets. Agents and humans act through VEI tools and routes. VEI records what happened, scores the run, and lets you replay or branch it.
+**4. Train / Data** — Turn traces into rollouts, demonstrations, and RL-friendly data. Train world models (JEPA / reference backend) on canonical event sequences to forecast future state and rank counterfactual actions. See [docs/RL_GYM.md](docs/RL_GYM.md).
 
-The governed twin path supports three write outcomes: allow, deny, or hold for approval. Workspace governor config can carry typed `approval_rules` for selected surfaces or tools, so approval holds live in normal workspace policy instead of one-off event payloads.
+**5. Knowledge / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; compose proposals or briefs with citations. Compile company-specific agent skills from the normalized bundle, with replay checks and evidence backing. See [docs/WHATIF.md](docs/WHATIF.md) § Knowledge.
 
-The agent-facing discovery ladder inside that world is now explicit: start with `vei.orientation`, then `vei.structure_view`, then `vei.capability_graphs`, `vei.graph_plan`, and `vei.graph_action`. `vei.structure_view` shows the event-derived read model with inferred entities, case clusters, timelines, and open ambiguities. Hidden truth comparison stays in the SDK, contract, and benchmark layers instead of the MCP tool surface.
+## CLI Map
 
-The knowledge authoring path rides on that same world. VEI hydrates notes, transcripts, metric snapshots, SOPs, pricing sheets, and deliverables into one `knowledge_graph`, then composes proposals or briefs with citations, freshness checks, and contract scoring. The deterministic baseline runs without an API key. The bounded LLM mode uses the same recorded event spine and the same workspace/run model.
+All commands live under `vei <group> <command>`.
 
-The company skill map path turns that event spine, structure view, capability graph, and knowledge graph into a reviewed skills file for agents. Skills are evidence-backed and draft by default. Historical replay scores test candidate skills against the same past/future case splits used by the what-if layer. Read-only steps can run directly in the twin, while any executable write step is shadow-mode or approval-gated until a named owner, reviewer, and replay proof are in place.
+| Surface | Key commands |
+|---|---|
+| **Quickstart** | `quickstart run`, `doctor`, `smoke run` |
+| **Test / Eval** | `eval benchmark`, `eval demo`, `eval suite`, `eval showcase`, `run start`, `score`, `llm-test run` |
+| **Governor / Control** | `twin serve`, `twin onboard`, `ingest agent-activity`, `provenance access-review`, `provenance verify`, `provenance export` |
+| **Sandbox / What-if** | `whatif explore`, `whatif events`, `whatif open`, `whatif experiment`, `whatif benchmark build-multitenant`, `whatif benchmark strategic-state-points` |
+| **Train / Data** | `rollout`, `train bc`, `pack`, `synthesize training-data` |
+| **Knowledge / Skills** | `knowledge compose`, `knowledge ingest`, `skillmap build`, `skillmap validate` |
+| **Inspect / Debug** | `world list`, `inspect fidelity`, `context timeline`, `context readiness`, `visualize`, `ui serve` |
+| **Project / Workspace** | `project init`, `project show`, `blueprint`, `contract`, `scenario`, `workspace`, `release` |
 
-The historical what-if path starts from one normalized company history bundle. The outer layer is `context_snapshot.json`. It keeps the raw sources parallel as typed records, with provider health, timestamps, actors, cases, and linked records. VEI explores that bundle, ranks branch candidates, and picks one real decision point.
+## Bring Your Own Company History
 
-The same capture now writes a canonical timeline beside the snapshot: `canonical_events.jsonl` plus `canonical_event_index.json`. That shared spine is what the company-history loader and the Studio timeline panel read first when those files are present.
+```bash
+# Normalize raw exports into a verified bundle
+vei context normalize \
+  --source-dir <raw_input_path> \
+  --org "YourCo" --domain "yourco.example" \
+  --output _vei_out/yourco/context_snapshot.json
 
-The saved what-if workspace is the inner layer. It lives under `workspace/` and is anchored by `episode_manifest.json`. That workspace contains the chosen branch event, the earlier history, the recorded future, and the saved files VEI uses to replay and compare alternate moves.
+vei context verify --snapshot _vei_out/yourco/context_snapshot.json
 
-Public-company facts live beside the bundle in `whatif_public_context.json` when they are available. VEI slices those facts to what was already known by the branch date, then carries that slice into the saved workspace, the comparison run, and the business readout.
+# Or: onboard from live sources (GitHub, ClickUp, Gmail, Notion, etc.)
+vei twin onboard \
+  --root _vei_out/yourco/twin \
+  --org "YourCo" --domain "yourco.example" \
+  --provider gmail --provider notion \
+  --base-url gmail=/path/to/gmail-takeout.zip \
+  --base-url notion=/path/to/notion-export.zip
+```
 
-## Walk Through The Enron Case
+Then explore branch points, run what-if experiments, or compile a skill map:
 
-The repo now ships the Enron what-if surface in two parts. The checkout carries a small checked-in Rosetta sample under `data/enron/rosetta/`, the public-company fixtures, the curated public-record fixture, and eight saved Studio bundles under `docs/examples/`. The full Enron archive is an optional download fetched with `make fetch-enron-full`.
+```bash
+vei whatif candidates --source-dir _vei_out/yourco/context_snapshot.json --limit 10
+vei skillmap build --source-dir _vei_out/yourco/context_snapshot.json --output _vei_out/yourco/skill_map
+```
 
-The repo-owned Enron public context now carries 11 dated financial checkpoints, 21 dated public news events, 986 daily stock rows, 7 credit events, and 1 FERC timeline event across 24 archived public source files. The saved Enron workspaces now also carry a richer branch-local timeline that blends mail with dated filings, disclosures, hearings, exhibits, and market records through the same canonical ledger.
+Full command reference: [docs/WHATIF.md](docs/WHATIF.md).
 
-Fetch the full archive when you want full-data search, training, or archive validation:
+## Enron Walkthrough
+
+The repo ships eight saved Enron what-if bundles as the flagship real-history example. Start with the Master Agreement case:
+
+```bash
+vei ui serve \
+  --root docs/examples/enron-master-agreement-public-context/workspace \
+  --host 127.0.0.1 --port 3055
+```
+
+Fetch the full Enron archive when you want whole-history search or training:
 
 ```bash
 make fetch-enron-full
 ```
 
-Verify that full archive after it is fetched:
-
-```bash
-python scripts/check_rosetta_archive.py
-```
-
-Install the learned runtime when you want the saved Enron bundles to open with the shipped reference forecast from a fresh clone:
-
-```bash
-pip install -e ".[worldmodel,llm,ui,browser]"
-```
-
-Install the optional JEPA path when you want to run the second backend from the same clone:
-
-```bash
-pip install -e ".[jepa]"
-```
-
-Open it in Studio:
-
-```bash
-vei ui serve \
-  --root docs/examples/enron-master-agreement-public-context/workspace \
-  --host 127.0.0.1 \
-  --port 3055
-```
-
-Open `http://127.0.0.1:3055`.
-
-This saved Master Agreement workspace is still the simplest Enron walkthrough in the repo. The branch date is September 27, 2000, so the public slice only shows the facts that were already public by then: 5 financial checkpoints, 6 public news events, and 680 daily stock rows. The saved branch timeline itself now carries 30 prior canonical events from multiple source families, so the branch scene reads as a company timeline rather than a single mail thread.
-
-![Decision scene for the Enron Master Agreement branch point, showing the branch moment, what actually happened, public company context, and recorded business state](docs/assets/enron-whatif/enron-decision-scene-top.png)
-
-The public-company panel now comes from the repo-owned v2 fixture rather than a side checkout:
-
-![Public company context sliced to the branch date, showing financial checkpoints and public news known before September 27, 2000](docs/assets/enron-whatif/enron-public-context.png)
-
-The saved counterfactual keeps the draft inside Enron, asks Gerald Nemec and Sara Shackleton for review, and holds the outside send. The saved forecast keeps the same 84-event horizon, moves risk from `1.000` to `0.560`, and predicts `64` fewer outside-addressed sends.
-
-![Predicted business change comparing the historical baseline, the LLM alternate path, and the learned forecast](docs/assets/enron-whatif/enron-predicted-business-change.png)
-
-VEI now also shows a macro outcome panel for the saved Enron bundles. It carries short-horizon stock, credit, and FERC heads, plus the measured calibration note. The current calibration is weak, so these macro heads stay advisory beside the email-path evidence.
-
-![Macro outcome panel for the saved Master Agreement branch, showing stock, credit, and FERC heads with the measured calibration note](docs/assets/enron-whatif/enron-macro-outcomes.png)
-
-The ranked comparison turns the same branch into a business choice. `Hold for internal review` ranks first at `0.209`, `Send a narrow status note` ranks second at `0.208`, and `Push for fast turnaround` falls to `-0.019`.
-
-![Ranked business comparison of three candidate moves scored against the recorded future](docs/assets/enron-whatif/enron-ranked-comparison.png)
-
-The repo now ships eight saved Enron examples. Each one carries at least 30 prior canonical events and at least three real source families in the saved timeline.
-
-Proof examples:
-
-- `enron-master-agreement-public-context`: contract control with a long visible downstream tail
-- `enron-pge-power-deal`: commercial judgment under counterparty deterioration
-- `enron-california-crisis-strategy`: regulatory and trading pressure under a preservation order
-- `enron-baxter-press-release`: public communications under executive shock
-- `enron-braveheart-forward`: accounting and structure review inside a finance loop
-
-Narrative examples:
-
-- `enron-watkins-follow-up`: the strongest governance fork, with a thinner recorded tail
-- `enron-q3-disclosure-review`: disclosure choices inside the October 2001 crisis
-- `enron-skilling-resignation-materials`: executive messaging and trust under leadership change
-
-The repo-owned Enron data chain, saved examples, and benchmark notes are
-documented in [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md).
-
-Train the repo-local reference backend when you want the Enron path to use the learned forecast by default:
-
-```bash
-python scripts/train_reference_backend_on_enron.py
-```
-
-The shipped reference checkpoint currently reports factual next-event AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951` on the held-out Enron validation split. That is the honest baseline for the thicker Enron timeline that now ships in the repo.
-
-Useful files in the Master Agreement example:
-
-- [workspace](docs/examples/enron-master-agreement-public-context/workspace/)
-- [whatif_experiment_overview.md](docs/examples/enron-master-agreement-public-context/whatif_experiment_overview.md)
-- [whatif_experiment_result.json](docs/examples/enron-master-agreement-public-context/whatif_experiment_result.json)
-- [whatif_business_state_comparison.md](docs/examples/enron-master-agreement-public-context/whatif_business_state_comparison.md)
-
-Refresh the bundles and screenshots:
-
-```bash
-make enron-example
-make enron-screens
-```
-
-Inspect a new company-history bundle through the same file-backed timeline path:
-
-```bash
-vei context timeline --root /path/to/context_snapshot.json --limit 25
-vei context readiness --root /path/to/context_snapshot.json --format plain
-python scripts/check_tenant_world_model.py --root /path/to/context_snapshot.json
-```
-
-Build a local real-company example from offline exports through the same path:
-
-```bash
-vei twin onboard \
-  --root _vei_out/newco/twin \
-  --org "NewCo" \
-  --domain newco.example \
-  --provider gmail \
-  --provider notion \
-  --base-url gmail=/path/to/gmail-takeout.zip \
-  --base-url notion=/path/to/notion-export.zip
-```
-
-For a local Dispatch export stored outside the repo, run:
-
-```bash
-python scripts/build_dispatch_local_example.py
-```
+See [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) for the full data chain, all eight saved bundles, benchmark commands, and refresh paths.
 
 ## Synthetic Clearwater Rig
 
-Clearwater stays in the repo as a synthetic control-room rig. It is the right place to test the kernel, the governor flow, and replay tooling without bringing in outside company data. Use Enron when you want the flagship real-history learned path.
-
-The repo now also ships three saved Clearwater what-if bundles so the same file-backed timeline and saved forecast flow can be checked across multiple synthetic service-ops cases:
-
-- `clearwater-dispatch-recovery`
-- `clearwater-billing-dispute-reopened`
-- `clearwater-technician-no-show`
-
-Spin up the built-in `service_ops` workspace with governor mode and run the same what-if loop:
+Clearwater is a synthetic service-ops workspace for testing the kernel, governor flow, and replay tooling without outside company data:
 
 ```bash
 vei quickstart run --world service_ops --governor-demo --no-serve
-vei whatif export --workspace _vei_out/quickstart
-vei whatif events --source company_history \
-  --source-dir _vei_out/quickstart/context_snapshot.json
-vei whatif experiment --source company_history \
-  --source-dir _vei_out/quickstart/context_snapshot.json \
-  --artifacts-root _vei_out/dispatch_whatif \
-  --label dispatch_t1 \
-  --thread-id "jira:JRA-CFS-10" \
-  --event-id "jira:JRA-CFS-10:state" \
-  --counterfactual-prompt "What if dispatch had escalated to a regional supervisor and pre-authorized after-hours premium?" \
-  --mode heuristic_baseline
 ```
 
-`--mode heuristic_baseline` runs without any LLM key. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` to `.env` and use `--mode both` for LLM-driven counterfactual continuations alongside the forecast.
-
-Open one of the saved synthetic bundles directly:
-
-```bash
-vei ui serve \
-  --root docs/examples/clearwater-dispatch-recovery/workspace \
-  --host 127.0.0.1 \
-  --port 3056
-```
-
-Rebuild the tracked synthetic bundles:
-
-```bash
-make service-ops-example
-```
-
-Use the saved Clearwater bundle as the synthetic service-ops example. Use Enron
-for the flagship real-history example.
-
-## Knowledge Authoring Demo
-
-The built-in `knowledge_authoring` family turns the Northstar Growth world into a grounded proposal-drafting workspace. It is a benchmark family built on the same Northstar pack used for campaign operations, with transcripts, pricing, delivery metrics, SOPs, and planning notes seeded into the normal VEI event spine.
-
-Run-based authoring export uses a recorded VEI run:
-
-```bash
-vei project init \
-  --root _vei_out/knowledge_authoring \
-  --family knowledge_authoring \
-  --overwrite
-
-vei run start \
-  --root _vei_out/knowledge_authoring \
-  --runner workflow
-
-vei synthesize training-data \
-  --root _vei_out/knowledge_authoring \
-  --run-id <run_id> \
-  --format authoring
-```
-
-Standalone workspace compose writes a fresh artifact into the workspace knowledge snapshot. It updates workspace knowledge state for future compose calls and future runs. It does not attach itself to an existing run timeline.
-
-```bash
-vei knowledge compose \
-  --workspace _vei_out/knowledge_authoring \
-  --target proposal \
-  --template proposal_v1 \
-  --subject crm_deal:CRM-NSG-D1 \
-  --mode heuristic_baseline \
-  --write-back
-```
-
-`--mode heuristic_baseline` is fully deterministic and runs without any API key. `--mode llm` uses the same bounded composition path with `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`, or `OPENROUTER_API_KEY`. When the selected key is missing, the compose command falls back to `heuristic_baseline` and records that note in the result.
-
-To ingest offline exports from real knowledge systems, use the new offline-first connectors. `notion`, `linear`, and `granola` read local exports only:
-
-```bash
-vei knowledge ingest \
-  --provider notion \
-  --provider linear \
-  --provider granola \
-  --source notion=/path/to/notion_export \
-  --source linear=/path/to/linear_dump.json \
-  --source granola=/path/to/granola_notes \
-  --org "Northstar Growth" \
-  --output _vei_out/knowledge_snapshot.json
-```
-
-## Company Skill Map Demo
-
-Build a deployable draft skill map from a normalized company bundle:
-
-```bash
-vei skillmap build \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --output _vei_out/<company>/skill_map \
-  --limit 12 \
-  --provider openai \
-  --model gpt-5-mini
-```
-
-The command writes:
-
-- `company_skill_map.json`: the typed `company_skill_map_v1` file
-- `company_skills.md`: the human-readable skill catalog
-- `skill_evidence_report.md`: the source evidence behind each skill
-- `skill_replay_report.md`: historical shadow tests for each skill
-- `skill_refresh_report.md`: what changed versus a previous map
-- `skill_gap_report.md`: missing data, stale evidence, source errors, and open ambiguities
-
-Validate the file before activation:
-
-```bash
-vei skillmap validate \
-  --map _vei_out/<company>/skill_map/company_skill_map.json
-```
-
-Skill synthesis is LLM-first and evidence-bound. The builder builds one evidence catalog from the full normalized company bundle, processes every catalog item in LLM shards, then runs a global finalizer over the strongest evidence clusters so cross-system operating rules can beat local one-off summaries. Final skills carry a candidate type (`flagship_skill`, `support_skill`, `workflow`, or `preprocessor`), positive and negative triggers, concrete output artifacts, usefulness scores, approval boundaries, and replay checks. Skills that do not cite supplied evidence IDs are rejected. The builder does not fall back to deterministic regex extraction; set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`, or `OPENROUTER_API_KEY`, or pass a configured `--provider/--model`.
-
-By default, `build` attaches deterministic replay checks when the bundle can be loaded as a company-history what-if world. Use `--no-replay` only when you want the raw LLM-synthesized map before replay scoring. To refresh after new company data lands, pass the previous output:
-
-```bash
-vei skillmap build \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --output _vei_out/<company>/skill_map_next \
-  --previous-map _vei_out/<company>/skill_map/company_skill_map.json
-```
-
-Bundle-built skills are compiled only from the supplied company bundle: canonical events, structure view, linked knowledge assets, and replayable history. The builder does not pull generic scenario-template action plans into `company_skill_map.json`.
-
-Inside a running MCP world, agents can inspect the same surface with `vei.skill_map`. The tool is read-only. It does not grant live company writes; generated write steps remain shadow-mode or approval-gated.
-
-## Bring Your Own Company History
-
-Bring raw exports into VEI as one verified bundle before you run what-if work.
-
-```bash
-vei context normalize \
-  --source-dir <raw_input_path> \
-  --org "<name>" \
-  --domain "<domain>" \
-  --output _vei_out/<company>/context_snapshot.json
-
-vei context verify --snapshot _vei_out/<company>/context_snapshot.json
-vei context status --snapshot _vei_out/<company>/context_snapshot.json
-
-vei whatif explore \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --format markdown
-
-vei whatif candidates \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --limit 10 \
-  --format markdown
-```
-
-For live multi-surface onboarding, use the twin entrypoint so capture, twin build, canonical timeline files, and the readiness readout land together:
-
-```bash
-vei twin onboard \
-  --root _vei_out/<company>/twin \
-  --org "<name>" \
-  --domain "<domain>" \
-  --provider github \
-  --provider clickup \
-  --filter github:repo=<org>/<repo> \
-  --filter clickup:list_id=<list_id>
-```
-
-When you find a real branch point, open a saved workspace and run a comparison:
-
-```bash
-vei whatif open \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --root _vei_out/<company>/whatif_case \
-  --event-id <branch_event_id>
-
-vei whatif experiment \
-  --source-dir _vei_out/<company>/context_snapshot.json \
-  --artifacts-root _vei_out/<company>/whatif_runs \
-  --label internal_review \
-  --event-id <branch_event_id> \
-  --counterfactual-prompt "Keep the draft inside the company, route it through one more internal review, and hold the outside send."
-```
-
-The canonical files are:
-
-- `context_snapshot.json` for the normalized company history bundle
-- `canonical_events.jsonl` for the shared event spine
-- `canonical_event_index.json` for the searchable event index with case and stitch metadata
-- `episode_manifest.json` for the saved what-if workspace manifest
-- `whatif_public_context.json` for the saved public-context sidecar written into every saved what-if workspace
-
-### Learned world-model benchmarks
-
-The learned path starts from the same canonical timeline files as the rest of
-VEI. It turns emails, tickets, ClickUp items, docs, and other dated work records
-into one event spine, then builds training rows that look like this:
-
-```text
-pre-branch company state + doctrine text + candidate action text/schema
--> observed future state
-```
-
-For factual rows, the candidate action is the historical branch event and the
-target is what actually happened next. For decision cases, candidate actions are
-created from pre-branch context only, then scored by the trained model. The
-model is never supposed to see the recorded future when proposing or scoring
-those candidates.
-
-The JEPA benchmark model does not predict one magic number directly. It predicts
-a bundle of factual future heads: evidence flow, business risk, stakeholder
-trust, execution drag, governance pressure, and related signals. Any single
-number in ranking tables is a convenience view computed after prediction, not a
-learned universal preference label.
-
-The current default readout is named `balanced_operator_score`. It is a fixed
-operator lens over five predicted heads:
-
-```text
-mean(1-risk, commercial position, 1-strain, trust, 1-drag)
-```
-
-Use that score as a sorting aid, not as proof that the JEPA learned a universal
-CEO preference. The more important output is the predicted future vector, its
-delta versus the baseline action, the Pareto/frontier set, and the concrete
-success/failure observables for checking the branch later.
-
-The current score flow is:
-
-```text
-candidate action
-+ doctrine text
-+ pre-branch company state
--> JEPA predicts likely future heads
--> frontier/tradeoff report, with optional operator objective views
-```
-
-The predicted heads include:
-
-- evidence heads such as outside spread, legal follow-up, review loops, participant fanout, delays, reassurance, blame pressure, and commitment clarity
-- business heads: `enterprise_risk`, `commercial_position_proxy`, `org_strain_proxy`, `stakeholder_trust`, `execution_drag`
-- future-state heads: `regulatory_exposure`, `accounting_control_pressure`, `liquidity_stress`, `governance_response`, `evidence_control`, `external_confidence_pressure`
-- optional reporting views such as risk-minimization or trust-preservation, computed from predicted futures rather than trained as factual targets
-
-Strategic-state-point exports now split the layers explicitly:
-
-- JEPA prediction: `predicted_future_vector`, `operator_utility_heads`,
-  `domain_risk_heads`, `telemetry_heads`, and checkpoint/encoder/probe
-  provenance.
-- Latent comparison: `latent_future_id`, baseline-relative latent distances,
-  and nearest-candidate latent distance when the checkpoint exposes JEPA latent
-  futures.
-- Frontier/readout: `pareto_frontier_group`, `frontier_rank`,
-  `operator_score_rank`, and `display_rank`. The display order puts Pareto
-  frontier options first; the score rank remains only the fixed operator lens.
-- Decision loop: `success_observable`, `failure_observable`, `time_to_signal`,
-  `next_decision_trigger`, and `falsifying_evidence`.
-
-The latest local pooled action-conditioned JEPA run combined the Enron Rosetta
-sample, Dispatch, Powr of You, and a small AmericanStories historical-news
-sample. It trained on `4,206` rows, validated on `785`, tested on `965`, and
-kept `12` final held-out cases. It uses deterministic hashing encoders for
-doctrine text and raw candidate action text, so changing the action text while
-holding the structured action schema fixed can change the prediction. On the
-held-out factual rows, external-spread Brier was `0.001085` and ECE was
-`0.003312`; AUROC is not informative in that particular split because the test
-label is nearly all positive. Business-head MAEs were `0.055` enterprise risk,
-`0.061` commercial position, `0.037` org strain, `0.058` stakeholder trust, and
-`0.099` execution drag. The honest read is: JEPA is a useful factual
-future-state forecaster in this run, but counterfactual rankings remain
-decision support, not causal proof.
-
-Build a pooled benchmark from multiple company-history bundles:
-
-```bash
-vei whatif benchmark build-multitenant \
-  --input enron=_vei_out/enron/context_snapshot.json \
-  --input dispatch=_vei_out/dispatch/context_snapshot.json \
-  --input newco=_vei_out/newco/context_snapshot.json \
-  --artifacts-root _vei_out/world_model_multitenant_jepa \
-  --label enron_dispatch_newco \
-  --candidate-mode template
-```
-
-Train JEPA on earlier history and keep the final tail for proof:
-
-```bash
-vei whatif benchmark train \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_newco \
-  --model-id jepa_latent \
-  --train-split train \
-  --train-split validation \
-  --validation-split test
-
-vei whatif benchmark eval \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_newco \
-  --model-id jepa_latent
-```
-
-The builder writes a leakage report and a data provenance report beside the dataset. Generated private company artifacts stay under `_vei_out/` and are not committed.
-
-Run the user-facing strategic state-point counterfactual pass against a trained checkpoint:
-
-```bash
-vei whatif benchmark strategic-state-points \
-  --input dispatch=_vei_out/dispatch/context_snapshot.json \
-  --input newco=_vei_out/newco/context_snapshot.json \
-  --checkpoint _vei_out/world_model_multitenant_jepa/enron_dispatch_newco/model_runs/jepa_latent/model.pt \
-  --artifacts-root _vei_out/world_model_strategic_state_points \
-  --label dispatch_newco_strategy \
-  --decisions-per-tenant 3 \
-  --candidates-per-decision 8 \
-  --proposal-mode llm \
-  --proposal-model gpt-5.4
-```
-
-That command is the reproducible CEO-decision workflow: build an as-of state
-dossier, propose strategic decision points and broad candidate actions from
-pre-as-of evidence, save prompts/responses/evidence hashes, score every
-candidate with the JEPA checkpoint, and export CSV/Markdown ranking tables.
-Strategic state points are now the counterfactual product surface.
-
-Use `--proposal-mode llm` for live LLM-generated decisions/actions. Strategic
-proposal models route through Codex by default. The default is `gpt-5.4`,
-because that is the newest model accepted by the current local Codex CLI.
-Override `--proposal-model` to `gpt-5.5` when the installed Codex runtime
-supports it. Set `VEI_STRATEGIC_PROPOSAL_BACKEND=api` only for an explicit
-direct-provider API run.
+Three saved Clearwater bundles ship under `docs/examples/clearwater-*/`. See [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md).
 
 ## Repo Checks
 
 ```bash
-make check
-make test
-make check-full
-make test-full
-make llm-live
-make clean-workspace
-make clean-workspace-hard-dry-run
-make clean-workspace-hard
+make check          # format, lint, types, import boundaries, security
+make test           # fast tests (skips slow)
+make check-full     # + bandit, semgrep, detect-secrets
+make test-full      # full suite with coverage
+make llm-live       # needs live API keys
+make clean-workspace  # clears caches; leaves _vei_out/ runs alone
 ```
 
-`make check` and `make test` are the fast local loop. `make test` skips tests marked `slow`. `make check-full` and `make test-full` match the stricter CI path with whole-repo security scans, the full slow suite, and coverage. `make llm-live` needs live keys. `make clean-workspace` clears low-risk local clutter such as repo-root `.artifacts/`, build folders, caches, and bytecode. It leaves `_vei_out/` runs alone. Use `make clean-workspace-hard-dry-run` to preview pruning old `_vei_out/` runs; `make clean-workspace-hard` keeps `_vei_out/datasets/`, `_vei_out/world_model_current/`, and `_vei_out/llm_live/latest/` when those are present.
+Exit codes: `0` pass · `1` test/gate failure · `2` cost ceiling exceeded · `3` infrastructure failure · `4` threshold/config missing.
 
-## Docs
+## Where to Go Next
 
-- [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) for a fast repo briefing, command checklist, and module-boundary rules
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module map, capability domains, and knowledge layer
-- [docs/WHATIF.md](docs/WHATIF.md) for the world-model and what-if command reference
-- [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) for the repo-owned public company example
-- [docs/NEWS_EXAMPLE.md](docs/NEWS_EXAMPLE.md) for the public news-timeline example
-- [docs/RL_GYM.md](docs/RL_GYM.md) for the scoped RL-training plan over deterministic process contracts
-- [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md) for a repo-owned synthetic Clearwater example
+- [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) — fast repo briefing and 10-minute checklist for humans and agents
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, five surfaces, runtime shape, what is and isn't learned
+- [docs/GLOSSARY.md](docs/GLOSSARY.md) — every term of art used in this repo, defined in one place
+- [docs/WHATIF.md](docs/WHATIF.md) — world-model and what-if command reference
+- [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) — the repo-owned public company example
+- [docs/NEWS_EXAMPLE.md](docs/NEWS_EXAMPLE.md) — the public news-timeline example
+- [docs/EVALS.md](docs/EVALS.md) — evaluation layers: factual metrics, LLM judge, human audit
+- [docs/RL_GYM.md](docs/RL_GYM.md) — scoped RL-training plan over deterministic process contracts
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, daily loop, module boundaries, PR workflow
 
 ## License
 

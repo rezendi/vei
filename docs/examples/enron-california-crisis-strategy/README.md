@@ -2,7 +2,7 @@
 
 This is the regulatory conduct case. It puts a preservation order, an active trading posture, and a narrow fork about halting versus continuing onto one saved branch.
 
-## Open It In Studio
+## Open in Studio
 
 ```bash
 vei ui serve \
@@ -24,6 +24,29 @@ Open `http://127.0.0.1:3055`.
 ## What Actually Happened
 
 - The preservation-order thread stayed inside the active crisis loop while the desk was still deciding how far to halt or continue.
+
+## Saved Files
+
+- `workspace/`: saved workspace you can open in Studio
+- `whatif_experiment_overview.md`: short human-readable run summary
+- `whatif_experiment_result.json`: saved combined result for the example bundle
+- `whatif_llm_result.json`: bounded message-path result
+- `whatif_reference_result.json`: saved forecast result
+- `whatif_business_state_comparison.md`: ranked comparison in business language
+- `whatif_business_state_comparison.json`: structured comparison payload
+- `enron_story_overview.md`: presenter-facing branch summary
+- `enron_story_manifest.json`: structured demo manifest
+- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
+- `enron_presentation_manifest.json`: presentation beat manifest
+- `enron_presentation_guide.md`: operator guide for bundle demos
+
+## Refresh
+
+```bash
+python scripts/build_enron_example_bundles.py --bundle enron-california-crisis-strategy
+python scripts/validate_whatif_artifacts.py docs/examples/enron-california-crisis-strategy
+python scripts/capture_enron_bundle_screenshots.py --bundle enron-california-crisis-strategy
+```
 
 ## Actions We Can Take
 
@@ -58,21 +81,6 @@ It gives the proof set the cleanest legal and operational branch.
 - Saved LLM path: Pause the strategy, preserve the record, alert legal and compliance, and prepare a self-report path instead of continuing the trading play.
 - Saved forecast file: `whatif_reference_result.json`
 
-## Saved Files
-
-- `workspace/`: saved workspace you can open in Studio
-- `whatif_experiment_overview.md`: short human-readable run summary
-- `whatif_experiment_result.json`: saved combined result for the example bundle
-- `whatif_llm_result.json`: bounded message-path result
-- `whatif_reference_result.json`: saved forecast result
-- `whatif_business_state_comparison.md`: ranked comparison in business language
-- `whatif_business_state_comparison.json`: structured comparison payload
-- `enron_story_overview.md`: presenter-facing branch summary
-- `enron_story_manifest.json`: structured demo manifest
-- `enron_exports_preview.json`: export preview for timeline and forecast artifacts
-- `enron_presentation_manifest.json`: presentation beat manifest
-- `enron_presentation_guide.md`: operator guide for bundle demos
-
 ## Other Enron Examples
 
 - [Enron Master Agreement Example](../enron-master-agreement-public-context/README.md)
@@ -82,14 +90,6 @@ It gives the proof set the cleanest legal and operational branch.
 - [Enron Watkins Follow-up Example](../enron-watkins-follow-up/README.md)
 - [Enron Q3 Disclosure Review Example](../enron-q3-disclosure-review/README.md)
 - [Enron Skilling Resignation Materials Example](../enron-skilling-resignation-materials/README.md)
-
-## Refresh
-
-```bash
-python scripts/build_enron_example_bundles.py --bundle enron-california-crisis-strategy
-python scripts/validate_whatif_artifacts.py docs/examples/enron-california-crisis-strategy
-python scripts/capture_enron_bundle_screenshots.py --bundle enron-california-crisis-strategy
-```
 
 ## Constraint
 

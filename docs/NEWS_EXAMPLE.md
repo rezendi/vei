@@ -1,5 +1,13 @@
 # News Public Example
 
+> **Exploratory surface.** News timelines use generic business heads (risk, trust, drag) that are workable but not yet news-native. Treat results as decision support, not historical causal proof. See [Limits](#limits) for details.
+
+## What you'll see
+
+- A dated world model built from public newspaper articles (AmericanStories or PleIAs archives)
+- Strategic state-point decisions proposed from pre-cutoff public evidence, scored by JEPA
+- A Studio demo with a compact shipped checkpoint spanning 1859–1865 American history
+
 News timelines are the public outside-in example. Use them when you want to test
 whether VEI can build a dated world model from public articles, propose
 state-level decision points, generate counterfactual actions, and score the

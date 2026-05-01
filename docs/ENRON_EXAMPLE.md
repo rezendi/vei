@@ -7,6 +7,12 @@ business-outcome forecasting, and saved Studio bundles.
 For the general command reference, use [WHATIF.md](WHATIF.md). This file keeps
 the Enron-specific data, cases, and benchmark notes in one place.
 
+## What you'll see
+
+- A saved what-if branch point from real Enron email history, viewable in Studio with no API key
+- Counterfactual comparisons showing how alternate actions would have changed the company's risk, trust, and execution state
+- Eight saved bundles spanning contract control, crisis communications, governance, and disclosure decisions
+
 ## What Ships
 
 The normal checkout includes enough data to open and rerun the saved Enron

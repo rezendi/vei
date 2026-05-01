@@ -1,68 +1,10 @@
 # VEI Architecture
 
 Use `README.md` for install, product framing, and operator flows. Use this
-document for module boundaries, runtime shape, and subsystem relationships.
+document for module boundaries, runtime shape, and subsystem relationships. See
+[GLOSSARY.md](GLOSSARY.md) for every term of art defined in one place.
 
 VEI is a deterministic, MCP-native enterprise simulator built around one stable boundary: `WorldSession`.
-
-## Core Primitives
-
-- `CanonicalEvent`
-  - frozen v1 envelope (`vei.events`) that is the single source of truth on the event spine; `StateStore`, run timelines, and connector receipts are derived views
-- `DynamicsBackend`
-  - protocol for forecast / learned-dynamics calls (`vei.dynamics`); backends (`null`, `heuristic_baseline`, `reference`, `external_subprocess`) register through one registry
-- `SessionSlice`
-  - lazy-hydration boundary produced by a `SessionMaterializer` from the ingest stores; what `WorldSession.from_session_materializer` consumes
-- `Blueprint`
-  - authored asset compiled into scenario, facades, workflow, contract, and run defaults
-- `BlueprintAsset`
-  - authoring root for scenario templates, capability-graph or environment seed data, facade requirements, and workflow defaults
-- `CompiledBlueprint`
-  - resolved facade/state-root graph plus workflow/contract/run defaults
-- `GroundingBundle`
-  - typed imported org/policy/incident bundle that compiles into a `BlueprintAsset`
-- `ImportPackage`
-  - raw file-based intake package with source manifests, mapping profiles, redaction state, and provenance anchors
-- `Scenario`
-  - seeded enterprise world plus manifest metadata
-- `Facade`
-  - typed enterprise surface grouped by capability domain
-- `Contract`
-  - explicit success predicates, forbidden predicates, observation boundary, policy invariants, reward terms, and intervention rules
-- `Run`
-  - workflow, benchmark, demo, showcase, and suite executions
-- `Snapshot`
-  - branchable world-state checkpoint over the kernel
-- `StructureView`
-  - event-derived read model (`vei.structure`) with inferred entities, case clusters, relations, timelines, and open ambiguities
-
-## One Kernel, Four Modes
-
-VEI is one kernel with four operating modes sharing the same world session, connector layer, event spine, replay model, and contract scoring:
-
-- **Test / Eval** — run a fixed company world, score an agent, compare scripted vs LLM vs workflow runners
-- **Governor / Control** — place VEI between agents and enterprise systems; govern, record, and replay what happened
-- **Sandbox / What-if** — fork the same world, change policy or actions, compare alternate futures with snapshot comparisons
-- **Train / Data** — turn traces and trajectories into rollouts, demonstrations, and RL-friendly data
-
-Copy-safe product language:
-
-- The world kernel is the deterministic `WorldSession`: one mutable company state,
-  one canonical event spine, typed enterprise facades, snapshots, branching, and
-  replay.
-- A workflow twin is a typed baseline run over that same kernel, not a separate
-  script viewer. Workflow steps can resolve to graph-native actions or concrete
-  tools at execution time, then write normal run events, snapshots, and contract
-  results.
-- Replay and shadow use the same boundary. Offline replay schedules recorded
-  events or candidate futures into the kernel; governed twin mode can sit
-  between outside agents and enterprise-shaped routes, recording, denying,
-  allowing, or holding writes for approval. Live connectors are explicit and
-  policy-gated rather than the default path.
-- The agent-training surface is the event spine and derived run data: canonical
-  events, recent state, doctrine or context, candidate actions, observed future
-  events, state deltas, business heads, and human or judge preferences where
-  available. Counterfactual rankings remain decision support, not causal proof.
 
 ## Runtime Shape
 
@@ -92,6 +34,72 @@ Workspace / CLI / UI / SDK / Agent
 ```
 
 The router is a transport and tool-dispatch adapter. The twin gateway is an HTTP adapter that exposes provider-shaped compatibility routes and manages governed agents. Mutable enterprise state belongs to the kernel, not to transport wrappers.
+
+## One Kernel, Five Surfaces
+
+VEI is one kernel with five product surfaces sharing the same world session, connector layer, event spine, replay model, and contract scoring:
+
+- **Test / Eval** — run a fixed company world, score an agent, compare scripted vs LLM vs workflow runners
+- **Governor / Control** — place VEI between agents and enterprise systems; govern, record, and replay what happened
+- **Sandbox / What-if** — fork the same world, change policy or actions, compare alternate futures with snapshot comparisons
+- **Train / Data** — turn traces and trajectories into rollouts, demonstrations, and RL-friendly data
+- **Knowledge / Skill Map** — hydrate company records into a knowledge graph; compose grounded artifacts; compile company-specific agent skills from the normalized bundle with replay checks and evidence backing
+
+Copy-safe product language:
+
+- The world kernel is the deterministic `WorldSession`: one mutable company state,
+  one canonical event spine, typed enterprise facades, snapshots, branching, and
+  replay.
+- A workflow twin is a typed baseline run over that same kernel, not a separate
+  script viewer. Workflow steps can resolve to graph-native actions or concrete
+  tools at execution time, then write normal run events, snapshots, and contract
+  results.
+- Replay and shadow use the same boundary. Offline replay schedules recorded
+  events or candidate futures into the kernel; governed twin mode can sit
+  between outside agents and enterprise-shaped routes, recording, denying,
+  allowing, or holding writes for approval. Live connectors are explicit and
+  policy-gated rather than the default path.
+- The agent-training surface is the event spine and derived run data: canonical
+  events, recent state, doctrine or context, candidate actions, observed future
+  events, state deltas, business heads, and human or judge preferences where
+  available. Counterfactual rankings remain decision support, not causal proof.
+- The knowledge and skill-map surface uses the same event spine, structure view,
+  and capability graph. Knowledge compositions run deterministically or with
+  bounded LLM authoring. Skill-map candidates carry evidence IDs, replay checks,
+  and approval boundaries.
+
+## Core Primitives
+
+> If you're skimming, skip ahead to the subsystem sections below — these are the typed values used across modules.
+
+- `CanonicalEvent`
+  - frozen v1 envelope (`vei.events`) that is the single source of truth on the event spine; `StateStore`, run timelines, and connector receipts are derived views
+- `DynamicsBackend`
+  - protocol for forecast / learned-dynamics calls (`vei.dynamics`); backends (`null`, `heuristic_baseline`, `reference`, `external_subprocess`) register through one registry
+- `SessionSlice`
+  - lazy-hydration boundary produced by a `SessionMaterializer` from the ingest stores; what `WorldSession.from_session_materializer` consumes
+- `Blueprint`
+  - authored asset compiled into scenario, facades, workflow, contract, and run defaults
+- `BlueprintAsset`
+  - authoring root for scenario templates, capability-graph or environment seed data, facade requirements, and workflow defaults
+- `CompiledBlueprint`
+  - resolved facade/state-root graph plus workflow/contract/run defaults
+- `GroundingBundle`
+  - typed imported org/policy/incident bundle that compiles into a `BlueprintAsset`
+- `ImportPackage`
+  - raw file-based intake package with source manifests, mapping profiles, redaction state, and provenance anchors
+- `Scenario`
+  - seeded enterprise world plus manifest metadata
+- `Facade`
+  - typed enterprise surface grouped by capability domain
+- `Contract`
+  - explicit success predicates, forbidden predicates, observation boundary, policy invariants, reward terms, and intervention rules
+- `Run`
+  - workflow, benchmark, demo, showcase, and suite executions
+- `Snapshot`
+  - branchable world-state checkpoint over the kernel
+- `StructureView`
+  - event-derived read model (`vei.structure`) with inferred entities, case clusters, relations, timelines, and open ambiguities
 
 ## Event Spine
 
