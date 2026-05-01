@@ -1,0 +1,73 @@
+{
+  "organization_name": "Apex Renewals",
+  "organization_domain": "apex.example",
+  "captured_at": "2026-01-03T00:00:00Z",
+  "sources": [
+    {
+      "provider": "mail_archive",
+      "captured_at": "2026-01-03T00:00:00Z",
+      "status": "ok",
+      "record_counts": {
+        "threads": 1,
+        "messages": 2
+      },
+      "data": {
+        "threads": [
+          {
+            "thread_id": "thr-CASE-789",
+            "subject": "CASE-789 renewal risk",
+            "messages": [
+              {
+                "from": "maya@apex.example",
+                "to": [
+                  "legal@apex.example"
+                ],
+                "date": "2026-01-01T10:00:00Z",
+                "subject": "CASE-789 renewal risk",
+                "body_text": "CASE-789 renewal risk needs legal review before any customer-facing reply."
+              },
+              {
+                "from": "legal@apex.example",
+                "to": [
+                  "maya@apex.example"
+                ],
+                "date": "2026-01-01T10:30:00Z",
+                "subject": "CASE-789 renewal risk",
+                "body_text": "Legal review is complete. Keep the first draft internal until finance confirms pricing."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "provider": "notion",
+      "captured_at": "2026-01-03T00:00:00Z",
+      "status": "ok",
+      "record_counts": {
+        "pages": 1
+      },
+      "data": {
+        "pages": [
+          {
+            "page_id": "page-CASE-789",
+            "title": "Renewal-risk response SOP",
+            "body": "For at-risk renewals, cite legal review, finance confirmation, and an internal approval owner before drafting a customer response.",
+            "tags": [
+              "renewal",
+              "approval",
+              "sop"
+            ],
+            "linked_object_refs": [
+              "case:CASE-789"
+            ],
+            "updated_at": "2026-01-01T12:00:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "snapshot_role": "company_history_bundle"
+  }
+}

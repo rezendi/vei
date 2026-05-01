@@ -9,6 +9,8 @@ from typer.testing import CliRunner
 
 from vei.cli.vei_skillmap import app
 from vei.context.api import ContextSnapshot, ContextSourceResult
+from vei.ingest.agent_activity.agent_activity_jsonl import AgentActivityJsonlAdapter
+from vei.ingest.agent_activity.api import ingest_agent_activity
 from vei.skillmap.api import CompanySkillMap
 
 
@@ -54,6 +56,61 @@ def test_skillmap_cli_builds_outputs_and_validates(
     payload = json.loads(validate_result.output)
     assert payload["ok"] is True
     assert payload["draft_skill_count"] >= 1
+
+
+def test_skillmap_cli_refreshes_workspace_control_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_skillmap_cli_llm(monkeypatch)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    _write_cli_snapshot(workspace)
+    activity_path = tmp_path / "agent_activity.jsonl"
+    activity_path.write_text(
+        json.dumps(
+            {
+                "id": "agent-draft-456",
+                "ts_ms": 1767272400000,
+                "case_id": "case:CASE-456",
+                "actor_id": "renewal.agent",
+                "tool": "docs.create",
+                "args": {"doc_id": "DOC-CASE-456-DRAFT"},
+                "response": {"doc_id": "DOC-CASE-456-DRAFT"},
+                "status": "completed",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    ingest_agent_activity(
+        adapter=AgentActivityJsonlAdapter(activity_path, tenant_id="acme.example"),
+        workspace=workspace,
+    )
+    output_dir = tmp_path / "skillmap"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "refresh",
+            "--workspace",
+            str(workspace),
+            "--output",
+            str(output_dir),
+            "--no-replay",
+            "--limit",
+            "4",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "from 1 Control event(s)" in result.output
+    map_path = output_dir / "company_skill_map.json"
+    assert map_path.exists()
+    assert (output_dir / "control_evidence_pack.json").exists()
+    payload = json.loads(map_path.read_text(encoding="utf-8"))
+    assert payload["metadata"]["builder"] == "workspace_control"
+    assert payload["metadata"]["control_event_count"] == 1
 
 
 def test_skillmap_cli_validate_exits_nonzero_for_invalid_map(tmp_path: Path) -> None:

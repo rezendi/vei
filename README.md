@@ -88,7 +88,7 @@ All commands live under `vei <group> <command>`.
 | **Governor / Control** | `twin serve`, `twin onboard`, `ingest agent-activity`, `provenance access-review`, `provenance verify`, `provenance export` |
 | **Sandbox / What-if** | `whatif explore`, `whatif events`, `whatif open`, `whatif experiment`, `whatif benchmark build-multitenant`, `whatif benchmark strategic-state-points` |
 | **Train / Data** | `rollout`, `train bc`, `pack`, `synthesize training-data` |
-| **Knowledge / Skills** | `knowledge compose`, `knowledge ingest`, `skillmap build`, `skillmap validate` |
+| **Knowledge / Skills** | `knowledge compose`, `knowledge ingest`, `skillmap build`, `skillmap refresh`, `skillmap validate` |
 | **Inspect / Debug** | `world list`, `inspect fidelity`, `context timeline`, `context readiness`, `visualize`, `ui serve` |
 | **Project / Workspace** | `project init`, `project show`, `blueprint`, `contract`, `scenario`, `workspace`, `release` |
 
@@ -117,6 +117,10 @@ Then explore branch points, run what-if experiments, or compile a skill map:
 ```bash
 vei whatif candidates --source-dir _vei_out/yourco/context_snapshot.json --limit 10
 vei skillmap build --source-dir _vei_out/yourco/context_snapshot.json --output _vei_out/yourco/skill_map
+
+# When agent behavior has been imported into the same workspace, refresh from
+# the context plus Control evidence spine.
+vei skillmap refresh --workspace _vei_out/yourco --output _vei_out/yourco/skill_map
 ```
 
 Full command reference: [docs/WHATIF.md](docs/WHATIF.md).

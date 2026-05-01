@@ -68,6 +68,32 @@ def build_company_skill_map_from_context_path(
     )
 
 
+def build_company_skill_map_from_workspace(
+    workspace: str | Path,
+    *,
+    context_path: str | Path | None = None,
+    limit: int = 12,
+    include_replay: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    previous_map_path: str | Path | None = None,
+    timeout_s: int = 240,
+    catalog_shard_size: int = 80,
+) -> CompanySkillMap:
+    _sync_test_hook_globals()
+    return _skill_pipeline.build_company_skill_map_from_workspace(
+        workspace,
+        context_path=context_path,
+        limit=limit,
+        include_replay=include_replay,
+        provider=provider,
+        model=model,
+        previous_map_path=previous_map_path,
+        timeout_s=timeout_s,
+        catalog_shard_size=catalog_shard_size,
+    )
+
+
 def build_company_skill_map_from_session(
     session: WorldSessionAPI,
     *,
@@ -87,6 +113,7 @@ __all__ = [
     "SkillTrigger",
     "SkillValidationIssue",
     "build_company_skill_map_from_context_path",
+    "build_company_skill_map_from_workspace",
     "build_company_skill_map_from_session",
     "render_company_skill_map_markdown",
     "render_skill_evidence_report",

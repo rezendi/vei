@@ -10,6 +10,8 @@ from vei.context.api import (
     ContextSourceResult,
     write_canonical_history_sidecars,
 )
+from vei.ingest.agent_activity.agent_activity_jsonl import AgentActivityJsonlAdapter
+from vei.ingest.agent_activity.api import ingest_agent_activity
 from vei.skillmap.api import (
     CompanySkill,
     CompanySkillMap,
@@ -17,6 +19,7 @@ from vei.skillmap.api import (
     SkillStep,
     SkillTrigger,
     build_company_skill_map_from_context_path,
+    build_company_skill_map_from_workspace,
     render_company_skill_map_markdown,
     render_skill_refresh_report,
     validate_company_skill_map,
@@ -77,6 +80,38 @@ def test_skill_map_builds_shadow_skills_from_context_bundle(
     markdown = render_company_skill_map_markdown(skill_map)
     assert "Company Skill Map: Acme Ops" in markdown
     assert "Evidence:" in markdown
+
+
+def test_skill_map_refresh_uses_workspace_control_events(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_control_skillmap_llm(monkeypatch)
+    workspace = _write_skillmap_workspace_with_control_activity(tmp_path)
+
+    skill_map = build_company_skill_map_from_workspace(
+        workspace,
+        limit=4,
+        include_replay=False,
+    )
+
+    assert skill_map.metadata["builder"] == "workspace_control"
+    assert skill_map.metadata["skill_source_policy"] == (
+        "workspace_context_plus_control_spine"
+    )
+    assert skill_map.metadata["control_event_count"] == 1
+    assert "agent_activity_jsonl" in skill_map.source_providers
+    assert skill_map.canonical_event_count >= 4
+    assert skill_map.validation.ok is True
+    control_event_id = skill_map.metadata["control_event_ids_sample"][0]
+    assert any(
+        evidence.ref_type == "event" and evidence.ref_id == control_event_id
+        for skill in skill_map.skills
+        for evidence in skill.evidence_refs
+    )
+    assert any(
+        "observed captured agent behavior" in skill.summary
+        for skill in skill_map.skills
+    )
 
 
 def test_skill_map_requires_llm_credentials_when_building_context_bundle(
@@ -373,6 +408,192 @@ def _patch_skillmap_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "vei.skillmap.skill_pipeline._llm_available", lambda provider: True
     )
+
+
+def _patch_control_skillmap_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_plan_once_with_usage(**kwargs: object) -> SimpleNamespace:
+        payload = json.loads(str(kwargs["user"]))
+        if "evidence_catalog" in payload:
+            evidence_ids = [
+                str(item["evidence_id"])
+                for item in payload["evidence_catalog"]
+                if str(item.get("evidence_id") or "").startswith("event:")
+                and str(item.get("summary") or "").find("tool=docs.create") >= 0
+            ]
+            assert evidence_ids, payload["evidence_catalog"]
+            return SimpleNamespace(
+                plan={
+                    "tool": "skillmap.cluster",
+                    "args": {
+                        "clusters": [
+                            {
+                                "title": "Captured renewal draft behavior",
+                                "summary": "A workspace agent created a renewal draft from the captured CASE-123 evidence.",
+                                "candidate_type": "workflow",
+                                "domain": "renewal_ops",
+                                "positive_triggers": [
+                                    "CASE-123 renewal risk draft is needed"
+                                ],
+                                "negative_triggers": [
+                                    "No captured agent draft or case evidence exists"
+                                ],
+                                "reuse_pattern": "Renewal-risk drafts should follow the captured agent behavior and stay approval-gated.",
+                                "evidence_ids": evidence_ids[:1],
+                                "allowed_actions": ["compose_shadow_draft"],
+                                "blocked_actions": ["send_without_approval"],
+                                "output_artifacts": [
+                                    {
+                                        "artifact_id": "renewal_control_draft",
+                                        "title": "Renewal control draft",
+                                        "kind": "markdown",
+                                        "schema_hint": "case, evidence, draft owner, approval state",
+                                    }
+                                ],
+                                "replay_checks": [
+                                    "The agent draft should cite the same case before any external reply."
+                                ],
+                                "usefulness_scores": {
+                                    "company_specificity": 0.9,
+                                    "repeat_frequency": 0.6,
+                                    "business_consequence": 0.8,
+                                    "actionability": 0.9,
+                                    "evidence_coverage": 0.8,
+                                    "risk_if_wrong": 0.7,
+                                    "replay_testability": 0.7,
+                                },
+                                "confidence": 0.84,
+                            }
+                        ]
+                    },
+                },
+                usage=SimpleNamespace(
+                    provider="openai",
+                    model="test-model",
+                    prompt_tokens=9,
+                    completion_tokens=18,
+                    total_tokens=27,
+                    estimated_cost_usd=0.01,
+                ),
+            )
+        evidence_ids = [
+            evidence_id
+            for cluster in payload["candidate_clusters"]
+            for evidence_id in cluster.get("evidence_ids", [])
+        ]
+        return SimpleNamespace(
+            plan={
+                "tool": "skillmap.propose",
+                "args": {
+                    "skills": [
+                        {
+                            "title": "Refresh renewal draft from captured agent behavior",
+                            "summary": "Use observed captured agent behavior and the company case context to produce an approval-gated renewal draft.",
+                            "candidate_type": "workflow",
+                            "domain": "renewal_ops",
+                            "trigger": {
+                                "description": "CASE-123 needs a renewal-risk draft and Control shows an agent already created one.",
+                                "signals": ["CASE-123", "docs.create", "renewal draft"],
+                            },
+                            "negative_triggers": [
+                                "The workspace has no captured agent draft behavior."
+                            ],
+                            "goal": "Create a grounded internal renewal draft that remains approval-gated.",
+                            "reuse_pattern": "Renewal-risk drafts should follow the captured agent behavior and stay approval-gated.",
+                            "evidence_ids": evidence_ids[:1],
+                            "steps": [
+                                {
+                                    "instruction": "Review the cited Control event and the linked CASE-123 company context.",
+                                    "tool": "vei.provenance.evidence_pack",
+                                    "read_only": True,
+                                },
+                                {
+                                    "instruction": "Draft the internal renewal update for human approval.",
+                                    "tool": "knowledge.compose_artifact",
+                                    "read_only": False,
+                                    "requires_approval": True,
+                                },
+                            ],
+                            "output_artifacts": [
+                                {
+                                    "artifact_id": "renewal_control_draft",
+                                    "title": "Renewal control draft",
+                                    "kind": "markdown",
+                                    "schema_hint": "case, evidence, draft owner, approval state",
+                                }
+                            ],
+                            "replay_checks": [
+                                "The agent draft should cite the same case before any external reply."
+                            ],
+                            "allowed_actions": ["compose_shadow_draft"],
+                            "blocked_actions": ["send_without_approval"],
+                            "execution_mode": "shadow",
+                            "tags": ["control", "renewal", "CASE-123"],
+                            "usefulness_scores": {
+                                "company_specificity": 0.9,
+                                "repeat_frequency": 0.6,
+                                "business_consequence": 0.8,
+                                "actionability": 0.9,
+                                "evidence_coverage": 0.8,
+                                "risk_if_wrong": 0.7,
+                                "replay_testability": 0.7,
+                            },
+                            "confidence": 0.84,
+                        }
+                    ]
+                },
+            },
+            usage=SimpleNamespace(
+                provider="openai",
+                model="test-model",
+                prompt_tokens=9,
+                completion_tokens=18,
+                total_tokens=27,
+                estimated_cost_usd=0.01,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "vei.skillmap.skill_pipeline.plan_once_with_usage", fake_plan_once_with_usage
+    )
+    monkeypatch.setattr(
+        "vei.skillmap.skill_pipeline._llm_available", lambda provider: True
+    )
+
+
+def _write_skillmap_workspace_with_control_activity(tmp_path: Path) -> Path:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    snapshot_path = _write_skillmap_snapshot(workspace)
+    activity_path = tmp_path / "agent_activity.jsonl"
+    activity_path.write_text(
+        json.dumps(
+            {
+                "id": "agent-draft-1",
+                "ts_ms": 1767272400000,
+                "case_id": "case:CASE-123",
+                "actor_id": "renewal.agent",
+                "actor_display_name": "Renewal Agent",
+                "tool": "docs.create",
+                "args": {
+                    "doc_id": "DOC-CASE-123-DRAFT",
+                    "title": "CASE-123 renewal control draft",
+                },
+                "response": {
+                    "doc_id": "DOC-CASE-123-DRAFT",
+                    "title": "CASE-123 renewal control draft",
+                },
+                "status": "completed",
+                "source_granularity": "per_call",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    ingest_agent_activity(
+        adapter=AgentActivityJsonlAdapter(activity_path, tenant_id="acme.example"),
+        workspace=snapshot_path.parent,
+    )
+    return workspace
 
 
 def _write_skillmap_snapshot(tmp_path: Path) -> Path:

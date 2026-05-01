@@ -8,9 +8,12 @@ import typer
 from vei.skillmap.api import (
     CompanySkillMap,
     build_company_skill_map_from_context_path,
+    build_company_skill_map_from_workspace,
     validate_company_skill_map,
     write_company_skill_map_outputs,
 )
+from vei.ingest.api import load_agent_activity_events
+from vei.provenance.api import build_evidence_pack
 
 try:
     from dotenv import load_dotenv
@@ -95,6 +98,102 @@ def build(
     )
 
 
+@app.command("refresh")
+def refresh(
+    workspace: Path = typer.Option(
+        ...,
+        "--workspace",
+        help="Workspace with context_snapshot.json and Control evidence.",
+    ),
+    context: Path | None = typer.Option(
+        None,
+        "--context",
+        help="Optional context snapshot path. Defaults to <workspace>/context_snapshot.json.",
+    ),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Directory for company_skill_map.json and reports. Defaults to <workspace>/skill_map.",
+    ),
+    limit: int = typer.Option(
+        12,
+        "--limit",
+        help="Maximum number of candidate skills to emit.",
+        min=1,
+    ),
+    replay: bool = typer.Option(
+        True,
+        "--replay/--no-replay",
+        help="Attach deterministic historical replay scores when the context bundle can be loaded as a what-if world.",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        help="LLM provider for skill synthesis. Defaults to .agents.yml.",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="LLM model for skill synthesis. Defaults to .agents.yml/provider fallback.",
+    ),
+    previous_map: str | None = typer.Option(
+        None,
+        "--previous-map",
+        help=(
+            "Previous company_skill_map.json or output directory. "
+            "Defaults to the output directory when company_skill_map.json exists."
+        ),
+    ),
+    timeout_s: int = typer.Option(
+        240,
+        "--timeout-s",
+        help="LLM request timeout in seconds.",
+        min=1,
+    ),
+    catalog_shard_size: int = typer.Option(
+        80,
+        "--catalog-shard-size",
+        help="Evidence items per LLM call. All shards are processed; use 0 to send one full catalog.",
+        min=0,
+    ),
+) -> None:
+    """Refresh a living skill map from context plus imported Control evidence."""
+    load_dotenv(override=False)
+    workspace_path = workspace.expanduser().resolve()
+    output_dir = (
+        Path(output).expanduser().resolve() if output else workspace_path / "skill_map"
+    )
+    previous_map_path = previous_map or _default_previous_map(output_dir)
+    skill_map = build_company_skill_map_from_workspace(
+        workspace_path,
+        context_path=context,
+        limit=limit,
+        include_replay=replay,
+        provider=provider,
+        model=model,
+        previous_map_path=previous_map_path,
+        timeout_s=timeout_s,
+        catalog_shard_size=catalog_shard_size,
+    )
+    paths = write_company_skill_map_outputs(skill_map, output_dir)
+    evidence_pack_path = output_dir / "control_evidence_pack.json"
+    events = load_agent_activity_events(str(workspace_path))
+    evidence_pack = build_evidence_pack(events, workspace=workspace_path)
+    evidence_pack_path.write_text(
+        json.dumps(evidence_pack.model_dump(mode="json"), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    typer.echo(
+        "Refreshed "
+        f"{skill_map.skill_count} skills from "
+        f"{skill_map.metadata.get('control_event_count', 0)} Control event(s) "
+        f"({skill_map.validation.error_count} errors, "
+        f"{skill_map.validation.warning_count} warnings) "
+        f"-> {paths['json'].parent}"
+    )
+
+
 @app.command("validate")
 def validate(
     map_path: str = typer.Option(..., "--map", help="Path to company_skill_map.json."),
@@ -126,6 +225,11 @@ def validate(
     )
     if not validation.ok:
         raise typer.Exit(1)
+
+
+def _default_previous_map(output_dir: Path) -> str | None:
+    candidate = output_dir / "company_skill_map.json"
+    return str(candidate) if candidate.exists() else None
 
 
 if __name__ == "__main__":

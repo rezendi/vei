@@ -133,6 +133,14 @@ class WhatIfSceneRequest(BaseModel):
     max_events: int | None = None
 
 
+class WhatIfChatRequest(BaseModel):
+    source: str = "auto"
+    message: str
+    event_id: str | None = None
+    thread_id: str | None = None
+    selected_citation_ids: list[str] = Field(default_factory=list)
+
+
 class WhatIfRunRequest(BaseModel):
     source: str = "auto"
     prompt: str

@@ -281,6 +281,15 @@ function bindControls() {
   document.getElementById("whatif-rank-btn")?.addEventListener("click", () => {
     void runRankedWhatIfFromUI();
   });
+  document.getElementById("whatif-chat-btn")?.addEventListener("click", () => {
+    void askWhatIfChat();
+  });
+  document.getElementById("whatif-chat-input")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void askWhatIfChat();
+    }
+  });
 }
 
 bindControls();
