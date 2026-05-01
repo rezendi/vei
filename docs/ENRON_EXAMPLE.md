@@ -163,6 +163,9 @@ canonical timeline.
 make enron-example
 make enron-screens
 
+# Refresh the static strangelab.ai/enron browser bundle
+python scripts/export_enron_static_assets.py --output ../strangelab.ai/public/enron
+
 # Refresh public fixtures
 python scripts/prepare_enron_public_context.py
 
