@@ -372,8 +372,9 @@ def build_static_bundle(
         },
         "caveat": (
             "This is evidence-grounded historical simulation, not causal proof. "
-            "LLM replies are plausible replay events constrained to supplied "
-            "pre-cutoff evidence; JEPA scores are decision-support readouts."
+            "Simulated replies are imagined by an LLM from only the evidence "
+            "shown for the selected cutoff; they are not actual future Enron "
+            "emails. JEPA scores are decision-support readouts."
         ),
     }
 
