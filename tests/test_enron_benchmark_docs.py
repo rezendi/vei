@@ -15,9 +15,9 @@ def _metrics_card_value(label: str) -> str:
 
 
 def test_enron_benchmark_doc_tracks_shipped_reference_metrics() -> None:
-    text = Path("docs/ENRON_EXAMPLE.md").read_text(encoding="utf-8")
+    text = Path("docs/EXAMPLES.md").read_text(encoding="utf-8")
 
-    assert "## Shipped reference backend" in text
+    assert "### Shipped reference backend" in text
     assert "`full_context_transformer`" in text
     assert f"`{_metrics_card_value('Factual next-event AUROC')}`" in text
     assert f"`{_metrics_card_value('Factual next-event Brier')}`" in text

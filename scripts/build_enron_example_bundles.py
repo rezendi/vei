@@ -824,7 +824,7 @@ def _write_casebook_overview() -> None:
     narrative_specs = [spec for spec in bundle_specs() if spec.role == "narrative"]
     lines = [
         "<!-- BEGIN GENERATED ENRON CASES -->",
-        "## Saved Examples",
+        "### Saved examples",
         "",
         "Start with the Master Agreement example. It is the clearest fresh-clone",
         "walkthrough:",
@@ -836,7 +836,7 @@ def _write_casebook_overview() -> None:
         "  --port 3055",
         "```",
         "",
-        "### Proof examples",
+        "#### Proof examples",
         "",
     ]
     for spec in proof_specs:
@@ -847,7 +847,7 @@ def _write_casebook_overview() -> None:
                 f"  - What actually happened: {spec.actual_happened}",
             ]
         )
-    lines.extend(["", "### Narrative examples", ""])
+    lines.extend(["", "#### Narrative examples", ""])
     for spec in narrative_specs:
         lines.extend(
             [
@@ -858,7 +858,7 @@ def _write_casebook_overview() -> None:
         )
     lines.extend(["<!-- END GENERATED ENRON CASES -->", ""])
     section = "\n".join(lines)
-    target = Path("docs/ENRON_EXAMPLE.md")
+    target = Path("docs/EXAMPLES.md")
     if not target.exists():
         target.write_text(section, encoding="utf-8")
         return
