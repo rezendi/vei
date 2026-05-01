@@ -137,7 +137,7 @@ def create_mcp_server(
 
     srv = fserver.FastMCP(
         name="VEI Router",
-        instructions="Virtual Enterprise Internet — synthetic MCP world",
+        instructions="VEI — synthetic MCP world",
         host=host,
         port=port,
         mount_path=mount_path,

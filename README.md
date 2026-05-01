@@ -2,7 +2,7 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Strange-Lab-AI/vei)
 
-**VEI** (Virtual Enterprise Internet) builds a runnable replica of a company from real records or built-in scenarios. You use it to test agents before they touch production systems, govern outside agents through a twin gateway, replay historical decisions and compare alternate moves, train agents on process compliance, and compile company-specific knowledge and skills from the same company state.
+**VEI** builds a runnable replica of any organisation or situation from real records. You use it to replay historical decisions and compare alternate moves, test agents before they touch production systems, turn agent traces into RL training data, and compile company-specific knowledge and skills from ongoing company state.
 
 One deterministic kernel powers every path: one world state, one event spine, one replay model, one CLI.
 
