@@ -12,7 +12,7 @@ This is the one starting document for anyone — human or AI agent — working o
 
 ## What VEI Is
 
-VEI (Virtual Enterprise Internet) is a deterministic enterprise simulation and evaluation system. The same event spine supports the CLI, Studio UI, twin gateway, branch-point what-if experiments, company skill-map compilation, and learned world-model benchmarks.
+VEI builds a runnable replica of any organisation or situation from real records. The same event spine supports the CLI, Studio UI, twin gateway, branch-point what-if experiments, company skill-map compilation, and learned world-model benchmarks.
 
 The practical job is usually one of five things:
 
