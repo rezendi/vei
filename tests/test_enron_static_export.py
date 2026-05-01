@@ -12,6 +12,10 @@ from scripts.export_enron_static_assets import (
     export_model_onnx,
     _load_checkpoint,
 )
+from scripts.enron_action_sensitivity import (
+    evaluate_enron_action_sensitivity,
+    public_enron_audit_actions,
+)
 from scripts.enron_example_specs import bundle_specs
 from vei.whatif._enron_dataset import repo_enron_sample_rosetta_dir
 from vei.whatif.api import load_world
@@ -108,3 +112,42 @@ def test_enron_onnx_export_runs_one_forward_pass(tmp_path: Path) -> None:
     assert len(outputs) == 5
     assert outputs[0].shape == (1,)
     assert outputs[1].shape[0] == 1
+
+
+def test_enron_audit_actions_cover_distinct_public_strategies() -> None:
+    actions = public_enron_audit_actions()
+
+    assert len({action.action_id for action in actions}) == len(actions)
+    assert any(action.recipient_scope == "external" for action in actions)
+    assert any(action.recipient_scope == "internal" for action in actions)
+    assert any(action.hold_required for action in actions)
+    assert any(action.decision_posture == "resolve" for action in actions)
+    assert any(action.legal_review_required for action in actions)
+
+
+def test_enron_action_sensitivity_audit_runs_on_exported_onnx(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("onnxruntime")
+
+    checkpoint = _load_checkpoint(DEFAULT_CHECKPOINT_PATH.resolve())
+    preprocessor = BenchmarkPreprocessor.from_metadata(checkpoint["metadata"])
+    output_path = tmp_path / "jepa_model.onnx"
+    export_model_onnx(
+        checkpoint=checkpoint,
+        preprocessor=preprocessor,
+        output_path=output_path,
+    )
+
+    report = evaluate_enron_action_sensitivity(
+        bundle=_sample_bundle(),
+        model_path=output_path,
+        max_states=3,
+        min_score_spread=0.0,
+    )
+
+    assert report["status"] == "pass"
+    assert report["state_count"] == 3
+    assert report["candidate_count"] == len(public_enron_audit_actions())
+    assert "max_score_spread" in report
+    assert len(report["states"]) == 3

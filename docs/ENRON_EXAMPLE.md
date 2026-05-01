@@ -166,6 +166,30 @@ make enron-screens
 # Refresh the static strangelab.ai/enron browser bundle
 python scripts/export_enron_static_assets.py --output ../strangelab.ai/public/enron
 
+# Audit whether the exported browser checkpoint actually separates actions
+python scripts/audit_enron_action_sensitivity.py \
+  --bundle ../strangelab.ai/public/enron/bundle.json \
+  --output _vei_out/enron_model_audit/current.json
+
+# Train an isolated action-sensitive public replay candidate from the full archive
+python scripts/train_reference_backend_on_enron.py \
+  --output-root _vei_out/enron_action_model_candidate_jepa/reference_backend \
+  --benchmark-root _vei_out/enron_action_model_candidate_jepa/benchmark \
+  --label enron_action_sensitive_candidate_jepa \
+  --model-id jepa_latent \
+  --epochs 3 \
+  --batch-size 64 \
+  --learning-rate 0.001 \
+  --device cpu
+
+# When publishing a newly trained action-sensitive checkpoint, make the export fail
+# unless same-state candidate actions produce a measurable score spread.
+python scripts/export_enron_static_assets.py \
+  --checkpoint _vei_out/enron_action_model_candidate_jepa/reference_backend/model.pt \
+  --output ../strangelab.ai/public/enron \
+  --min-action-score-spread 0.01 \
+  --require-action-sensitive
+
 # Refresh public fixtures
 python scripts/prepare_enron_public_context.py
 

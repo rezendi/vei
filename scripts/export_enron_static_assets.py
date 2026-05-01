@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.enron_example_specs import bundle_specs
+from scripts.enron_action_sensitivity import evaluate_enron_action_sensitivity
 from vei.whatif._benchmark_case_packs import (
     BENCHMARK_CASE_PACKS,
     DEFAULT_BENCHMARK_PACK_ID,
@@ -65,6 +66,30 @@ def main() -> int:
     parser.add_argument("--max-dates-per-lens", type=int, default=72)
     parser.add_argument("--max-evidence-events", type=int, default=14)
     parser.add_argument("--max-bundle-bytes", type=int, default=MAX_BUNDLE_BYTES)
+    parser.add_argument(
+        "--min-action-score-spread",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum action-conditioned balanced-score spread required for the "
+            "exported ONNX model. Use a positive value when publishing a new "
+            "action-sensitive Enron checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--min-action-passing-state-fraction",
+        type=float,
+        default=0.5,
+        help=(
+            "Fraction of sampled Enron states that must meet "
+            "--min-action-score-spread when --require-action-sensitive is used."
+        ),
+    )
+    parser.add_argument(
+        "--require-action-sensitive",
+        action="store_true",
+        help="Fail the export when the action-sensitivity audit is below threshold.",
+    )
     parser.add_argument("--generated-at", default="")
     args = parser.parse_args()
 
@@ -100,6 +125,24 @@ def main() -> int:
         max_dates_per_lens=max(1, args.max_dates_per_lens),
         max_evidence_events=max(4, args.max_evidence_events),
     )
+    action_sensitivity = evaluate_enron_action_sensitivity(
+        bundle=bundle,
+        model_path=output / "jepa_model.onnx",
+        min_score_spread=max(0.0, args.min_action_score_spread),
+        min_passing_state_fraction=(
+            min(1.0, max(0.0, args.min_action_passing_state_fraction))
+            if args.require_action_sensitive
+            else 0.0
+        ),
+    )
+    bundle["model"]["action_sensitivity"] = {
+        key: value for key, value in action_sensitivity.items() if key != "states"
+    }
+    if args.require_action_sensitive and action_sensitivity["status"] != "pass":
+        raise RuntimeError(
+            "Enron action-sensitivity audit failed: "
+            + "; ".join(action_sensitivity["warnings"])
+        )
     bundle_path = output / "bundle.json"
     payload = json.dumps(bundle, sort_keys=True, separators=(",", ":"))
     encoded = payload.encode("utf-8")
@@ -123,6 +166,7 @@ def main() -> int:
         "state_count": sum(len(states) for states in bundle["states"].values()),
         "event_count": len(bundle["events"]),
         "case_anchor_count": len(bundle["case_anchors"]),
+        "action_sensitivity": bundle["model"]["action_sensitivity"],
     }
     (output / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -372,9 +416,10 @@ def build_static_bundle(
         },
         "caveat": (
             "This is evidence-grounded historical simulation, not causal proof. "
-            "Simulated replies are imagined by an LLM from only the evidence "
-            "shown for the selected cutoff; they are not actual future Enron "
-            "emails. JEPA scores are decision-support readouts."
+            "The user email is treated as a new candidate action at the selected "
+            "cutoff, generated alternatives must cite only pre-cutoff evidence, "
+            "and JEPA scores are decision-support readouts rather than historical "
+            "truth."
         ),
     }
 
