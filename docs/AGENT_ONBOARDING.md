@@ -72,6 +72,11 @@ make setup-full
 ```
 
 `make setup` is a lighter alternative that skips worldmodel, jepa, test, rl, and browser extras.
+For a focused install of the optional JEPA backend:
+
+```bash
+pip install -e ".[jepa]"
+```
 
 Useful entrypoints:
 
