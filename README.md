@@ -55,6 +55,14 @@ vei quickstart run    # launches Studio + Twin Gateway
 
 **Requirements:** Python 3.11, ports 3011 and 3012 free. `OPENAI_API_KEY` in `.env` only when you want live LLM runs. VEI also supports Anthropic, Google, OpenRouter, and local Codex CLI for live planning backends.
 
+For the optional JEPA backend by itself:
+
+```bash
+pip install -e ".[jepa]"
+```
+
+`make setup-full` already includes this extra for full local development.
+
 ### Try a saved example
 
 Open the flagship Enron what-if bundle from a fresh clone — no API key needed:

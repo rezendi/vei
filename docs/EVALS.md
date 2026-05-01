@@ -8,6 +8,7 @@ document covers the evaluation framework itself.
 ## What Is and Isn't Learned
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) § What Is and Isn't Learned for the canonical breakdown of learned, heuristic, and external components. The shipped Enron reference checkpoint reports factual next-event AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951`.
+Treat that repo-local checkpoint as the flagship learned path. Clearwater workflow families stay in the repo as kernel and workflow smoke tests.
 
 ## Layer 1: Factual forecast metrics
 
