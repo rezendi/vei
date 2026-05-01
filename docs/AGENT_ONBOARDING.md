@@ -31,8 +31,7 @@ Read these next when needed:
 - `README.md` for setup and operator flows
 - `docs/ARCHITECTURE.md` for the module map, five surfaces, and what is and isn't learned
 - `docs/GLOSSARY.md` for every term of art defined in one place
-- `docs/ENRON_EXAMPLE.md` for the public company example
-- `docs/NEWS_EXAMPLE.md` for the public news-timeline example
+- `docs/EXAMPLES.md` for worked examples (Enron, public history, Clearwater)
 - `docs/WHATIF.md` for the world-model and what-if command reference
 - `docs/EVALS.md` for the three-layer evaluation framework
 - `docs/RL_GYM.md` for the scoped contract-only RL-training plan

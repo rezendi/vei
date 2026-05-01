@@ -4,6 +4,8 @@
 
 **VEI** builds a runnable replica of any organisation or situation from real records. You use it to replay historical decisions and compare alternate moves, test agents before they touch production systems, turn agent traces into RL training data, and compile company-specific knowledge and skills from ongoing company state.
 
+Try it now: [strangelab.ai/enron](https://strangelab.ai/enron) · [strangelab.ai/public-history](https://strangelab.ai/public-history)
+
 One deterministic kernel powers every path: one world state, one event spine, one replay model, one CLI.
 
 ```mermaid
@@ -22,11 +24,17 @@ flowchart LR
     H --> I
 ```
 
-### Who is this for?
+## The Five Surfaces
 
-- **Agent builders** — benchmark and score agents against deterministic enterprise scenarios before live deployment.
-- **Governance and audit teams** — capture agent activity, review access, replay policy decisions, and export evidence packs.
-- **Researchers** — run historical what-if experiments, train world models on real company data, and compare counterfactual futures.
+**1. Test / Eval** — Run a fixed company world and score an agent. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
+
+**2. Governor / Control** — Place VEI between agents and enterprise systems. Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance. Export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
+
+**3. Sandbox / What-if** — Fork a world, change a policy or action, compare alternate futures. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
+
+**4. Train / Data** — Turn traces into rollouts, demonstrations, and RL-friendly data. Train world models (JEPA / reference backend) on canonical event sequences to forecast future state and rank counterfactual actions. See [docs/RL_GYM.md](docs/RL_GYM.md).
+
+**5. Knowledge / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; compose proposals or briefs with citations. Compile company-specific agent skills from the normalized bundle, with replay checks and evidence backing.
 
 ## Quick Start
 
@@ -57,25 +65,9 @@ vei ui serve \
   --host 127.0.0.1 --port 3055
 ```
 
-Open `http://127.0.0.1:3055` to see the branch point, the recorded future, the counterfactual comparison, and the ranked business readout.
-
 ![Decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-top.png)
 
-See [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) for the full Enron walkthrough and all eight saved bundles. See [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md) for the synthetic service-ops example.
-
-## The Five Surfaces
-
-VEI exposes five product surfaces over the same kernel. Each surface uses the same world state, event spine, and replay model.
-
-**1. Test / Eval** — Run a fixed company world and score an agent. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
-
-**2. Governor / Control** — Place VEI between agents and enterprise systems. Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance. Export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
-
-**3. Sandbox / What-if** — Fork a world, change a policy or action, compare alternate futures. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
-
-**4. Train / Data** — Turn traces into rollouts, demonstrations, and RL-friendly data. Train world models (JEPA / reference backend) on canonical event sequences to forecast future state and rank counterfactual actions. See [docs/RL_GYM.md](docs/RL_GYM.md).
-
-**5. Knowledge / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; compose proposals or briefs with citations. Compile company-specific agent skills from the normalized bundle, with replay checks and evidence backing. See [docs/WHATIF.md](docs/WHATIF.md) § Knowledge.
+See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public history, Clearwater).
 
 ## CLI Map
 
@@ -121,34 +113,6 @@ vei skillmap build --source-dir _vei_out/yourco/context_snapshot.json --output _
 
 Full command reference: [docs/WHATIF.md](docs/WHATIF.md).
 
-## Enron Walkthrough
-
-The repo ships eight saved Enron what-if bundles as the flagship real-history example. Start with the Master Agreement case:
-
-```bash
-vei ui serve \
-  --root docs/examples/enron-master-agreement-public-context/workspace \
-  --host 127.0.0.1 --port 3055
-```
-
-Fetch the full Enron archive when you want whole-history search or training:
-
-```bash
-make fetch-enron-full
-```
-
-See [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) for the full data chain, all eight saved bundles, benchmark commands, and refresh paths.
-
-## Synthetic Clearwater Rig
-
-Clearwater is a synthetic service-ops workspace for testing the kernel, governor flow, and replay tooling without outside company data:
-
-```bash
-vei quickstart run --world service_ops --governor-demo --no-serve
-```
-
-Three saved Clearwater bundles ship under `docs/examples/clearwater-*/`. See [docs/examples/clearwater-dispatch-recovery/README.md](docs/examples/clearwater-dispatch-recovery/README.md).
-
 ## Repo Checks
 
 ```bash
@@ -168,8 +132,7 @@ Exit codes: `0` pass · `1` test/gate failure · `2` cost ceiling exceeded · `3
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, five surfaces, runtime shape, what is and isn't learned
 - [docs/GLOSSARY.md](docs/GLOSSARY.md) — every term of art used in this repo, defined in one place
 - [docs/WHATIF.md](docs/WHATIF.md) — world-model and what-if command reference
-- [docs/ENRON_EXAMPLE.md](docs/ENRON_EXAMPLE.md) — the repo-owned public company example
-- [docs/NEWS_EXAMPLE.md](docs/NEWS_EXAMPLE.md) — the public news-timeline example
+- [docs/EXAMPLES.md](docs/EXAMPLES.md) — Enron, public history, and Clearwater worked examples
 - [docs/EVALS.md](docs/EVALS.md) — evaluation layers: factual metrics, LLM judge, human audit
 - [docs/RL_GYM.md](docs/RL_GYM.md) — scoped RL-training plan over deterministic process contracts
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup, daily loop, module boundaries, PR workflow

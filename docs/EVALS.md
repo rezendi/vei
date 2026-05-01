@@ -2,7 +2,7 @@
 
 VEI evaluation has three layers that feed each other: **Layer 1** (factual forecast metrics) checks the model against observed history — no humans, no LLM calls. **Layer 2** (LLM judge) ranks counterfactual candidates via structured pairwise comparisons. **Layer 3** (human audit) calibrates the automated layers through blind-then-reveal ranking and produces independent training data. Together they close the calibration triangle: model vs. reality, model vs. judge, judge vs. human, model vs. human.
 
-Use `docs/ENRON_EXAMPLE.md` for the specific Enron benchmark setup. This
+Use [EXAMPLES.md](EXAMPLES.md) § Enron for the specific Enron benchmark setup. This
 document covers the evaluation framework itself.
 
 ## What Is and Isn't Learned
