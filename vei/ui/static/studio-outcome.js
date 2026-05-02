@@ -59,14 +59,14 @@ function renderRunSummary() {
   const outcomeBody = inWorldCopy(
     outcome?.why_it_matters?.[0],
     run.contract?.ok
-      ? "The moves so far are reducing the business risk tied to this crisis."
-      : "The moves so far have not fully repaired the business risk tied to this crisis."
+      ? "The moves so far are reducing the business risk tied to this scenario."
+      : "The moves so far have not fully repaired the business risk tied to this scenario."
   );
   const changedTitle = inWorldCopy(
     outcome?.what_changed?.[0],
     run.contract?.ok
       ? "The run is starting to clear the operational blockers."
-      : "The run changed the company, but not enough to make the crisis safe yet."
+      : "The run changed the company, but not enough to resolve the scenario yet."
   );
   const changedDetail = inWorldCopy(
     outcome?.what_changed?.[1],
@@ -392,34 +392,9 @@ function renderEventDetail() {
 }
 
 function renderOrientation() {
-  const orientation = state.orientation;
-  const panel = document.getElementById("orientation-summary");
-  const questions = document.getElementById("next-questions");
-  if (!orientation) {
-    panel.innerHTML = "";
-    questions.innerHTML = "";
-    return;
-  }
-  panel.innerHTML = `
-    <div class="stack-card">
-      <h3>World summary</h3>
-      <p class="metric-detail">${escapeHtml(orientation.summary || "No summary available.")}</p>
-      <div class="chip-row">${(orientation.available_surfaces || []).map((item) => chip(item)).join("")}</div>
-    </div>
-    <div class="stack-card">
-      <h3>Suggested focuses</h3>
-      <div class="chip-row">${(orientation.suggested_focuses || []).map((item) => chip(item)).join("")}</div>
-    </div>
-    <div class="stack-card">
-      <h3>Key objects</h3>
-      <div class="stack">${(orientation.key_objects || []).slice(0, 6).map(keyObjectCard).join("")}</div>
-    </div>
-  `;
-  questions.innerHTML = (orientation.next_questions || [])
-    .map((question) => `<div class="question-item">${escapeHtml(question)}</div>`)
-    .join("");
-
-  renderJson("orientation-panel", orientation);
+  // The standalone Orientation card is absorbed into the wiki Overview page.
+  // Only the Developer Drawer raw JSON dump remains.
+  renderJson("orientation-panel", state.orientation);
 }
 
 function renderGraphs() {
@@ -452,57 +427,9 @@ function renderGraphs() {
 }
 
 function renderKnowledge() {
-  const knowledge = state.knowledgeStore;
-  const panel = document.getElementById("knowledge-panel");
-  const viewer = document.getElementById("knowledge-citation-viewer");
-  if (!panel || !viewer) {
-    return;
-  }
-  const assets = Object.values(knowledge?.assets || {});
-  if (!assets.length) {
-    panel.innerHTML = "";
-    viewer.innerHTML = "";
-    return;
-  }
-
-  const ordered = assets
-    .filter((item) => item && typeof item === "object")
-    .sort((left, right) => {
-      const leftComposed = left.composition ? 1 : 0;
-      const rightComposed = right.composition ? 1 : 0;
-      if (leftComposed !== rightComposed) {
-        return rightComposed - leftComposed;
-      }
-      const leftTime = Number(left.metadata?.captured_at_ms || 0);
-      const rightTime = Number(right.metadata?.captured_at_ms || 0);
-      return rightTime - leftTime;
-    });
-
-  panel.innerHTML = ordered
-    .slice(0, 8)
-    .map((asset) => `
-      <button class="graph-card knowledge-card" data-asset-id="${escapeHtml(asset.asset_id)}">
-        <h3>${escapeHtml(asset.title || asset.asset_id)}</h3>
-        <p class="metric-detail">${escapeHtml(asset.summary || asset.body || "")}</p>
-        <div class="chip-row">
-          ${chip(asset.kind || "knowledge")}
-          ${chip(asset.status || "active", statusClass(asset.status || "active"))}
-          ${(asset.tags || []).slice(0, 2).map((tag) => chip(tag)).join("")}
-          ${asset.composition ? chip("composed", "ok") : ""}
-        </div>
-      </button>
-    `)
-    .join("");
-
-  const selected = ordered.find((asset) => asset.composition) || ordered[0];
-  viewer.innerHTML = renderKnowledgeDetail(selected);
-  panel.querySelectorAll("[data-asset-id]").forEach((node) => {
-    node.addEventListener("click", () => {
-      const assetId = node.getAttribute("data-asset-id");
-      const asset = ordered.find((item) => item.asset_id === assetId);
-      viewer.innerHTML = renderKnowledgeDetail(asset || selected);
-    });
-  });
+  // The standalone Knowledge card is absorbed into the wiki Knowledge page.
+  // Only the Developer Drawer raw JSON dump remains.
+  renderJson("knowledge-raw-panel", state.knowledgeStore);
 }
 
 function renderKnowledgeDetail(asset) {
@@ -758,6 +685,12 @@ async function loadWorkspace() {
   state.provenanceIndex = provenanceIndex;
   state.whatIfStatus = whatIfStatus;
   state.publicDemoStatus = publicDemoStatus;
+  window.VEIStudio?.bus?.emit("workspace-loaded", {
+    workspace: state.workspace,
+    scenarios: state.scenarios,
+    whatIfStatus: state.whatIfStatus,
+    publicDemoStatus: state.publicDemoStatus,
+  });
   const evalProviderInput = document.getElementById("eval-provider-input");
   if (evalProviderInput && state.whatIfStatus?.default_provider) {
     const currentValue = evalProviderInput.value?.trim() || "";
@@ -792,7 +725,7 @@ async function loadWorkspace() {
     state.historicalAutoFocusKey = "";
   } else if (historicalFocusKey !== previousHistoricalFocusKey) {
     state.historicalAutoFocusKey = historicalFocusKey;
-    jumpToCompanySection("company-historical", { behavior: "auto" });
+    jumpToStudioView("sandbox");
   }
 }
 
@@ -809,6 +742,11 @@ async function loadScenario(name) {
   renderMissionPlay();
   renderLivingCompanyView();
   renderScenarioBriefing();
+  window.VEIStudio?.bus?.emit("scenario-loaded", {
+    scenarioName: name,
+    preview,
+    contract,
+  });
 }
 
 async function activateScenarioVariant(name) {
@@ -855,7 +793,7 @@ async function activateMission(name, objectiveVariant = null) {
     });
     await loadWorkspace();
     status.textContent = `Scenario ${name} is ready.`;
-    setStudioView("crisis");
+    setStudioView("sandbox");
   } catch (error) {
     status.textContent = `Could not activate scenario: ${error?.message || error}`;
   }
@@ -868,7 +806,7 @@ async function startMission() {
   const missionName = missionSelect?.value;
   const objectiveVariant = objectiveSelect?.value || null;
   if (hasExerciseMode()) {
-    status.textContent = "Applying crisis\u2026";
+    status.textContent = "Applying scenario\u2026";
     state.lastMoveImpact = null;
     try {
       await getJson("/api/workspace/governor/exercise/activate", {
@@ -882,7 +820,7 @@ async function startMission() {
       await loadWorkspace();
       await loadRuns();
       status.textContent = "Company pressure updated.";
-      setStudioView("company");
+      setStudioView("sandbox");
     } catch (error) {
       status.textContent = `Could not update situation: ${error?.message || error}`;
     }
@@ -907,7 +845,7 @@ async function startMission() {
     state.missionState = payload;
     renderMissionPlay();
     status.textContent = `Scenario is live: ${payload.mission?.title || payload.run_id}.`;
-    setStudioView("company");
+    setStudioView("sandbox");
   } catch (error) {
     status.textContent = `Could not start scenario: ${error?.message || error}`;
   }
@@ -1069,7 +1007,7 @@ function showPolicyReplayModal(bundle) {
       state.compareMode = true;
       if (!state.timelineMode) toggleTimelineMode();
       renderTimelineView();
-      setStudioView("outcome");
+      setStudioView("sandbox");
       if (status) status.textContent = "Replay complete. Compare the original path against the new policy run.";
     } catch (error) {
       if (status) status.textContent = `Policy replay failed: ${error}`;
@@ -1140,7 +1078,7 @@ async function branchMission() {
     const payload = await requestMissionBranch(state.missionState.run_id);
     await activateMissionBranch(payload);
     status.textContent = `Branch ${payload.branch_name} is live.`;
-    setStudioView("outcome");
+    setStudioView("sandbox");
   } catch (error) {
     status.textContent = `Could not create branch: ${error?.message || error}`;
   }
@@ -1164,7 +1102,7 @@ async function finishMission() {
     status.textContent = payload.scorecard?.mission_success
       ? "Run ended successfully."
       : "Run ended with remaining risk.";
-    setStudioView("outcome");
+    setStudioView("sandbox");
   } catch (error) {
     status.textContent = `Could not end run: ${error?.message || error}`;
   }

@@ -77,6 +77,29 @@ def _ensure_sse_available(sse_url: str, autostart: bool) -> bool:
 
 
 @app.command()
+def build(
+    vertical: str = typer.Option("b2b_saas", help="Vertical pack name"),
+    output: Path = typer.Option(..., help="Output directory for the demo workspace"),
+    overwrite: bool = typer.Option(False, help="Overwrite existing workspace"),
+) -> None:
+    """Build a pure-simulation workspace from a vertical pack."""
+    from vei.twin.api import build_simulation_workspace
+
+    try:
+        result = build_simulation_workspace(
+            vertical=vertical,
+            output_dir=output,
+            overwrite=overwrite,
+        )
+        typer.echo(f"Built simulation workspace: {result['title']}")
+        typer.echo(f"  Mode: {result['workspace_mode']}")
+        typer.echo(f"  Path: {result['workspace_root']}")
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def run(
     sse_url: str = typer.Option(
         os.environ.get("VEI_SSE_URL", "http://127.0.0.1:3001/sse"),

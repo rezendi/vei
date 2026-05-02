@@ -52,26 +52,6 @@ const state = {
   generatedImportScenarios: [],
   provenanceIndex: [],
   historicalWorkspace: null,
-  publicDemoStatus: null,
-  publicDemoChat: [],
-  publicDemoScore: null,
-  publicDemoPending: false,
-  whatIfStatus: null,
-  whatIfSearchPending: false,
-  whatIfOpenPending: false,
-  whatIfRunPending: false,
-  whatIfRankPending: false,
-  whatIfChatPending: false,
-  whatIfChat: [],
-  whatIfSearchResult: null,
-  whatIfSelectedEvent: null,
-  whatIfScene: null,
-  whatIfSceneLoading: false,
-  whatIfChosenOptionLabel: "",
-  whatIfCustomMovePrompt: "",
-  whatIfOpenResult: null,
-  whatIfExperimentResult: null,
-  whatIfRankedResult: null,
   selectedObjectRef: null,
   runs: [],
   activeRunId: null,
@@ -91,23 +71,13 @@ const state = {
   selectedEventIndex: 0,
   selectedSnapshotFrom: null,
   selectedSnapshotTo: null,
-  studioView: "public-history",
+  studioView: "wiki",
+  activeProvenanceSection: "control",
   activeCompanySection: "company-overview",
   historicalAutoFocusKey: "",
   developerMode: false,
   cinemaMode: false,
   timelineMode: false,
-  compareMode: false,
-  compareRunA: null,
-  compareRunB: null,
-  compareSnapshotA: null,
-  compareSnapshotB: null,
-  compareTimelineA: [],
-  compareTimelineB: [],
-  compareMissionA: null,
-  compareMissionB: null,
-  compareKnowledgeA: null,
-  compareKnowledgeB: null,
   visualTone: "control-room",
   cinemaAutoAdvance: false,
   cinemaAutoTimer: null,
@@ -119,7 +89,125 @@ const state = {
   sseDebounceTimer: null,
 };
 
+const whatIfStore = {
+  status: null,
+  searchPending: false,
+  openPending: false,
+  runPending: false,
+  rankPending: false,
+  chatPending: false,
+  chat: [],
+  searchResult: null,
+  selectedEvent: null,
+  scene: null,
+  sceneLoading: false,
+  chosenOptionLabel: "",
+  customMovePrompt: "",
+  openResult: null,
+  experimentResult: null,
+  rankedResult: null,
+  timelineFilters: {},
+  busyStatus: "",
+};
+
+const publicDemoStore = {
+  status: null,
+  chat: [],
+  score: null,
+  pending: false,
+};
+
+const compareStore = {
+  mode: false,
+  runA: null,
+  runB: null,
+  snapshotA: null,
+  snapshotB: null,
+  timelineA: [],
+  timelineB: [],
+  missionA: null,
+  missionB: null,
+  knowledgeA: null,
+  knowledgeB: null,
+  contractA: null,
+  contractB: null,
+};
+
+function defineStoreAlias(target, aliasName, backingStore, backingKey) {
+  Object.defineProperty(target, aliasName, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return backingStore[backingKey];
+    },
+    set(value) {
+      backingStore[backingKey] = value;
+    },
+  });
+}
+
+[
+  ["whatIfStatus", whatIfStore, "status"],
+  ["whatIfSearchPending", whatIfStore, "searchPending"],
+  ["whatIfOpenPending", whatIfStore, "openPending"],
+  ["whatIfRunPending", whatIfStore, "runPending"],
+  ["whatIfRankPending", whatIfStore, "rankPending"],
+  ["whatIfChatPending", whatIfStore, "chatPending"],
+  ["whatIfChat", whatIfStore, "chat"],
+  ["whatIfSearchResult", whatIfStore, "searchResult"],
+  ["whatIfSelectedEvent", whatIfStore, "selectedEvent"],
+  ["whatIfScene", whatIfStore, "scene"],
+  ["whatIfSceneLoading", whatIfStore, "sceneLoading"],
+  ["whatIfChosenOptionLabel", whatIfStore, "chosenOptionLabel"],
+  ["whatIfCustomMovePrompt", whatIfStore, "customMovePrompt"],
+  ["whatIfOpenResult", whatIfStore, "openResult"],
+  ["whatIfExperimentResult", whatIfStore, "experimentResult"],
+  ["whatIfRankedResult", whatIfStore, "rankedResult"],
+  ["whatIfTimelineFilters", whatIfStore, "timelineFilters"],
+  ["whatIfBusyStatus", whatIfStore, "busyStatus"],
+  ["publicDemoStatus", publicDemoStore, "status"],
+  ["publicDemoChat", publicDemoStore, "chat"],
+  ["publicDemoScore", publicDemoStore, "score"],
+  ["publicDemoPending", publicDemoStore, "pending"],
+  ["compareMode", compareStore, "mode"],
+  ["compareRunA", compareStore, "runA"],
+  ["compareRunB", compareStore, "runB"],
+  ["compareSnapshotA", compareStore, "snapshotA"],
+  ["compareSnapshotB", compareStore, "snapshotB"],
+  ["compareTimelineA", compareStore, "timelineA"],
+  ["compareTimelineB", compareStore, "timelineB"],
+  ["compareMissionA", compareStore, "missionA"],
+  ["compareMissionB", compareStore, "missionB"],
+  ["compareKnowledgeA", compareStore, "knowledgeA"],
+  ["compareKnowledgeB", compareStore, "knowledgeB"],
+  ["compareContractA", compareStore, "contractA"],
+  ["compareContractB", compareStore, "contractB"],
+].forEach(([aliasName, backingStore, backingKey]) => {
+  defineStoreAlias(state, aliasName, backingStore, backingKey);
+});
+
+const bus = {
+  listeners: {},
+  on(eventName, callback) {
+    if (!this.listeners[eventName]) {
+      this.listeners[eventName] = [];
+    }
+    this.listeners[eventName].push(callback);
+  },
+  emit(eventName, payload) {
+    (this.listeners[eventName] || []).forEach((callback) => {
+      callback(payload);
+    });
+  },
+};
+
 studio.state = state;
+studio.stores = {
+  whatIf: whatIfStore,
+  publicDemo: publicDemoStore,
+  compare: compareStore,
+};
+studio.bus = bus;
 
 async function getJson(path, options = {}) {
   const response = await fetch(path, options);
@@ -483,7 +571,7 @@ function currentCrisisTitle() {
   if (scenarioVariant?.title) {
     return scenarioVariant.title;
   }
-  return state.scenarioPreview?.scenario?.title || "Current crisis";
+  return state.scenarioPreview?.scenario?.title || "Active scenario";
 }
 
 function currentCrisisSummary() {
@@ -512,7 +600,7 @@ function currentCrisisSummary() {
   }
   return state.story?.company_briefing
     || state.workspace?.manifest?.description
-    || "Choose a crisis and enter the world.";
+    || "Choose a scenario and enter the world.";
 }
 
 function currentFailureImpact() {
@@ -804,40 +892,76 @@ function normalizeStudioView(view) {
     history: "public-history",
     public: "public-history",
     "public history": "public-history",
-    play: "company",
-    worlds: "company",
-    situations: "crisis",
-    missions: "crisis",
-    objectives: "crisis",
-    results: "outcome",
-    runs: "outcome",
-    exports: "outcome",
+    play: "sandbox",
+    worlds: "wiki",
+    company: "wiki",
+    situations: "sandbox",
+    missions: "sandbox",
+    objectives: "sandbox",
+    crisis: "sandbox",
+    results: "sandbox",
+    runs: "sandbox",
+    outcome: "sandbox",
+    exports: "sandbox",
+    control: "provenance",
+    audit: "provenance",
+    presentation: "sandbox",
+    briefing: "sandbox",
   };
-  return ALIASES[normalized] || normalized || "company";
+  return ALIASES[normalized] || normalized || "wiki";
 }
 
 const STUDIO_VIEW_HELPER_TEXT = {
+  wiki: "Living operational memory derived from the canonical event spine.",
+  sandbox: "Run scenarios, inspect outcomes, compare paths, and test what-if decisions.",
+  provenance: "Agent evidence, policy replay, blast radius, and human audit of benchmark rankings.",
   "public-history": "Ask the historical news world what was visible, then test public actions.",
-  company: "Company state, missions, and historical what-if are all in this view.",
-  crisis: "Review the active situation, constraints, and objective before choosing a move.",
-  outcome: "Inspect run outcomes, compare paths, and verify effects across systems.",
-  control: "Review agent evidence, access paths, blast radius, and policy replay from the canonical spine.",
-  audit: "Audit model-ranked decisions and log reviewer judgments.",
 };
 
 const COMPANY_SECTIONS = {
   "company-overview": "company-overview",
+  "company-wiki": "company-wiki",
   "company-mission": "company-mission",
   "company-recent": "company-recent",
   "company-historical": "company-historical",
 };
 
-function setActiveCompanySection(sectionId) {
-  const normalized = COMPANY_SECTIONS[sectionId] || "company-overview";
-  state.activeCompanySection = normalized;
-  document.querySelectorAll(".company-subnav-button").forEach((node) => {
-    node.classList.toggle("active", node.dataset.companyTarget === normalized);
-  });
+function detectWorkspaceMode() {
+  // Workspace mode detection:
+  //   real-capture: customer_twin set AND canonical event count >= 10
+  //   simulation:   no customer_twin OR canonical event count < 10 (and no override)
+  //   hybrid:       customer_twin set AND any scenario has source_kind == "vertical"
+  // An explicit metadata.workspace_mode override always wins (e.g. simulation
+  // workspaces produced by `vei demo build`).
+  const manifest = state.workspace?.manifest || {};
+  const explicitMode = manifest.metadata?.workspace_mode;
+  if (explicitMode) return explicitMode;
+
+  const customerTwin = manifest.metadata?.customer_twin;
+  const hasCustomerName = Boolean(customerTwin?.organization_name);
+
+  const scenarios = state.scenarios || [];
+  const hasVerticalScenarios = scenarios.some(
+    (s) => s.metadata?.source_kind === "vertical" || s.source_kind === "vertical"
+  );
+  const story = state.story || {};
+  const storySourceKind = story.manifest?.metadata?.source_kind;
+
+  // Canonical event count: prefer the workspace-level count, fall back to
+  // manifest metadata. Treat unknown counts as "enough" so we don't downgrade
+  // workspaces just because the count hasn't loaded yet.
+  const eventCount = (
+    state.workspace?.canonical_event_count
+    ?? manifest.metadata?.canonical_event_count
+    ?? null
+  );
+  const hasEnoughEvents = eventCount === null || eventCount >= 10;
+
+  if (hasCustomerName && (hasVerticalScenarios || storySourceKind === "vertical")) {
+    return "hybrid";
+  }
+  if (hasCustomerName && hasEnoughEvents) return "real-capture";
+  return "simulation";
 }
 
 function updateStudioViewHelper() {
@@ -845,10 +969,11 @@ function updateStudioViewHelper() {
   if (!helper) {
     return;
   }
-  helper.textContent = STUDIO_VIEW_HELPER_TEXT[state.studioView] || STUDIO_VIEW_HELPER_TEXT.company;
+  helper.textContent = STUDIO_VIEW_HELPER_TEXT[state.studioView] || STUDIO_VIEW_HELPER_TEXT.wiki;
 }
 
 function setStudioView(view) {
+  const previousView = state.studioView;
   state.studioView = normalizeStudioView(view);
   document.querySelectorAll("main [data-studio-view]").forEach((node) => {
     node.classList.toggle("hidden-panel", node.dataset.studioView !== state.studioView);
@@ -856,17 +981,71 @@ function setStudioView(view) {
   document.querySelectorAll(".studio-nav-button").forEach((node) => {
     node.classList.toggle("active", node.dataset.studioView === state.studioView);
   });
-  if (state.studioView === "audit" && typeof loadAuditQueue === "function") {
-    loadAuditQueue();
+  if (state.studioView === "provenance") {
+    if (typeof loadControlSurface === "function") loadControlSurface();
+    setActiveProvenanceSection(state.activeProvenanceSection || "control");
   }
-  if (state.studioView === "control" && typeof loadControlSurface === "function") {
-    loadControlSurface();
+  if (state.studioView === "wiki" && typeof window.ensureWikiLoaded === "function") {
+    void window.ensureWikiLoaded();
   }
-  const companySubnav = document.getElementById("company-subnav");
-  if (companySubnav) {
-    companySubnav.hidden = state.studioView !== "company";
+  if (state.studioView === "wiki") {
+    updateLivingCompanyVisibility();
+  }
+  const hybridBanner = document.getElementById("wiki-hybrid-banner");
+  if (hybridBanner) {
+    hybridBanner.style.display = (state.studioView === "wiki" && detectWorkspaceMode() === "hybrid") ? "" : "none";
+  }
+  if (state.studioView === "sandbox") {
+    updateSandboxEmptyState();
   }
   updateStudioViewHelper();
+  if (typeof updateContextHint === "function") {
+    updateContextHint();
+  }
+  if (previousView !== state.studioView) {
+    studio.bus.emit("view-changed", {
+      previousView,
+      currentView: state.studioView,
+    });
+  }
+}
+
+function updateLivingCompanyVisibility() {
+  // Living Company card is a run-only Overview section inside the Wiki tab.
+  // Per plan: "becomes an Overview wiki section that only renders when a run is active".
+  const card = document.querySelector(".living-company-card");
+  if (!card) return;
+  const hasActiveRun = Boolean(state.missionState?.run_id || state.activeRunId);
+  // Use class instead of inline style so the data-studio-view hide/show logic still wins.
+  card.classList.toggle("run-only-hidden", !hasActiveRun);
+}
+
+function updateSandboxEmptyState() {
+  const emptyState = document.getElementById("sandbox-empty-state");
+  if (!emptyState) return;
+  const mode = detectWorkspaceMode();
+  const hasScenarios = Array.isArray(state.scenarios) && state.scenarios.length > 0;
+  const hasActiveRun = Boolean(state.missionState?.run_id);
+  const showEmpty = mode === "real-capture" && !hasScenarios && !hasActiveRun;
+  emptyState.style.display = showEmpty ? "" : "none";
+  document.querySelectorAll("[data-studio-view='sandbox']:not(#sandbox-empty-state):not(.studio-nav-button)").forEach((el) => {
+    if (showEmpty) el.classList.add("sandbox-greyed");
+    else el.classList.remove("sandbox-greyed");
+  });
+}
+
+function setActiveProvenanceSection(section) {
+  state.activeProvenanceSection = section;
+  document.querySelectorAll("[data-provenance-section]").forEach((el) => {
+    el.style.display = el.dataset.provenanceSection === section ? "" : "none";
+  });
+  document.querySelectorAll(".provenance-toggle").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.provenanceTarget === section);
+  });
+  if (section === "audit" && typeof loadAuditQueue === "function") {
+    loadAuditQueue();
+  }
+  studio.bus.emit("provenance-section-changed", { section });
 }
 
 function toggleDeveloperMode() {
@@ -888,10 +1067,23 @@ function jumpToStudioView(view) {
 }
 
 function jumpToCompanySection(sectionId, { behavior = "smooth", forceCompanyView = true } = {}) {
+  // Backwards-compatible shim: the old company subnav is gone, so we route old
+  // `company-*` section IDs to the new top-level views and scroll to the
+  // surviving DOM nodes (which kept their IDs).
   const normalized = COMPANY_SECTIONS[sectionId] || "company-overview";
-  setActiveCompanySection(normalized);
+  state.activeCompanySection = normalized;
+  const SECTION_TO_VIEW = {
+    "company-overview": "wiki",
+    "company-wiki": "wiki",
+    "company-mission": "sandbox",
+    "company-recent": "sandbox",
+    "company-historical": "sandbox",
+  };
   if (forceCompanyView) {
-    setStudioView("company");
+    setStudioView(SECTION_TO_VIEW[normalized] || "wiki");
+  }
+  if (normalized === "company-wiki" && typeof window.ensureWikiLoaded === "function") {
+    void window.ensureWikiLoaded();
   }
   const target = document.getElementById(normalized);
   if (target) {
@@ -1089,13 +1281,19 @@ function renderWorkspaceHero() {
   const subtitle = document.getElementById("workspace-subtitle");
   const topbarEyebrow = document.querySelector(".brand-copy .eyebrow");
   const historical = state.historicalWorkspace;
-  const companyName = historical?.organization_name || manifest.title || story.manifest?.company_name || "Workspace";
+  const companyName = historical?.organization_name || manifest.metadata?.customer_twin?.organization_name || manifest.title || manifest.name || "Workspace";
   const missionLine = currentCrisisSummary();
   if (topbarEyebrow) {
     topbarEyebrow.textContent = isPublicHistory ? "Public History" : "Company";
   }
   if (title) {
     title.textContent = companyName;
+  }
+  const modeBadge = document.getElementById("workspace-mode-badge");
+  if (modeBadge) {
+    const mode = detectWorkspaceMode();
+    modeBadge.textContent = mode.replace(/-/g, " ");
+    modeBadge.className = "workspace-mode-badge workspace-mode-" + mode;
   }
   if (subtitle) {
     subtitle.classList.remove("loading-pulse");
@@ -1142,7 +1340,14 @@ function renderTrustStrip() {
       parts.push("Control plane: simulated connectors (no live writes)");
     }
   } else {
-    parts.push("Company state: simulated workspace");
+    const mode = detectWorkspaceMode();
+    if (mode === "real-capture") {
+      parts.push("Company state: real captured data");
+    } else if (mode === "hybrid") {
+      parts.push("Company state: real capture + template scenarios");
+    } else {
+      parts.push("Company state: simulated workspace");
+    }
   }
   const syncs = Array.isArray(state.importSources?.syncs) ? state.importSources.syncs : [];
   const okSyncs = syncs.filter((s) => s && s.status === "ok");
@@ -1168,9 +1373,10 @@ function renderWorldsPanel() {
   const manifest = workspace.manifest || {};
   const availableWorlds = Array.isArray(story?.available_worlds) ? story.available_worlds : [];
   const currentWorldName = story?.manifest?.name || manifest.source_ref || "";
-  const companyName = story?.manifest?.company_name || manifest.title || manifest.name || "Workspace";
+  const customerName = manifest.metadata?.customer_twin?.organization_name || manifest.title || manifest.name || "Workspace";
+  const scenarioName = story?.manifest?.company_name || "";
   if (label) {
-    label.textContent = companyName;
+    label.textContent = customerName;
   }
   if (!panel) {
     return;
@@ -1224,7 +1430,7 @@ function renderMissionSelector() {
   missionSelect.disabled = false;
   objectiveSelect.disabled = false;
   if (missionLabel) {
-    missionLabel.textContent = "Crisis";
+    missionLabel.textContent = "Scenario";
   }
   if (objectiveLabel) {
     objectiveLabel.textContent = "Success criteria";
@@ -1344,7 +1550,7 @@ function renderMissionSummary() {
     const failureImpact = currentFailureImpact();
     briefing.innerHTML = `
       <div class="story-card accent-card story-span-2 crisis-hero-card">
-        <p class="eyebrow">Current crisis</p>
+        <p class="eyebrow">Active scenario</p>
         <h3>${escapeHtml(crisisTitle)}</h3>
         <p class="metric-detail">${escapeHtml(crisisSummary)}</p>
         <div class="chip-row">
@@ -1395,7 +1601,7 @@ function renderMissionSummary() {
   }
   briefing.innerHTML = `
     <div class="story-card accent-card story-span-2 crisis-hero-card">
-      <p class="eyebrow">Current crisis</p>
+      <p class="eyebrow">Active scenario</p>
       <h3>${escapeHtml(currentMission.title)}</h3>
       <p class="metric-detail">${escapeHtml(currentMission.briefing || "")}</p>
       <div class="chip-row">
@@ -1522,7 +1728,7 @@ function toggleCinemaMode() {
   if (!state.cinemaMode) {
     stopCinemaAutoAdvance();
   } else {
-    setStudioView("company");
+    setStudioView("sandbox");
     const hasMoves = (state.missionState?.available_moves || []).some(
       (m) => !m.executed && m.availability !== "blocked"
     );
@@ -1685,7 +1891,7 @@ function toggleTimelineMode() {
   const section = document.getElementById("timeline-section");
   if (section) section.style.display = state.timelineMode ? "" : "none";
   if (state.timelineMode) {
-    setStudioView("company");
+    setStudioView("sandbox");
     renderTimelineView();
   }
 }
@@ -1759,7 +1965,8 @@ function renderTimelineView() {
   const score = ms?.scorecard || {};
   const completed = ms?.status === "completed";
   const mission = ms?.mission || state.playableBundle?.mission || null;
-  const companyName = state.story?.manifest?.company_name || state.workspace?.manifest?.title || "";
+  const wsManifest = state.workspace?.manifest || {};
+  const companyName = wsManifest.metadata?.customer_twin?.organization_name || wsManifest.title || state.story?.manifest?.company_name || "";
 
   let html = "";
   html += `<div class="tl-status-bar">`;

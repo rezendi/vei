@@ -14,6 +14,7 @@ class LazyCommandSpec:
     module_path: str
     help: str
     app_attr: str = "app"
+    hidden: bool = False
 
 
 class LazyTyperGroup(typer.core.TyperGroup):
@@ -21,7 +22,9 @@ class LazyTyperGroup(typer.core.TyperGroup):
 
     def list_commands(self, ctx: click.Context) -> list[str]:
         del ctx
-        return sorted(self.lazy_commands)
+        return sorted(
+            name for name, spec in self.lazy_commands.items() if not spec.hidden
+        )
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         del ctx
@@ -46,7 +49,7 @@ class LazyTyperGroup(typer.core.TyperGroup):
         rows = [
             (name, spec.help)
             for name, spec in sorted(self.lazy_commands.items())
-            if spec.help
+            if spec.help and not spec.hidden
         ]
         if not rows:
             return

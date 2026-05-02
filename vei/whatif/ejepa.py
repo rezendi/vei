@@ -56,11 +56,16 @@ def resolve_ejepa_runtime(
         root = os.environ.get("VEI_EJEPA_ROOT")
     if root is None:
         vendored_root = _REPO_ROOT / "structured_jepa"
+        # NOTE: do NOT call .resolve() on sys.executable. In a venv, the
+        # interpreter is a symlink to the underlying base interpreter, and
+        # .resolve() would follow that link and lose access to the venv's
+        # site-packages (e.g. defusedxml, torch, etc.). expanduser() is enough
+        # to canonicalize ~ paths without breaking the venv lookup.
         if vendored_root.exists():
-            return _REPO_ROOT, Path(sys.executable).expanduser().resolve()
+            return _REPO_ROOT, Path(sys.executable).expanduser()
         vendored_spec = importlib.util.find_spec("structured_jepa")
         if vendored_spec is not None:
-            return _REPO_ROOT, Path(sys.executable).expanduser().resolve()
+            return _REPO_ROOT, Path(sys.executable).expanduser()
 
     candidate_root = (
         Path(root).expanduser().resolve()

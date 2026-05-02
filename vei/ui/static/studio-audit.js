@@ -1,3 +1,6 @@
+window.VEIStudio = window.VEIStudio || {};
+const auditStudio = window.VEIStudio;
+
 // ---------------------------------------------------------------------------
 // studio-audit.js — Human audit UI for LLM judge benchmark rankings
 // Blind-then-reveal: auditor ranks candidates without seeing judge reasoning,
@@ -531,5 +534,9 @@ function _renderReveal(revealNode) {
   }
 }
 
+auditStudio.audit = {
+  renderAuditStudio,
+  loadAuditQueue,
+};
 window.renderAuditStudio = renderAuditStudio;
 window.loadAuditQueue = loadAuditQueue;

@@ -79,18 +79,20 @@ See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public hi
 
 ## CLI Map
 
-All commands live under `vei <group> <command>`.
+All commands live under `vei <group> <command>`. After the recent regroup the
+top-level surface looks like this (legacy names still work as hidden aliases):
 
 | Surface | Key commands |
 |---|---|
-| **Quickstart** | `quickstart run`, `doctor`, `smoke run` |
-| **Test / Eval** | `eval benchmark`, `eval demo`, `eval suite`, `eval showcase`, `run start`, `score`, `llm-test run` |
-| **Governor / Control** | `twin serve`, `twin onboard`, `ingest agent-activity`, `provenance access-review`, `provenance verify`, `provenance export` |
-| **Sandbox / What-if** | `whatif explore`, `whatif events`, `whatif open`, `whatif experiment`, `whatif benchmark build-multitenant`, `whatif benchmark strategic-state-points` |
-| **Train / Data** | `rollout`, `train bc`, `pack`, `synthesize training-data` |
-| **Knowledge / Skills** | `knowledge compose`, `knowledge ingest`, `skillmap build`, `skillmap refresh`, `skillmap validate` |
-| **Inspect / Debug** | `world list`, `inspect fidelity`, `context timeline`, `context readiness`, `visualize`, `ui serve` |
-| **Project / Workspace** | `project init`, `project show`, `blueprint`, `contract`, `scenario`, `workspace`, `release` |
+| **Quickstart** | `vei admin quickstart run`, `vei admin doctor`, `vei eval smoke run` |
+| **Test / Eval** | `vei eval benchmark`, `vei eval demo`, `vei eval showcase`, `vei eval llm-test run`, `vei run start`, `vei admin report` |
+| **Governor / Control** | `vei workspace twin serve`, `vei workspace twin onboard`, `vei workspace ingest agent-activity`, `vei provenance access-review`, `vei provenance verify`, `vei provenance export` |
+| **Sandbox / What-if** | `vei whatif candidates`, `vei whatif events`, `vei whatif open`, `vei whatif experiment` (`--mode e_jepa` for the trained backend), `vei whatif rank`, `vei whatif pack run` |
+| **Train / Data** | `vei rollout procurement`, `vei train bc` |
+| **Knowledge / Skills / Wiki** | `vei knowledge compose`, `vei knowledge ingest`, `vei knowledge skillmap build`, `vei knowledge skillmap refresh`, `vei wiki build`, `vei wiki refresh`, `vei wiki query` |
+| **Inspect / Debug** | `vei admin world list`, `vei inspect fidelity`, `vei workspace context timeline`, `vei workspace context readiness`, `vei admin visualize`, `vei ui serve` |
+| **Project / Workspace** | `vei workspace project init`, `vei workspace project show`, `vei admin blueprint`, `vei admin contract`, `vei admin release` |
+| **Static-site exports** | `python scripts/export_enron_static_assets.py`, `python scripts/export_public_history_static_assets.py` (powers `strangelab.ai/enron` and `strangelab.ai/public-history`) |
 
 ## Bring Your Own Company History
 
@@ -112,15 +114,46 @@ vei twin onboard \
   --base-url notion=/path/to/notion-export.zip
 ```
 
-Then explore branch points, run what-if experiments, or compile a skill map:
+Then explore branch points, run what-if experiments, build a wiki, or compile
+a skill map — all from the same canonical event spine:
 
 ```bash
+# 1. Rank strong branch points (no LLM, no training)
 vei whatif candidates --source-dir _vei_out/yourco/context_snapshot.json --limit 10
-vei skillmap build --source-dir _vei_out/yourco/context_snapshot.json --output _vei_out/yourco/skill_map
 
-# When agent behavior has been imported into the same workspace, refresh from
-# the context plus Control evidence spine.
-vei skillmap refresh --workspace _vei_out/yourco --output _vei_out/yourco/skill_map
+# 2. Run a counterfactual. --mode e_jepa trains a structured-state JEPA on the
+#    spine and predicts; --mode heuristic_baseline is deterministic and fast.
+vei whatif experiment \
+  --source-dir _vei_out/yourco/context_snapshot.json \
+  --label first_experiment \
+  --counterfactual-prompt "What if escalation had gone through legal first?" \
+  --mode e_jepa --forecast-backend e_jepa
+
+# 3. Build the company wiki (Overview, Recent Changes, Cases, People,
+#    Knowledge, Skills, Evidence Index). Citations link back to canonical
+#    events; nothing from synthetic vertical packs is mixed in.
+vei wiki build --source-dir _vei_out/yourco/context_snapshot.json \
+  --output _vei_out/yourco/wiki
+
+# 4. Compile evidence-backed skills (LLM-derived, every step cited)
+vei knowledge skillmap build \
+  --source-dir _vei_out/yourco/context_snapshot.json \
+  --output _vei_out/yourco/skill_map
+
+# 5. When real agent activity has been imported into the workspace, refresh
+#    skills + wiki from the context plus the Control evidence spine.
+vei knowledge skillmap refresh --workspace _vei_out/yourco \
+  --output _vei_out/yourco/skill_map
+vei wiki refresh --workspace _vei_out/yourco
+```
+
+Run a real LLM agent against the resulting twin via MCP stdio:
+
+```bash
+vei eval llm-test run \
+  --provider openai --model gpt-5 \
+  --task "Triage the open exception and reply to the customer." \
+  --artifacts _vei_out/yourco/llm_run
 ```
 
 Full command reference: [docs/WHATIF.md](docs/WHATIF.md).

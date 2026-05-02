@@ -191,6 +191,28 @@ async def _openai_plan(
         api_key=api_key or os.environ.get("OPENAI_API_KEY"),
     )
 
+    try:
+        return await _openai_plan_impl(
+            client=client,
+            model=model,
+            system=system,
+            user=user,
+            plan_schema=plan_schema,
+            timeout_s=timeout_s,
+        )
+    finally:
+        await client.close()
+
+
+async def _openai_plan_impl(
+    *,
+    client: "AsyncOpenAI",
+    model: str,
+    system: str,
+    user: str,
+    plan_schema: Optional[dict] = None,
+    timeout_s: int = 240,
+) -> PlanResult:
     # Per user feedback, gpt-5 requires the Responses API and specific params.
     if model.startswith("gpt-5"):
         prompt = (
@@ -330,12 +352,12 @@ async def _anthropic_plan(
         client_kwargs["default_headers"] = headers
     client = AsyncAnthropic(**client_kwargs)
 
-    use_beta_api = (
-        os.environ.get("ANTHROPIC_USE_BETA", "").strip().lower() in {"1", "true", "yes"}
-    ) or model.startswith("claude-4.5")
-    messages_api = client.beta.messages if use_beta_api else client.messages
-
     try:
+        use_beta_api = (
+            os.environ.get("ANTHROPIC_USE_BETA", "").strip().lower()
+            in {"1", "true", "yes"}
+        ) or model.startswith("claude-4.5")
+        messages_api = client.beta.messages if use_beta_api else client.messages
         bridge_mode = bool(
             tool_schemas
             and len(tool_schemas) == 1
@@ -455,6 +477,8 @@ async def _anthropic_plan(
 
     except Exception:
         raise
+    finally:
+        await client.close()
 
 
 async def _google_plan(
@@ -635,6 +659,8 @@ async def _openrouter_plan(
 
     except Exception:
         raise
+    finally:
+        await client.close()
 
     return PlanResult(
         plan={"tool": "vei.observe", "args": {}},

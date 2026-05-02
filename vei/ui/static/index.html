@@ -20,6 +20,7 @@
               <div class="brand-copy">
                 <p class="eyebrow">Company</p>
                 <h1 id="workspace-title">Loading company&hellip;</h1>
+                <span id="workspace-mode-badge" class="workspace-mode-badge"></span>
                 <p id="workspace-subtitle" class="studio-topbar-subtitle loading-pulse">Loading scenario context&hellip;</p>
               </div>
             </div>
@@ -42,7 +43,7 @@
               </details>
             </label>
             <label class="toolbar-field sandbox-only">
-              <span id="mission-field-label">Crisis</span>
+              <span id="mission-field-label">Scenario</span>
               <select id="mission-select"></select>
             </label>
             <label class="toolbar-field sandbox-only">
@@ -77,20 +78,12 @@
       <section class="card studio-shell-card">
         <p class="eyebrow" id="shell-context-hint">Track the company, then make the next move</p>
         <div id="studio-nav" class="studio-nav">
-          <button type="button" class="studio-nav-button active" data-studio-view="public-history">Public History</button>
-          <button type="button" class="studio-nav-button" data-studio-view="company">Company</button>
-          <button type="button" class="studio-nav-button" data-studio-view="crisis">Crisis</button>
-          <button type="button" class="studio-nav-button" data-studio-view="outcome">Outcome</button>
-          <button type="button" class="studio-nav-button" data-studio-view="control">Control</button>
-          <button type="button" class="studio-nav-button" data-studio-view="audit">Audit</button>
+          <button type="button" class="studio-nav-button active" data-studio-view="wiki">Wiki</button>
+          <button type="button" class="studio-nav-button" data-studio-view="sandbox">Sandbox</button>
+          <button type="button" class="studio-nav-button" data-studio-view="provenance">Provenance</button>
+          <button type="button" class="studio-nav-button" data-studio-view="public-history">Public History</button>
         </div>
-        <p id="studio-view-helper" class="studio-view-helper">Company state, missions, and historical what-if are all in this view.</p>
-        <div id="company-subnav" class="company-subnav" role="navigation" aria-label="Company sections">
-          <button type="button" class="company-subnav-button active" data-company-target="company-overview">Live Company</button>
-          <button type="button" class="company-subnav-button" data-company-target="company-mission">Next Move</button>
-          <button type="button" class="company-subnav-button" data-company-target="company-recent">Recent Changes</button>
-          <button type="button" class="company-subnav-button" data-company-target="company-historical">Historical Decision</button>
-        </div>
+        <p id="studio-view-helper" class="studio-view-helper">Living operational memory derived from the canonical event spine.</p>
         <div id="cinema-narrative" class="cinema-narrative"></div>
         <details class="developer-only studio-dev-launcher">
           <summary>Run tools</summary>
@@ -221,11 +214,15 @@
         </section>
 
         <!-- ========== TIMELINE / CAUSALITY VIEW ========== -->
-        <section id="timeline-section" class="timeline-section" data-studio-view="company" style="display:none">
+        <section id="timeline-section" class="timeline-section" data-studio-view="sandbox" style="display:none">
         </section>
 
-        <!-- ========== TAB: CONTROL ========== -->
-        <section class="card control-card hidden-panel" data-studio-view="control">
+        <!-- ========== TAB: PROVENANCE (Control + Audit) ========== -->
+        <div class="provenance-toggle-strip" data-studio-view="provenance">
+          <button type="button" class="provenance-toggle active" data-provenance-target="control">Control</button>
+          <button type="button" class="provenance-toggle" data-provenance-target="audit">Audit</button>
+        </div>
+        <section class="card control-card hidden-panel" data-studio-view="provenance" data-provenance-section="control">
           <div class="section-header">
             <div>
               <p class="eyebrow">VEI Control</p>
@@ -273,8 +270,34 @@
           <div id="connect-status-bar" class="connect-status-bar"></div>
         </section>
 
-        <!-- ========== TAB: COMPANY ========== -->
-        <section class="card living-company-card" data-studio-view="company" id="company-overview">
+        <!-- ========== TAB: WIKI ========== -->
+        <div id="wiki-hybrid-banner" class="wiki-hybrid-banner" data-studio-view="wiki" style="display:none">
+          This workspace mixes real captured data with template scenarios.
+        </div>
+        <section class="card wiki-card" data-studio-view="wiki" id="company-wiki">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Company Wiki</p>
+              <h2>Living operational memory</h2>
+              <p class="metric-detail" id="wiki-build-status">Loading wiki&hellip;</p>
+            </div>
+            <button id="wiki-refresh-button" type="button" class="ghost-button">Refresh</button>
+          </div>
+          <div class="wiki-shell">
+            <nav id="wiki-page-nav" class="wiki-page-nav" aria-label="Wiki pages"></nav>
+            <div class="wiki-content-shell">
+              <header class="wiki-page-header">
+                <h3 id="wiki-page-title"></h3>
+                <p id="wiki-page-summary" class="metric-detail"></p>
+              </header>
+              <div id="wiki-page-content" class="wiki-page-content"></div>
+              <div id="wiki-next-steps" class="wiki-next-steps"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== TAB: WIKI — Live operating state (run-only) ========== -->
+        <section class="card living-company-card" data-studio-view="wiki" id="company-overview">
           <div class="section-header">
             <div>
               <p class="eyebrow">Company</p>
@@ -297,7 +320,18 @@
           </div>
         </section>
 
-        <section class="card play-card sandbox-only" data-studio-view="company" id="company-mission">
+        <section id="sandbox-empty-state" class="card sandbox-empty-state" data-studio-view="sandbox" style="display:none">
+          <div class="sandbox-empty-inner">
+            <p class="eyebrow">Sandbox</p>
+            <h2>No scenarios authored against this company yet</h2>
+            <p class="metric-detail">
+              This workspace contains real captured data. Scenario authoring and what-if simulation
+              will appear here once scenarios are created for this company.
+            </p>
+          </div>
+        </section>
+
+        <section class="card play-card sandbox-only" data-studio-view="sandbox" id="company-mission">
           <div class="section-header">
             <div>
               <p class="eyebrow">Next Move</p>
@@ -308,14 +342,14 @@
           <div id="mission-moves-panel" class="run-grid"></div>
         </section>
 
-        <section class="card move-log-card" data-studio-view="company" id="company-recent">
+        <section class="card move-log-card" data-studio-view="sandbox" id="company-recent">
           <details id="move-log-shell" class="secondary-disclosure move-log-shell">
             <summary>Recent changes</summary>
             <div id="move-log-panel" class="move-log"></div>
           </details>
         </section>
 
-        <section class="card whatif-card" data-studio-view="company" id="company-historical">
+        <section class="card whatif-card" data-studio-view="sandbox" id="company-historical">
           <div class="section-header">
             <div>
               <p class="eyebrow">Historical Decision</p>
@@ -417,11 +451,11 @@
           </div>
         </section>
 
-        <!-- ========== TAB: CRISIS ========== -->
-        <section class="card briefing-card crisis-card" data-studio-view="crisis">
+        <!-- ========== TAB: SANDBOX ========== -->
+        <section class="card briefing-card crisis-card" data-studio-view="sandbox">
           <div class="section-header">
             <div>
-              <p class="eyebrow">Current Crisis</p>
+              <p class="eyebrow">Active Scenario</p>
               <h2>What went wrong and why it matters</h2>
             </div>
           </div>
@@ -434,8 +468,8 @@
           </details>
         </section>
 
-        <!-- ========== TAB: OUTCOME ========== -->
-        <section class="card run-card outcome-card" data-studio-view="outcome">
+        <!-- ========== TAB: SANDBOX — Outcome ========== -->
+        <section class="card run-card outcome-card" data-studio-view="sandbox">
           <div id="eval-narrative-panel" class="eval-narrative developer-only" style="display:none"></div>
           <div class="section-header">
             <div>
@@ -490,8 +524,8 @@
           </details>
         </section>
 
-        <!-- ========== TAB: BRIEFING (developer-only tab) ========== -->
-        <section class="card briefing-card" data-studio-view="presentation">
+        <!-- ========== TAB: SANDBOX — Briefing (developer-only) ========== -->
+        <section class="card briefing-card developer-only" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Briefing</p>
@@ -503,8 +537,8 @@
         </section>
 
         <!-- ========== ENGINE PANELS (developer-only, under Company tab) ========== -->
-        <!-- ========== TAB: AUDIT ========== -->
-        <section class="card audit-card" data-studio-view="audit">
+        <!-- ========== TAB: PROVENANCE — Audit ========== -->
+        <section class="card audit-card" data-studio-view="provenance" data-provenance-section="audit" style="display:none">
           <div class="section-header">
             <div>
               <p class="eyebrow">Human Audit</p>
@@ -519,7 +553,7 @@
           <div id="audit-reveal" class="audit-reveal"></div>
         </section>
 
-        <section class="card stage-card developer-only" data-studio-view="company">
+        <section class="card stage-card developer-only" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Playback</p>
@@ -545,18 +579,7 @@
           <div id="timeline-feed" class="timeline-feed"></div>
         </section>
 
-        <section class="card orientation-card developer-only" data-studio-view="company">
-          <div class="section-header">
-            <div>
-              <p class="eyebrow">Orientation</p>
-              <h2>What matters right now</h2>
-            </div>
-          </div>
-          <div id="orientation-summary" class="stack"></div>
-          <div id="next-questions" class="question-list"></div>
-        </section>
-
-        <section class="card graphs-card developer-only" data-studio-view="company">
+        <section class="card graphs-card developer-only" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Domain state</p>
@@ -566,18 +589,7 @@
           <div id="graphs-panel" class="graph-grid"></div>
         </section>
 
-        <section class="card graphs-card developer-only" data-studio-view="company">
-          <div class="section-header">
-            <div>
-              <p class="eyebrow">Knowledge</p>
-              <h2>Knowledge assets and citations</h2>
-            </div>
-          </div>
-          <div id="knowledge-panel" class="graph-grid"></div>
-          <div id="knowledge-citation-viewer" class="detail-summary"></div>
-        </section>
-
-        <section class="card import-card developer-only" data-studio-view="crisis">
+        <section class="card import-card developer-only" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Data sources</p>
@@ -590,7 +602,7 @@
           <div id="provenance-detail" class="detail-summary"></div>
         </section>
 
-        <section class="card snapshots-card" data-studio-view="outcome">
+        <section class="card snapshots-card" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Snapshots</p>
@@ -612,7 +624,7 @@
           <pre id="diff-panel" class="code-panel"></pre>
         </section>
 
-        <section class="card detail-card developer-only" data-studio-view="outcome">
+        <section class="card detail-card developer-only" data-studio-view="sandbox">
           <div class="section-header">
             <div>
               <p class="eyebrow">Selection</p>
@@ -647,7 +659,7 @@
             <pre id="contract-panel" class="code-panel"></pre>
           </details>
           <details>
-            <summary>Mission State</summary>
+            <summary>Run State</summary>
             <pre id="mission-state-panel" class="code-panel"></pre>
           </details>
           <details>
@@ -657,6 +669,10 @@
           <details>
             <summary>Orientation JSON</summary>
             <pre id="orientation-panel" class="code-panel"></pre>
+          </details>
+          <details>
+            <summary>Knowledge assets JSON</summary>
+            <pre id="knowledge-raw-panel" class="code-panel"></pre>
           </details>
           <details>
             <summary>Capability Graph JSON</summary>
@@ -682,6 +698,7 @@
     <script src="/static/studio-public-demo.js"></script>
     <script src="/static/studio-control.js"></script>
     <script src="/static/studio-audit.js"></script>
+    <script src="/static/studio-wiki.js"></script>
     <script src="/static/studio-outcome.js"></script>
     <script src="/static/studio-bootstrap.js"></script>
   </body>

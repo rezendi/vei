@@ -23,6 +23,14 @@ Drop‑In Rules for Autonomous Coding Agents
 - Modules cannot call each other, except through specific interfaces (for our Python monolith, we put those in a file called some_module/api.py, so other modules can do from some_module.api import some_function, SomeClass and call things that way.
 - All of these interfaces are statically typed. What the functions accept and what they return are statically typed, with types usually being Pydantic classes (no passing a bunch of opaque dicts!).
 - The above is enforced via automated checks on CI and in the git pre-commit stage. More on this later in the doc.
+
+### Naming glossary (user-facing)
+- **workspace**: the VEI folder with `vei_project.json`
+- **company**: the real organization represented by the workspace
+- **scenario**: a selectable situation definition
+- **run**: one execution over a scenario
+- **provenance**: governance/evidence surface (control + audit)
+- **wiki**: materialized company read model over canonical evidence
 ---
 
 ## 1) Development Cycle
@@ -318,6 +326,12 @@ Scoring is multi-layered: raw task success → policy compliance → domain-spec
   - `vei eval benchmark --runner scripted --scenario multi_channel --artifacts-root ./_vei_out/benchmark` or `vei eval benchmark --runner bc --bc-model ... --scenario multi_channel --artifacts-root ./_vei_out/benchmark` to produce trace + score artifacts.
   - `vei llm-test run --dataset ./_vei_out/rollout.json --artifacts ./_vei_out/llm_eval` for LLM evals in replay context.
 - Rich scenarios: set `VEI_SCENARIO=multi_channel` for docs/tickets/mail coverage during manual or LLM-driven evaluations.
+- Company Wiki (materialized read model over canonical events + curated overlays):
+  - `vei wiki build --source-dir <context_or_workspace> --output ./wiki` to materialize a wiki snapshot from a context bundle (writes `company_wiki.json`, `index.md`, `pages/*.md`, `wiki_build_report.json`).
+  - `vei wiki refresh --workspace <workspace>` to rebuild `<workspace>/.artifacts/wiki/` for Studio. Picks up curated `KnowledgeStore` and `CompanySkillMap` overlays automatically when present.
+  - `vei wiki query "<text>" --workspace <workspace> [--format json]` for title-only keyword search across page and section titles. Body search and snippet generation are deferred to V2.
+  - Studio: the Company tab now opens a **Wiki** subnav alongside Live Company / Recent Changes / Historical Decision. The wiki absorbs the developer-only Knowledge and Orientation panels; raw JSON for both stays in the Developer Drawer.
+  - Architectural rule: every "thing we know" about a company has a path into the wiki via canonical events first, with curated layers (`vei.knowledge`, `vei.skillmap`) enriching it on top. Curation has visible payoff; absence of curation is never a dead page.
 
 
 ### Security & Config Tips
@@ -328,3 +342,4 @@ Scoring is multi-layered: raw task success → policy compliance → domain-spec
 ### Architecture Overview
 - Router exposes MCP tools: `slack.*`, `mail.*`, `browser.*`, `vei.*`.
 - Two transports: stdio (default for dev/CI) and SSE (`vei.router.sse`). Keep new tools deterministic and replay‑friendly.
+- Read-model surfaces: the **Company Wiki** (`vei.wiki`) is the unified materialized read model over canonical events, structure, knowledge, and skills. It projects pages from the spine first and overlays curated layers; `vei.knowledge` and `vei.skillmap` remain the curation/composition layers, while `vei.wiki` is purely a derived view.

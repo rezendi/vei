@@ -25,6 +25,7 @@ async function selectRun(runId, options = {}) {
   state.activeRunId = runId;
   renderRuns();
   await refreshActiveRun(runId, { connectStream: true, ...options });
+  window.VEIStudio?.bus?.emit("run-selected", { runId });
 }
 
 async function startRun(event) {
@@ -174,11 +175,7 @@ async function captureProvider(providerName) {
 }
 
 function bindCompanySubnav() {
-  document.querySelectorAll(".company-subnav-button").forEach((node) => {
-    node.addEventListener("click", () => {
-      jumpToCompanySection(node.dataset.companyTarget || "company-overview");
-    });
-  });
+  // Company subnav removed in nav restructure; kept as no-op for compatibility.
 }
 
 function bindControls() {
@@ -207,15 +204,13 @@ function bindControls() {
   });
   document.querySelectorAll(".studio-nav-button").forEach((node) => {
     node.addEventListener("click", () => {
-      const nextView = node.dataset.studioView || "company";
-      if (nextView === "company") {
-        jumpToCompanySection(
-          state.activeCompanySection || "company-overview",
-          { behavior: "smooth", forceCompanyView: true },
-        );
-        return;
-      }
+      const nextView = node.dataset.studioView || "wiki";
       setStudioView(nextView);
+    });
+  });
+  document.querySelectorAll(".provenance-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setActiveProvenanceSection(btn.dataset.provenanceTarget);
     });
   });
   document.getElementById("developer-toggle").addEventListener("click", toggleDeveloperMode);
@@ -230,7 +225,7 @@ function bindControls() {
     if (!state.timelineMode) {
       toggleTimelineMode();
     }
-    setStudioView("company");
+    setStudioView("sandbox");
     renderTimelineView();
     document.getElementById("timeline-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
@@ -347,14 +342,14 @@ function initializeStudioMode() {
 }
 
 function applyStudioChrome() {
-  const labels = ["Public History", "Company", "Crisis", "Outcome", "Control", "Audit"];
+  const labels = ["Wiki", "Sandbox", "Provenance", "Public History"];
   const buttons = document.querySelectorAll("#studio-nav .studio-nav-button");
   buttons.forEach((btn, i) => {
     if (labels[i]) btn.textContent = labels[i];
   });
   const hint = document.getElementById("shell-context-hint");
   if (hint && !state.missionState?.run_id) {
-    hint.textContent = "Track the company, then make the next move";
+    hint.textContent = "Read the company wiki, then explore scenarios in the sandbox";
   }
 }
 
