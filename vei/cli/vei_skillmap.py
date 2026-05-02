@@ -29,7 +29,10 @@ app = typer.Typer(add_completion=False)
 @app.command("build")
 def build(
     source_dir: str = typer.Option(
-        ..., "--source-dir", help="Path to a context snapshot or bundle directory."
+        ...,
+        "--source-dir",
+        "--source",
+        help="Path to a context snapshot or bundle directory.",
     ),
     output: str = typer.Option(
         "company_skill_map",

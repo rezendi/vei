@@ -27,6 +27,7 @@ def build(
     source_dir: str = typer.Option(
         ...,
         "--source-dir",
+        "--source",
         help="Path to a context snapshot file or directory containing context_snapshot.json.",
     ),
     output: str = typer.Option(
