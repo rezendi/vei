@@ -11,13 +11,17 @@ function renderLivingCompanyView() {
   renderLivingCompanyRail();
   updateContextHint();
   if (state.cinemaMode) renderCinemaNarrative();
+  if (typeof updateLivingCompanyVisibility === "function") {
+    updateLivingCompanyVisibility();
+  }
 }
 
 function renderLivingCompanyContext() {
   const panel = document.getElementById("living-company-context");
   if (!panel) return;
   const story = state.story || {};
-  const companyName = story.manifest?.company_name || state.workspace?.manifest?.title || "";
+  const manifest = state.workspace?.manifest || {};
+  const companyName = manifest.metadata?.customer_twin?.organization_name || manifest.title || story.manifest?.company_name || "";
   const briefing = currentCrisisSummary();
   const crisisTitle = currentCrisisTitle();
   const failureImpact = currentFailureImpact();
@@ -108,17 +112,32 @@ function updateContextHint() {
     return;
   }
   const ms = state.missionState;
+  // Active-run hints take priority across all views, since the user is mid-scenario.
   if (ms?.status === "completed") {
     hint.textContent = "Run complete \u2014 review outcome or start a new situation";
-  } else if (ms?.run_id) {
+    return;
+  }
+  if (ms?.run_id) {
     const moveCount = (ms.executed_moves || []).length;
     hint.textContent = moveCount
       ? `${moveCount} move${moveCount === 1 ? "" : "s"} played \u2014 pick the next action or end the run`
       : "You\u2019re in the scenario \u2014 play your first move below";
-  } else if (state.missions.length) {
-    hint.textContent = "Pick a situation above, then watch every system react";
+    return;
+  }
+  // No active run: tailor the hint to the current top-level view.
+  const view = state.studioView || "wiki";
+  if (view === "wiki") {
+    hint.textContent = "Read the company wiki, then explore scenarios in the sandbox";
+  } else if (view === "sandbox") {
+    hint.textContent = state.missions?.length
+      ? "Pick a situation above, then watch every system react"
+      : "No scenarios yet \u2014 author one or load a vertical workspace";
+  } else if (view === "provenance") {
+    hint.textContent = "Inspect agent evidence, replay policies, and audit benchmark rankings";
+  } else if (view === "public-history") {
+    hint.textContent = "Ask the historical news world what was visible, then test public actions.";
   } else {
-    hint.textContent = "Loading company world\u2026";
+    hint.textContent = "Read the company wiki, then explore scenarios in the sandbox";
   }
 }
 
@@ -135,7 +154,7 @@ function renderSituationRoom() {
         <strong>${historical ? "Historical indicators are loading." : "Situation room is waiting for live signals."}</strong>
         <span>${historical
           ? "Load a decision scene below to populate branch context and observed outcomes."
-          : "Start a run or open a mission to populate systems, exceptions, and approvals."}</span>
+          : "Start a run or open a scenario to populate systems, exceptions, and approvals."}</span>
       </div>
     `;
     return;
@@ -869,7 +888,9 @@ function renderSurfaceWall() {
   const surfaceState = state.surfaceState;
   if (!surfaceState || !Array.isArray(surfaceState.panels) || !surfaceState.panels.length) {
     const loadingRun = state.missionState?.run_id || state.activeRunId;
-    const companyName = state.workspace?.manifest?.title
+    const wm = state.workspace?.manifest || {};
+    const companyName = wm.metadata?.customer_twin?.organization_name
+      || wm.title
       || state.story?.manifest?.company_name
       || "Your company";
     if (hasHistoricalWorkspace()) {
@@ -1021,7 +1042,7 @@ function renderLivingCompanyRail() {
   panel.innerHTML = `
     <div class="story-card accent-card">
       <p class="eyebrow">Active pressure</p>
-      <h3>${escapeHtml(surfaceState?.company_name || state.story?.manifest?.company_name || state.workspace?.manifest?.title || "Company")}</h3>
+      <h3>${escapeHtml(surfaceState?.company_name || (state.workspace?.manifest || {}).metadata?.customer_twin?.organization_name || (state.workspace?.manifest || {}).title || state.story?.manifest?.company_name || "Company")}</h3>
       <p class="metric-detail">${escapeHtml(currentCrisisSummary())}</p>
       ${
         surfaceState
@@ -1243,7 +1264,7 @@ function renderMissionPlay() {
           hasHistoricalWorkspace()
             ? "Use the historical what-if panel below to search the historical archive, open the saved branch point, and compare alternate paths."
             : hasExerciseMode()
-            ? "Apply a crisis above, then connect an outside agent and use the control room here to watch the company respond."
+            ? "Apply a scenario above, then connect an outside agent and use the control room here to watch the company respond."
             : "Choose a situation and enter the world to begin making moves inside the company."
         }</p>
       </div>
@@ -1265,7 +1286,7 @@ function renderMissionPlay() {
         <strong>${scorePct}</strong>
         <div class="score-bar"><div class="score-bar-fill ${scorePct >= 70 ? "bar-ok" : scorePct >= 40 ? "bar-warn" : "bar-danger"}" style="width:${scorePct}%"></div></div>
       </div>
-      ${scorePill("Mission", score.mission_success === null ? "pending" : score.mission_success ? "pass" : "in play")}
+      ${scorePill("Run", score.mission_success === null ? "pending" : score.mission_success ? "pass" : "in play")}
       <div class="score-pill ${pressureClass}">
         <span class="metric-label">Budget left</span>
         <strong>${score.action_budget_remaining || 0}</strong>
@@ -1283,8 +1304,8 @@ function renderMissionPlay() {
     </div>
     <div class="briefing-grid">
       <div class="story-card accent-card">
-        <p class="eyebrow">Mission health</p>
-        <h3>${escapeHtml(score.summary || "Mission active.")}</h3>
+        <p class="eyebrow">Run health</p>
+        <h3>${escapeHtml(score.summary || "Run active.")}</h3>
         <div class="detail-grid">
           ${detailTile("Moves used", String(score.move_count || 0))}
           ${detailTile("Success checks", `${score.success_assertions_passed || 0}/${score.success_assertions_total || 0}`)}
@@ -1333,7 +1354,7 @@ function renderMissionPlay() {
   });
   status.textContent =
     missionState.status === "completed"
-      ? "Mission finished. Branch it, inspect the outcome, or switch to a new situation."
+      ? "Run finished. Branch it, inspect the outcome, or switch to a new scenario."
       : "Play a move, branch the situation, or finish the run.";
   renderMoveLog();
   renderJson("mission-state-panel", missionState);
@@ -1882,7 +1903,7 @@ function renderObjectiveBriefing(contractVariants = [], activeContractVariant = 
       ${
         availableVariants.length
           ? `<div class="story-card story-span-2">
-              <p class="eyebrow">Other ways to judge this crisis</p>
+              <p class="eyebrow">Other ways to judge this scenario</p>
               <div class="stack compact-stack">
                 ${availableVariants
                   .map(

@@ -128,6 +128,16 @@ def render_experiment_overview(result: WhatIfExperimentResult) -> str:
                 f"- Escalation delta: {result.forecast_result.delta.escalation_delta}",
             ]
         )
+        # Surface fallback / runtime notes (e.g. silent E-JEPA fallback to
+        # heuristic_baseline) so users don't see a backend they didn't ask
+        # for without knowing why.
+        forecast_notes = list(result.forecast_result.notes or [])
+        if forecast_notes:
+            lines.append("- Notes:")
+            for note in forecast_notes[:4]:
+                first_line = note.splitlines()[0] if note else ""
+                if first_line.strip():
+                    lines.append(f"  - {first_line.strip()}")
         lines.extend(
             _business_state_change_lines(
                 result.forecast_result.business_state_change,

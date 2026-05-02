@@ -195,6 +195,61 @@ def build_customer_twin(
     return bundle
 
 
+def build_simulation_workspace(
+    *,
+    vertical: str = "b2b_saas",
+    output_dir: str | Path,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Create a pure-simulation workspace from a vertical pack.
+
+    Unlike ``build_customer_twin``, this does NOT set
+    ``customer_twin.organization_name`` — marking the workspace as simulation-only.
+    """
+    workspace_root = Path(output_dir).expanduser().resolve()
+
+    from vei.verticals import get_vertical_company_name
+
+    company_name = get_vertical_company_name(vertical)
+    slug = company_name.lower().replace(" ", "-").replace("_", "-") + "-demo"
+
+    create_workspace_from_template(
+        root=workspace_root,
+        source_kind="vertical",
+        source_ref=vertical,
+        title=company_name,
+        name=slug,
+        description=f"Pure simulation workspace for {company_name} ({vertical} vertical)",
+        overwrite=overwrite,
+    )
+
+    manifest = load_workspace(workspace_root)
+    manifest.title = company_name
+    manifest.name = slug
+    manifest.metadata = {
+        **dict(manifest.metadata),
+        "workspace_mode": "simulation",
+    }
+    write_workspace(workspace_root, manifest)
+    compile_workspace(workspace_root)
+
+    snapshot_path = workspace_root / CONTEXT_SNAPSHOT_FILE
+    if not snapshot_path.exists():
+        snapshot = ContextSnapshot(
+            organization_name=company_name,
+            organization_domain="",
+            sources=[],
+        )
+        snapshot_path.write_text(snapshot.model_dump_json(indent=2), encoding="utf-8")
+
+    return {
+        "title": company_name,
+        "workspace_mode": "simulation",
+        "workspace_root": str(workspace_root),
+        "vertical": vertical,
+    }
+
+
 def build_customer_twin_asset(
     snapshot: ContextSnapshot,
     *,

@@ -1,3 +1,6 @@
+window.VEIStudio = window.VEIStudio || {};
+const controlStudio = window.VEIStudio;
+
 async function loadControlSurface() {
   const status = document.getElementById("control-status");
   const agents = document.getElementById("control-agents");
@@ -195,3 +198,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("control-refresh-button");
   if (btn) btn.addEventListener("click", () => void loadControlSurface());
 });
+
+controlStudio.control = {
+  loadControlSurface,
+};
+window.loadControlSurface = loadControlSurface;

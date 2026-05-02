@@ -43,7 +43,18 @@ VEI is one kernel with five product surfaces sharing the same world session, con
 - **Governor / Control** — place VEI between agents and enterprise systems; govern, record, and replay what happened
 - **Sandbox / What-if** — fork the same world, change policy or actions, compare alternate futures with snapshot comparisons
 - **Train / Data** — turn traces and trajectories into rollouts, demonstrations, and RL-friendly data
-- **Knowledge / Skill Map** — hydrate company records into a knowledge graph; compose grounded artifacts; compile company-specific agent skills from the normalized bundle with replay checks and evidence backing
+- **Knowledge / Company Wiki / Skill Map** — hydrate company records into a knowledge graph; materialize cited wiki pages over canonical evidence; compile company-specific agent skills from the normalized bundle with replay checks and evidence backing
+
+## Product Glossary
+
+Use these terms consistently in user-facing surfaces:
+
+- **Workspace** — the on-disk VEI folder rooted by `vei_project.json`
+- **Company** — the real-world organization represented by that workspace
+- **Scenario** — a selectable situation configuration authored for a workspace
+- **Run** — one execution of a scenario (workflow/scripted/bc/llm)
+- **Provenance** — the governance and evidence surface (with Control and Audit sections)
+- **Wiki** — the materialized company read model derived from canonical evidence
 
 Copy-safe product language:
 

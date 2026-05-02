@@ -79,7 +79,10 @@ def test_resolve_ejepa_runtime_prefers_vendored_package(
     assert resolved is not None
     assert resolved[0] == Path(ejepa_module.__file__).resolve().parents[2]
     assert (resolved[0] / "structured_jepa").exists()
-    assert resolved[1] == Path(sys.executable).resolve()
+    # The resolver must NOT call Path(sys.executable).resolve(), because in a
+    # venv that follows the python -> base-interpreter symlink and breaks
+    # access to venv site-packages (e.g. defusedxml). Keep symlinks intact.
+    assert resolved[1] == Path(sys.executable).expanduser()
 
 
 def test_resolve_ejepa_runtime_prefers_vendored_root_without_importable_package(
@@ -93,7 +96,9 @@ def test_resolve_ejepa_runtime_prefers_vendored_root_without_importable_package(
     assert resolved is not None
     assert resolved[0] == Path(ejepa_module.__file__).resolve().parents[2]
     assert (resolved[0] / "structured_jepa").exists()
-    assert resolved[1] == Path(sys.executable).resolve()
+    # See note in the previous test: do not resolve() the interpreter path,
+    # otherwise the JEPA subprocess loses venv site-packages.
+    assert resolved[1] == Path(sys.executable).expanduser()
 
 
 def test_benchmark_runtime_bridge_requires_runtime(

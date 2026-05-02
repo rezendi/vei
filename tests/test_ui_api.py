@@ -93,12 +93,11 @@ def test_ui_index_contains_company_subnav_and_whatif_steps(tmp_path: Path) -> No
     assert 'id="public-demo-evidence-list"' in body
     assert 'id="public-demo-score-btn"' in body
     assert 'id="studio-view-helper"' in body
-    assert 'id="company-subnav"' in body
     assert 'id="whatif-chat-log"' in body
     assert 'id="whatif-chat-btn"' in body
-    assert 'data-studio-view="control">Control</button>' in body
-    assert 'data-studio-view="audit">Audit</button>' in body
-    assert 'data-company-target="company-historical"' in body
+    assert 'data-studio-view="provenance">Provenance</button>' in body
+    assert 'data-studio-view="sandbox">Sandbox</button>' in body
+    assert 'data-studio-view="wiki">Wiki</button>' in body
     assert "Step 1" in body
     assert "Find Decision" in body
     assert "Compare Moves" in body
@@ -114,10 +113,7 @@ def test_studio_bootstrap_preserves_control_nav_label() -> None:
         / "studio-bootstrap.js"
     ).read_text(encoding="utf-8")
 
-    assert (
-        '["Public History", "Company", "Crisis", "Outcome", "Control", "Audit"]'
-        in bootstrap
-    )
+    assert '["Wiki", "Sandbox", "Provenance", "Public History"]' in bootstrap
 
 
 def _write_rosetta_fixture(root: Path) -> None:

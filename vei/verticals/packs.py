@@ -56,6 +56,11 @@ def get_vertical_pack_manifest(name: str) -> VerticalPackManifest:
     return _VERTICAL_PACKS[key].manifest
 
 
+def get_vertical_company_name(name: str) -> str:
+    """Return the default company name for a vertical pack."""
+    return get_vertical_pack_manifest(name).company_name
+
+
 def build_vertical_blueprint_asset(name: str) -> BlueprintAsset:
     key = name.strip().lower()
     definition = _VERTICAL_PACKS.get(key)

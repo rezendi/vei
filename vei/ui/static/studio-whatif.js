@@ -12,7 +12,7 @@ function whatIfCurrentScene() {
 }
 
 function whatIfTimelineFilters() {
-  return state.whatIfTimelineFilters || {
+  return (window.VEIStudio?.stores?.whatIf?.timelineFilters || state.whatIfTimelineFilters) || {
     surface: "",
     actor: "",
     caseId: "",
