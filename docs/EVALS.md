@@ -81,6 +81,22 @@ Five business objective rubrics ship with the benchmark:
 
 Each rubric includes 3 criteria and a decision rule. See `vei/whatif/benchmark_business.py` for the full rubric definitions.
 
+## Workflow Evaluation Levels
+
+Business Task Specs use a separate evaluation ladder before they become eval or
+RL environments:
+
+- `descriptive` specs explain recurring work from source events.
+- `labeled` specs add human labels such as good example, rejected, needs human, missing context, or policy risk.
+- `rubric_evaluable` specs have criteria that a human or calibrated judge can score.
+- `contract_evaluable` specs have deterministic predicates over event-spine or tool-result state.
+- `rl_packaged` specs are reviewed contract-evaluable specs exported with schemas, reset cases, splits, and reward terms.
+
+The distinction matters. Judgment-heavy workflows can be highly useful as
+labeled or rubric-evaluable specs without pretending that deterministic
+predicates capture the business outcome. Contract and RL packaging are
+downstream specializations, not the default value of workflow mining.
+
 ## Layer 3: Human audit and panel
 
 The human layer serves two purposes: calibrating the automated evaluators and producing independent training data.

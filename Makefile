@@ -11,7 +11,7 @@ SETUP_FULL_EXTRAS := dev,llm,sse,ui,test,rl,browser,worldmodel,jepa
 COVERAGE_FAIL_UNDER ?= $(or $(shell awk 'BEGIN { section = 0 } $$1 == "coverage:" { section = 1; next } section && $$1 == "global:" { print int($$2 * 100); exit }' $(AGENTS_FILE) 2>/dev/null),80)
 PIPAPI_PYTHON := $(abspath $(VENV_BIN)/python)
 
-.PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval codex-live-smoke worldmodel-smoke public-demo-smoke fetch-public-history-fixture-shrink llm-live deps-audit enron-example service-ops-example dispatch-local-example enron-screens fetch-enron-full package-enron-full all clean clean-workspace clean-workspace-dry-run clean-workspace-hard clean-workspace-hard-dry-run
+.PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval codex-live-smoke worldmodel-smoke public-demo-smoke workflow-intel-smoke fetch-public-history-fixture-shrink llm-live deps-audit enron-example service-ops-example dispatch-local-example enron-screens fetch-enron-full package-enron-full all clean clean-workspace clean-workspace-dry-run clean-workspace-hard clean-workspace-hard-dry-run
 
 $(VENV)/bin/activate:
 	$(PYTHON) -m venv $(VENV)
@@ -118,6 +118,9 @@ worldmodel-smoke: $(SETUP_FULL_STAMP)
 
 public-demo-smoke: $(SETUP_FULL_STAMP)
 	$(VENV_BIN)/python scripts/run_public_demo_smoke.py
+
+workflow-intel-smoke: $(SETUP_FULL_STAMP)
+	$(VENV_BIN)/python -m pytest tests/test_workflow_intelligence.py -q
 
 # Downsample docs/examples NEWS public-history workspace context_snapshot (cap documents list).
 fetch-public-history-fixture-shrink: $(SETUP_FULL_STAMP)
