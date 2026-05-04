@@ -91,6 +91,7 @@ const state = {
 
 const whatIfStore = {
   status: null,
+  mode: "",
   searchPending: false,
   openPending: false,
   runPending: false,
@@ -101,6 +102,7 @@ const whatIfStore = {
   selectedEvent: null,
   scene: null,
   sceneLoading: false,
+  statusRefreshTimer: null,
   chosenOptionLabel: "",
   customMovePrompt: "",
   openResult: null,
@@ -148,6 +150,7 @@ function defineStoreAlias(target, aliasName, backingStore, backingKey) {
 
 [
   ["whatIfStatus", whatIfStore, "status"],
+  ["whatIfMode", whatIfStore, "mode"],
   ["whatIfSearchPending", whatIfStore, "searchPending"],
   ["whatIfOpenPending", whatIfStore, "openPending"],
   ["whatIfRunPending", whatIfStore, "runPending"],
@@ -158,6 +161,7 @@ function defineStoreAlias(target, aliasName, backingStore, backingKey) {
   ["whatIfSelectedEvent", whatIfStore, "selectedEvent"],
   ["whatIfScene", whatIfStore, "scene"],
   ["whatIfSceneLoading", whatIfStore, "sceneLoading"],
+  ["whatIfStatusRefreshTimer", whatIfStore, "statusRefreshTimer"],
   ["whatIfChosenOptionLabel", whatIfStore, "chosenOptionLabel"],
   ["whatIfCustomMovePrompt", whatIfStore, "customMovePrompt"],
   ["whatIfOpenResult", whatIfStore, "openResult"],

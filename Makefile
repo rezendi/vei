@@ -11,7 +11,7 @@ SETUP_FULL_EXTRAS := dev,llm,sse,ui,test,rl,browser,worldmodel,jepa
 COVERAGE_FAIL_UNDER ?= $(or $(shell awk 'BEGIN { section = 0 } $$1 == "coverage:" { section = 1; next } section && $$1 == "global:" { print int($$2 * 100); exit }' $(AGENTS_FILE) 2>/dev/null),80)
 PIPAPI_PYTHON := $(abspath $(VENV_BIN)/python)
 
-.PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval fetch-public-history-fixture-shrink llm-live deps-audit enron-example service-ops-example dispatch-local-example enron-screens fetch-enron-full package-enron-full all clean clean-workspace clean-workspace-dry-run clean-workspace-hard clean-workspace-hard-dry-run
+.PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval codex-live-smoke worldmodel-smoke public-demo-smoke fetch-public-history-fixture-shrink llm-live deps-audit enron-example service-ops-example dispatch-local-example enron-screens fetch-enron-full package-enron-full all clean clean-workspace clean-workspace-dry-run clean-workspace-hard clean-workspace-hard-dry-run
 
 $(VENV)/bin/activate:
 	$(PYTHON) -m venv $(VENV)
@@ -53,10 +53,10 @@ check-full: check
 		$(VENV_BIN)/semgrep --config p/python --config p/security-audit --config .semgrep.yml --error vei scripts || true; \
 	fi
 	@mkdir -p .artifacts
-	@DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -v '^\.secrets\.baseline$$' || true)"; \
+	@DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -Ev '^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)' || true)"; \
 	$(VENV_BIN)/detect-secrets scan $$DETECT_SECRETS_FILES > .artifacts/detect-secrets.json
 	@if [ -f .secrets.baseline ]; then \
-		DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -v '^\.secrets\.baseline$$' || true)"; \
+		DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -Ev '^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)' || true)"; \
 		$(VENV_BIN)/detect-secrets-hook --baseline .secrets.baseline $$DETECT_SECRETS_FILES; \
 	else \
 		echo "No .secrets.baseline found; detect-secrets check is advisory-only."; \
@@ -109,6 +109,15 @@ dynamics-eval: $(SETUP_FULL_STAMP)
 	$(VENV_BIN)/python -m pytest tests/dynamics/ -v --tb=short
 	$(VENV_BIN)/python scripts/validate_dynamics_metrics.py --metrics _vei_out/dynamics_eval/metrics.json
 	@echo "Dynamics evaluation passed."
+
+codex-live-smoke: $(SETUP_FULL_STAMP)
+	$(VENV_BIN)/python scripts/run_codex_live_smoke.py
+
+worldmodel-smoke: $(SETUP_FULL_STAMP)
+	$(VENV_BIN)/python -m pytest tests/test_tenant_world_model_check.py tests/test_multitenant_world_model_benchmark.py tests/test_public_demo_ui.py tests/test_enron_static_export.py -q
+
+public-demo-smoke: $(SETUP_FULL_STAMP)
+	$(VENV_BIN)/python scripts/run_public_demo_smoke.py
 
 # Downsample docs/examples NEWS public-history workspace context_snapshot (cap documents list).
 fetch-public-history-fixture-shrink: $(SETUP_FULL_STAMP)

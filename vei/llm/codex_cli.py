@@ -34,7 +34,7 @@ def _normalize_output_schema(node: Any) -> Any:
         normalized["additionalProperties"] = False
         normalized["required"] = list(normalized["properties"].keys())
     elif normalized.get("type") == "object":
-        normalized["additionalProperties"] = False
+        normalized.setdefault("additionalProperties", True)
         normalized.setdefault("required", [])
     return normalized
 

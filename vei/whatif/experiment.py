@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.whatif.artifact_validation import validate_artifact_tree
 from vei.whatif.filenames import (
     EJEPA_RESULT_FILE,
@@ -78,8 +78,8 @@ def run_counterfactual_experiment(
     mode: WhatIfExperimentMode = "both",
     forecast_backend: WhatIfForecastBackend | None = None,
     allow_proxy_fallback: bool = True,
-    provider: str = "openai",
-    model: str = default_model_for_provider("openai"),
+    provider: str | None = None,
+    model: str | None = None,
     seed: int = 42042,
     ejepa_epochs: int = 4,
     ejepa_batch_size: int = 64,
@@ -88,6 +88,10 @@ def run_counterfactual_experiment(
 ) -> WhatIfExperimentResult:
     from .api import run_whatif
 
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=provider,
+        model=model,
+    )
     selection = (
         run_whatif(
             world,
@@ -133,8 +137,8 @@ def run_counterfactual_experiment(
         llm_result = run_llm_counterfactual(
             workspace_root,
             prompt=counterfactual_prompt,
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             seed=seed,
         )
     forecast_result: WhatIfCounterfactualEstimateResult | None = None
@@ -231,8 +235,8 @@ def run_ranked_counterfactual_experiment(
     thread_id: str | None = None,
     event_id: str | None = None,
     rollout_count: int = 4,
-    provider: str = "openai",
-    model: str = default_model_for_provider("openai"),
+    provider: str | None = None,
+    model: str | None = None,
     seed: int = 42042,
     shadow_forecast_backend: WhatIfForecastBackend | None = None,
     allow_proxy_fallback: bool = True,
@@ -246,6 +250,10 @@ def run_ranked_counterfactual_experiment(
     if rollout_count < 1 or rollout_count > 16:
         raise ValueError("rollout_count must be between 1 and 16")
 
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=provider,
+        model=model,
+    )
     normalized_candidates = _normalize_candidate_interventions(candidate_interventions)
     if not normalized_candidates:
         raise ValueError("at least one candidate intervention is required")
@@ -305,8 +313,8 @@ def run_ranked_counterfactual_experiment(
             llm_result = run_llm_counterfactual(
                 workspace_root,
                 prompt=intervention.prompt,
-                provider=provider,
-                model=model,
+                provider=resolved_provider,
+                model=resolved_model,
                 seed=rollout_seed,
             )
             if first_rollout is None:

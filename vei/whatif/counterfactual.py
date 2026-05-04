@@ -12,7 +12,7 @@ from vei.blueprint.api import BlueprintAsset
 from vei.data.models import BaseEvent, VEIDataset
 from vei.llm import providers
 from vei.events.api import emit_llm_call_completed, emit_llm_call_failed
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.twin import load_customer_twin
 
 try:
@@ -69,7 +69,7 @@ def _llm_timeout_seconds() -> int:
     """Resolve the per-call LLM timeout for what-if counterfactuals.
 
     Override with VEI_WHATIF_LLM_TIMEOUT_S (defaults to 180s, since reasoning
-    models like gpt-5-mini routinely exceed 60s on long contexts).
+    models routinely exceed 60s on long contexts).
     """
     raw = os.environ.get("VEI_WHATIF_LLM_TIMEOUT_S", "").strip()
     if not raw:
@@ -557,6 +557,55 @@ def _forecast_delta_summary(delta: WhatIfCounterfactualEstimateDelta) -> str:
     )
 
 
+def _counterfactual_plan_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "tool": {"type": "string"},
+            "args": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string"},
+                    "notes": {"type": "array", "items": {"type": "string"}},
+                    "messages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "actor_id": {"type": "string"},
+                                "surface": {"type": "string"},
+                                "to": {"type": "string"},
+                                "subject": {"type": "string"},
+                                "body_text": {"type": "string"},
+                                "delay_ms": {"type": "integer"},
+                                "rationale": {"type": "string"},
+                                "conversation_anchor": {
+                                    "anyOf": [
+                                        {"type": "string"},
+                                        {"type": "null"},
+                                    ]
+                                },
+                            },
+                            "required": [
+                                "actor_id",
+                                "surface",
+                                "to",
+                                "subject",
+                                "body_text",
+                                "delay_ms",
+                                "rationale",
+                                "conversation_anchor",
+                            ],
+                        },
+                    },
+                },
+                "required": ["summary", "notes", "messages"],
+            },
+        },
+        "required": ["tool", "args"],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
@@ -566,11 +615,15 @@ def run_llm_counterfactual(
     root: str | Path,
     *,
     prompt: str,
-    provider: str = "openai",
-    model: str = default_model_for_provider("openai"),
+    provider: str | None = None,
+    model: str | None = None,
     seed: int = 42042,
 ) -> WhatIfLLMReplayResult:
     load_dotenv(override=True)
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=provider,
+        model=model,
+    )
     workspace_root = Path(root).expanduser().resolve()
     manifest = load_episode_manifest(workspace_root)
     snapshot = _load_episode_snapshot(workspace_root)
@@ -604,16 +657,17 @@ def run_llm_counterfactual(
     try:
         response = _run_async(
             providers.plan_once_with_usage(
-                provider=provider,
-                model=model,
+                provider=resolved_provider,
+                model=resolved_model,
                 system=system,
                 user=user,
+                plan_schema=_counterfactual_plan_schema(),
                 timeout_s=timeout_s,
             )
         )
         emit_llm_call_completed(
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             prompt=user,
             response=str(response.plan),
             status="completed",
@@ -632,8 +686,8 @@ def run_llm_counterfactual(
             raise ValueError("LLM returned no usable messages")
     except _COUNTERFACTUAL_FAILURES as exc:
         emit_llm_call_failed(
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             prompt=user,
             status="failed",
             error=str(exc) or type(exc).__name__,
@@ -665,8 +719,8 @@ def run_llm_counterfactual(
             )
         return WhatIfLLMReplayResult(
             status="error",
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             prompt=prompt,
             summary=summary_text,
             error=str(exc) or type(exc).__name__,
@@ -700,8 +754,8 @@ def run_llm_counterfactual(
         )
     return WhatIfLLMReplayResult(
         status="ok",
-        provider=provider,
-        model=model,
+        provider=resolved_provider,
+        model=resolved_model,
         prompt=prompt,
         summary=summary,
         messages=messages,

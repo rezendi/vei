@@ -11,7 +11,7 @@ For the general command reference, use [WHATIF.md](WHATIF.md).
 The [Control skill-map refresh example](examples/control-skillmap-live-map/README.md)
 shows a small workspace with company context plus captured agent activity. It
 imports the activity into the workspace evidence spine and runs
-`vei skillmap refresh` so the living company map updates from real captured
+`vei knowledge skillmap refresh` so the living company map updates from real captured
 behavior rather than only the static context bundle.
 
 ---
@@ -364,13 +364,13 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.4
+  --proposal-model gpt-5.3-codex-spark
 ```
 
 Strategic proposal models route through Codex by default. The current default is
-`gpt-5.4`; override `--proposal-model` when a newer Codex-supported model is
-available. Set `VEI_STRATEGIC_PROPOSAL_BACKEND=api` only when an explicit
-direct-provider API run is intended.
+`gpt-5.3-codex-spark`; override `--proposal-model` when a newer
+Codex-supported model is available. Set `VEI_STRATEGIC_PROPOSAL_BACKEND=api`
+only when an explicit direct-provider API run is intended.
 
 ### Current Local Result
 

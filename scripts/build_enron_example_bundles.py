@@ -14,7 +14,7 @@ from vei.context.api import (
     write_canonical_history_bundle,
     write_canonical_history_sidecars,
 )
-from vei.project_settings import resolve_llm_defaults
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.context.api import resolve_world_public_context
 from vei.whatif.analysis import select_specific_event
 from vei.whatif.artifacts import render_experiment_overview
@@ -1147,7 +1147,7 @@ def main() -> None:
         if args.bundle
         else list(bundle_specs())
     )
-    provider, model = resolve_llm_defaults(
+    provider, model = resolve_interactive_llm_defaults(
         provider=args.provider,
         model=args.model,
     )

@@ -1,0 +1,288 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+
+from ._api_models import (
+    GovernorAgentUpdateRequest,
+    GovernorApprovalResolveRequest,
+    GovernorSituationActivateRequest,
+    OrchestratorApprovalDecisionRequest,
+    OrchestratorTaskCommentRequest,
+    gateway_json_request,
+    load_workspace_workforce_payload,
+)
+from ._workspace_route_context import WorkspaceRouteContext
+
+
+def register_workspace_governor_routes(
+    app: FastAPI,
+    ctx: WorkspaceRouteContext,
+) -> None:
+    root = ctx.root
+    deps: Any = ctx.deps
+
+    @app.get("/api/workspace/governor")
+    def api_workspace_governor() -> JSONResponse:
+        if ctx.is_public_history_workspace():
+            return JSONResponse({"mode": "public_history"})
+        live_governor_payload: dict[str, Any] | None = None
+        live_workforce_payload: dict[str, Any] | None = None
+        try:
+            live_governor_payload = gateway_json_request(root, path="/api/governor")
+        except HTTPException:
+            live_governor_payload = None
+        try:
+            live_workforce_payload = gateway_json_request(root, path="/api/workforce")
+        except HTTPException:
+            live_workforce_payload = None
+
+        payload = deps.build_workspace_governor_status(
+            root,
+            governor_payload=live_governor_payload,
+            workforce_payload=live_workforce_payload,
+        )
+        data = payload.model_dump(mode="json")
+        governor = data.get("governor")
+        if isinstance(governor, dict):
+            data = {**governor, **data}
+        return JSONResponse(data)
+
+    @app.get("/api/workforce")
+    def api_workforce() -> JSONResponse:
+        try:
+            payload = gateway_json_request(root, path="/api/workforce")
+        except HTTPException:
+            payload = load_workspace_workforce_payload(root)
+        return JSONResponse(payload or {})
+
+    @app.post("/api/workspace/governor/agents")
+    def api_workspace_governor_register_agent(
+        request: GovernorAgentUpdateRequest,
+    ) -> JSONResponse:
+        payload = gateway_json_request(
+            root,
+            path="/api/governor/agents",
+            method="POST",
+            payload=request.model_dump(exclude_none=True),
+        )
+        return JSONResponse(payload, status_code=201)
+
+    @app.patch("/api/workspace/governor/agents/{agent_id}")
+    def api_workspace_governor_update_agent(
+        agent_id: str,
+        request: GovernorAgentUpdateRequest,
+    ) -> JSONResponse:
+        payload = gateway_json_request(
+            root,
+            path=f"/api/governor/agents/{agent_id}",
+            method="PATCH",
+            payload=request.model_dump(exclude_none=True),
+        )
+        return JSONResponse(payload)
+
+    @app.delete("/api/workspace/governor/agents/{agent_id}")
+    def api_workspace_governor_remove_agent(agent_id: str) -> JSONResponse:
+        payload = gateway_json_request(
+            root,
+            path=f"/api/governor/agents/{agent_id}",
+            method="DELETE",
+        )
+        return JSONResponse(payload)
+
+    @app.get("/api/workspace/governor/approvals")
+    def api_workspace_governor_approvals() -> JSONResponse:
+        payload = gateway_json_request(root, path="/api/governor/approvals")
+        return JSONResponse(payload)
+
+    @app.post("/api/workspace/governor/approvals/{approval_id}/approve")
+    def api_workspace_governor_approve(
+        approval_id: str,
+        request: GovernorApprovalResolveRequest,
+    ) -> JSONResponse:
+        payload = gateway_json_request(
+            root,
+            path=f"/api/governor/approvals/{approval_id}/approve",
+            method="POST",
+            payload=request.model_dump(),
+        )
+        return JSONResponse(payload)
+
+    @app.post("/api/workspace/governor/approvals/{approval_id}/reject")
+    def api_workspace_governor_reject(
+        approval_id: str,
+        request: GovernorApprovalResolveRequest,
+    ) -> JSONResponse:
+        payload = gateway_json_request(
+            root,
+            path=f"/api/governor/approvals/{approval_id}/reject",
+            method="POST",
+            payload=request.model_dump(),
+        )
+        return JSONResponse(payload)
+
+    @app.post("/api/workspace/governor/exercise/activate")
+    def api_workspace_governor_activate_situation(
+        request: GovernorSituationActivateRequest,
+    ) -> JSONResponse:
+        try:
+            payload = deps.activate_twin_exercise(
+                root,
+                scenario_variant=request.scenario_variant,
+                contract_variant=request.contract_variant,
+            )
+        except (FileNotFoundError, KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/finalize")
+    def api_workspace_governor_finalize() -> JSONResponse:
+        try:
+            payload = deps.finalize_twin(root)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/reset")
+    def api_workspace_governor_reset() -> JSONResponse:
+        try:
+            payload = deps.reset_twin(root)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/sync")
+    def api_workspace_governor_sync() -> JSONResponse:
+        try:
+            payload = deps.sync_twin(root)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/orchestrator/agents/{agent_id}/pause")
+    def api_workspace_governor_pause_agent(agent_id: str) -> JSONResponse:
+        try:
+            payload = deps.pause_twin_orchestrator_agent(root, agent_id)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/orchestrator/agents/{agent_id}/resume")
+    def api_workspace_governor_resume_agent(agent_id: str) -> JSONResponse:
+        try:
+            payload = deps.resume_twin_orchestrator_agent(root, agent_id)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/orchestrator/tasks/{task_id}/comment")
+    def api_workspace_governor_comment_on_task(
+        task_id: str,
+        request: OrchestratorTaskCommentRequest,
+    ) -> JSONResponse:
+        try:
+            payload = deps.comment_on_twin_orchestrator_task(
+                root,
+                task_id,
+                body=request.body,
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/orchestrator/approvals/{approval_id}/approve")
+    def api_workspace_governor_approve_orchestrator(
+        approval_id: str,
+        request: OrchestratorApprovalDecisionRequest,
+    ) -> JSONResponse:
+        try:
+            payload = deps.approve_twin_orchestrator_approval(
+                root,
+                approval_id,
+                decision_note=request.decision_note,
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post("/api/workspace/governor/orchestrator/approvals/{approval_id}/reject")
+    def api_workspace_governor_reject_orchestrator(
+        approval_id: str,
+        request: OrchestratorApprovalDecisionRequest,
+    ) -> JSONResponse:
+        try:
+            payload = deps.reject_twin_orchestrator_approval(
+                root,
+                approval_id,
+                decision_note=request.decision_note,
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+    @app.post(
+        "/api/workspace/governor/orchestrator/approvals/{approval_id}/request-revision"
+    )
+    def api_workspace_governor_request_orchestrator_revision(
+        approval_id: str,
+        request: OrchestratorApprovalDecisionRequest,
+    ) -> JSONResponse:
+        try:
+            payload = deps.request_twin_orchestrator_revision(
+                root,
+                approval_id,
+                decision_note=request.decision_note,
+            )
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="twin services are not configured",
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(payload.model_dump(mode="json"))
+
+
+__all__ = ["register_workspace_governor_routes"]

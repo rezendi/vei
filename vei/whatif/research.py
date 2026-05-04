@@ -8,8 +8,6 @@ from math import sqrt
 from pathlib import Path
 from typing import Collection, Sequence
 
-from vei.project_settings import default_model_for_provider
-
 from ._research_packs import build_research_packs
 from ._research_constants import (
     DEFAULT_ROLLOUT_SEEDS as _DEFAULT_ROLLOUT_SEEDS,
@@ -134,14 +132,20 @@ def run_research_pack(
     label: str,
     pack_id: str = "enron_research_v1",
     research_pack: WhatIfResearchPack | None = None,
-    provider: str = "openai",
-    model: str = default_model_for_provider("openai"),
+    provider: str | None = None,
+    model: str | None = None,
     ejepa_epochs: int = 4,
     ejepa_batch_size: int = 64,
     ejepa_force_retrain: bool = False,
     ejepa_device: str | None = None,
     rollout_workers: int = 4,
 ) -> WhatIfPackRunResult:
+    from vei.project_settings import resolve_interactive_llm_defaults
+
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=provider,
+        model=model,
+    )
     if research_pack is not None:
         pack = research_pack.model_copy(deep=True)
     else:
@@ -216,8 +220,8 @@ def run_research_pack(
                 candidate=candidate,
                 rollout_seeds=pack.rollout_seeds,
                 case_root=case_root,
-                provider=provider,
-                model=model,
+                provider=resolved_provider,
+                model=resolved_model,
                 calibration_rows=calibration_rows,
                 historical_outcome=historical_outcome,
                 ejepa_epochs=ejepa_epochs,
@@ -1784,9 +1788,7 @@ def _reference_timestamp_ms(event) -> int:
 
 
 def _sequence_delay_bias(contract: WhatIfBackendBranchContract) -> float:
-    generated = [
-        step.delay_ms for step in contract.sequence_steps if step.phase == "generated"
-    ]
+    generated = [s.delay_ms for s in contract.sequence_steps if s.phase == "generated"]
     if not generated:
         return contract.average_rollout_signals.delay_risk
     average_delay = sum(generated) / len(generated)

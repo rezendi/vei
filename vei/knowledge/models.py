@@ -136,7 +136,7 @@ class KnowledgeComposeRequest(BaseModel):
     seed_outline: List[str] = Field(default_factory=list)
     prompt: str = ""
     mode: KnowledgeComposeMode = "heuristic_baseline"
-    provider: str = "openai"
+    provider: str = "codex"
     model: str = ""
     limit: int = 8
 

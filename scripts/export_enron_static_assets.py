@@ -4,6 +4,7 @@ import argparse
 import bisect
 import json
 import sys
+import warnings
 from collections import Counter
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -230,55 +231,59 @@ def export_model_onnx(
             )
 
     wrapper = EnronReplayModel(model).eval()
+    # Batch 2 keeps the first axis symbolic under torch.export; batch 1 is
+    # otherwise specialized to a constant in the ONNX graph.
+    sample_batch = 2
     summary = torch.zeros(
-        1,
+        sample_batch,
         len(preprocessor.summary_feature_names),
         dtype=torch.float32,
     )
     action = torch.zeros(
-        1,
+        sample_batch,
         _action_vector_width(preprocessor),
         dtype=torch.float32,
     )
     token_categorical = torch.zeros(
-        1,
+        sample_batch,
         _SEQUENCE_TOKEN_LIMIT,
         3,
         dtype=torch.long,
     )
     token_numeric = torch.zeros(
-        1,
+        sample_batch,
         _SEQUENCE_TOKEN_LIMIT,
         _SEQUENCE_NUMERIC_WIDTH,
         dtype=torch.float32,
     )
-    torch.onnx.export(
-        wrapper,
-        (summary, action, token_categorical, token_numeric),
-        output_path,
-        input_names=["summary", "action", "token_categorical", "token_numeric"],
-        output_names=[
-            "binary_logits",
-            "regression",
-            "business",
-            "objective",
-            "future_state",
-        ],
-        dynamic_axes={
-            "summary": {0: "batch"},
-            "action": {0: "batch"},
-            "token_categorical": {0: "batch"},
-            "token_numeric": {0: "batch"},
-            "binary_logits": {0: "batch"},
-            "regression": {0: "batch"},
-            "business": {0: "batch"},
-            "objective": {0: "batch"},
-            "future_state": {0: "batch"},
-        },
-        opset_version=17,
-        do_constant_folding=True,
-        dynamo=False,
-    )
+    batch = torch.export.Dim("batch", min=1, max=64)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"`isinstance\(treespec, LeafSpec\)` is deprecated.*",
+            category=FutureWarning,
+        )
+        torch.onnx.export(
+            wrapper,
+            (summary, action, token_categorical, token_numeric),
+            output_path,
+            input_names=["summary", "action", "token_categorical", "token_numeric"],
+            output_names=[
+                "binary_logits",
+                "regression",
+                "business",
+                "objective",
+                "future_state",
+            ],
+            dynamic_shapes={
+                "summary": {0: batch},
+                "action": {0: torch.export.Dim.AUTO},
+                "token_categorical": {0: torch.export.Dim.AUTO},
+                "token_numeric": {0: torch.export.Dim.AUTO},
+            },
+            opset_version=18,
+            dynamo=True,
+        )
 
 
 def build_static_bundle(

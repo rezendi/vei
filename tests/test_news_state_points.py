@@ -475,7 +475,7 @@ def test_strategic_state_point_cli_defaults_to_available_codex_model(
 
     def fake_run(*_args: Any, **kwargs: Any) -> StrategicStatePointRunResult:
         assert kwargs["proposal_mode"] == "llm"
-        assert kwargs["proposal_model"] == "gpt-5.4"
+        assert kwargs["proposal_model"] == "gpt-5.3-codex-spark"
         root = tmp_path / "strategic_default"
         root.mkdir(parents=True, exist_ok=True)
         return StrategicStatePointRunResult(
@@ -516,7 +516,7 @@ def test_strategic_state_point_cli_defaults_to_available_codex_model(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["proposal_model"] == "gpt-5.4"
+    assert payload["proposal_model"] == "gpt-5.3-codex-spark"
 
 
 def test_strategic_proposal_runner_uses_codex_by_default(monkeypatch) -> None:

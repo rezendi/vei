@@ -51,24 +51,48 @@ function whatIfObjectivePacks() {
     : [];
 }
 
-function whatIfSourceId() {
-  return state.whatIfStatus?.source || "auto";
+function whatIfCapabilities() {
+  return state.whatIfStatus?.capabilities || {};
+}
+
+function whatIfSelectedMode() {
+  const capabilities = whatIfCapabilities();
+  const selected = state.whatIfMode || state.whatIfStatus?.mode || "live";
+  if (selected === "saved" && capabilities.saved) {
+    return "saved";
+  }
+  if (selected === "live" && capabilities.live) {
+    return "live";
+  }
+  return capabilities.saved && !capabilities.live ? "saved" : "live";
+}
+
+function whatIfSourceSelection() {
+  return {
+    mode: whatIfSelectedMode(),
+    source: state.whatIfStatus?.source || "auto",
+  };
 }
 
 function whatIfProviderOverrides() {
   const status = state.whatIfStatus || {};
+  const defaults = status.defaults || {};
   const overrides = {};
-  if (status.default_provider) {
-    overrides.provider = status.default_provider;
+  if (defaults.provider) {
+    overrides.provider = defaults.provider;
   }
-  if (status.default_model) {
-    overrides.model = status.default_model;
+  if (defaults.model) {
+    overrides.model = defaults.model;
   }
   return overrides;
 }
 
 function whatIfSourceLabel() {
-  const source = whatIfSourceId();
+  const display = state.whatIfStatus?.display || {};
+  if (display.detail) {
+    return display.detail;
+  }
+  const source = state.whatIfStatus?.source || "auto";
   if (source === "company_history") {
     return "Company history bundle";
   }
@@ -79,6 +103,42 @@ function whatIfSourceLabel() {
     return "Enron Rosetta archive";
   }
   return "Historical archive";
+}
+
+function whatIfLiveCacheState() {
+  return state.whatIfStatus?.debug?.world_cache?.state || "";
+}
+
+function whatIfLiveSearchLabel() {
+  const source = state.whatIfStatus?.source || "auto";
+  if (source === "enron") {
+    return "Searching full Enron archive";
+  }
+  return `Searching ${whatIfSourceLabel()}`;
+}
+
+function scheduleWhatIfStatusRefresh() {
+  const shouldPoll = whatIfSelectedMode() === "live" && whatIfLiveCacheState() === "warming";
+  if (!shouldPoll) {
+    if (state.whatIfStatusRefreshTimer) {
+      window.clearTimeout(state.whatIfStatusRefreshTimer);
+      state.whatIfStatusRefreshTimer = null;
+    }
+    return;
+  }
+  if (state.whatIfStatusRefreshTimer) {
+    return;
+  }
+  state.whatIfStatusRefreshTimer = window.setTimeout(async () => {
+    state.whatIfStatusRefreshTimer = null;
+    try {
+      state.whatIfStatus = await getJson("/api/workspace/whatif");
+    } catch {
+      return;
+    }
+    renderWhatIfStudio();
+    scheduleWhatIfStatusRefresh();
+  }, 1500);
 }
 
 function whatIfHasPendingRequest() {
@@ -454,11 +514,11 @@ function renderWhatIfCaseContext(caseContext) {
 }
 
 function renderWhatIfTimeline(timeline) {
-  if (!state.whatIfStatus?.timeline_available) {
+  if (!whatIfCapabilities().timeline || whatIfSelectedMode() !== "live") {
     return "";
   }
   const filters = whatIfTimelineFilters();
-  const readiness = state.whatIfStatus?.timeline_readiness || null;
+  const readiness = state.whatIfStatus?.debug?.timeline_readiness || null;
   const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
   const available = Boolean(timeline?.available);
   const loading = Boolean(state.whatIfTimelinePending);
@@ -827,13 +887,13 @@ function renderWhatIfChat() {
   if (!chatNode) {
     return;
   }
-  const usingSavedBundle = Boolean(state.whatIfStatus?.saved_bundle_active);
+  const usingSavedBundle = whatIfSelectedMode() === "saved" && Boolean(whatIfCapabilities().saved);
   const messages = state.whatIfChat || [];
   if (!usingSavedBundle) {
     chatNode.innerHTML = `
       <div class="public-demo-message is-assistant">
         <span>VEI</span>
-        <p>Saved branch chat is available when Studio is opened on a saved historical what-if workspace.</p>
+        <p>Saved branch chat is available in Saved reference mode when this workspace has recorded branch artifacts.</p>
       </div>
     `;
     return;
@@ -890,7 +950,7 @@ async function askWhatIfChat() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...whatIfSourceSelection(),
         event_id: event?.event_id || state.historicalWorkspace?.branch_event_id || null,
         thread_id: event?.thread_id || state.historicalWorkspace?.thread_id || null,
         message,
@@ -1227,6 +1287,30 @@ function renderWhatIfScene(scene) {
   `;
 }
 
+function renderWhatIfModeSelector() {
+  const capabilities = whatIfCapabilities();
+  if (!(capabilities.live && capabilities.saved)) {
+    return "";
+  }
+  const selectedMode = whatIfSelectedMode();
+  const option = (mode, label, detail) => `
+    <button
+      type="button"
+      class="whatif-mode-option ${selectedMode === mode ? "is-selected" : ""}"
+      data-whatif-mode="${mode}"
+    >
+      <strong>${escapeHtml(label)}</strong>
+      <span>${escapeHtml(detail)}</span>
+    </button>
+  `;
+  return `
+    <div class="whatif-mode-switch" role="group" aria-label="What-if source mode">
+      ${option("live", "Live archive", "Explore the full configured history")}
+      ${option("saved", "Saved reference", "Replay the recorded branch artifacts")}
+    </div>
+  `;
+}
+
 function renderWhatIfStudio() {
   const statusNode = document.getElementById("whatif-status");
   const resultsNode = document.getElementById("whatif-results");
@@ -1241,6 +1325,7 @@ function renderWhatIfStudio() {
   const status = state.whatIfStatus || { available: false };
   updateWhatIfActionButtons();
   if (!status.available) {
+    scheduleWhatIfStatusRefresh();
     const fetchError = status.unavailable_reason === "fetch_error";
     statusNode.innerHTML = `
       <div class="whatif-empty">
@@ -1254,39 +1339,69 @@ function renderWhatIfStudio() {
     resultNode.innerHTML = "";
     return;
   }
+  scheduleWhatIfStatusRefresh();
 
   const busyStatus = whatIfCurrentBusyStatus();
-  const statusLabel = busyStatus?.label || "Archive ready";
-  const usingSavedBundle = Boolean(status.saved_bundle_active);
-  const llmAvailable = Boolean(status.llm_available);
-  const statusDetail = busyStatus?.detail
-    || (usingSavedBundle
-      ? "Saved branch workspace"
-      : status.source_dir || whatIfSourceLabel());
-  const defaultProvider = status.default_provider || "";
-  const availableProviders = Array.isArray(status.available_providers)
-    ? status.available_providers.filter(Boolean)
-    : [];
-  const providerSummary = availableProviders.length
-    ? `Keys loaded for <code>${escapeHtml(availableProviders.join(", "))}</code>. `
-    : "";
-  const llmNotice = llmAvailable
-    ? defaultProvider
-      ? `<div class="whatif-notice whatif-notice-info">${providerSummary}LLM counterfactuals will use <code>${escapeHtml(defaultProvider)}</code>.</div>`
+  const display = status.display || {};
+  const capabilities = whatIfCapabilities();
+  const defaults = status.defaults || {};
+  const debug = status.debug || {};
+  const statusLabel = busyStatus?.label || display.label || "Archive ready";
+  const statusDetail = busyStatus?.detail || display.detail || whatIfSourceLabel();
+  const llmNotice = capabilities.llm
+    ? defaults.provider
+      ? `<div class="whatif-notice whatif-notice-info">LLM counterfactuals will use <code>${escapeHtml(defaults.provider)}</code>.</div>`
       : ""
-    : `<div class="whatif-notice">No LLM key configured — counterfactual runs use the heuristic baseline. Set a supported provider key in <code>.env</code>, such as <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>GOOGLE_API_KEY</code>, <code>GEMINI_API_KEY</code>, or <code>OPENROUTER_API_KEY</code>.</div>`;
-  const validationIssues = (status.validation_issues || []);
+    : `<div class="whatif-notice">No LLM key configured — counterfactual runs use the heuristic baseline.</div>`;
+  const validationIssues = (debug.validation_issues || []);
   const validationNotice = validationIssues.length
     ? `<div class="whatif-notice whatif-notice-warn">${validationIssues.map((i) => escapeHtml(i)).join("<br>")}</div>`
     : "";
+  const warmNotice =
+    whatIfSelectedMode() === "live" && whatIfLiveCacheState() === "warming"
+      ? `<div class="whatif-notice whatif-notice-info">Warming the live archive. First search may take a moment.</div>`
+      : "";
   statusNode.innerHTML = `
     <div class="whatif-status-pill">
       <strong>${escapeHtml(statusLabel)}</strong>
       <span>${escapeHtml(statusDetail)}</span>
     </div>
+    ${renderWhatIfModeSelector()}
+    ${warmNotice}
     ${llmNotice}
     ${validationNotice}
   `;
+  statusNode.querySelectorAll("[data-whatif-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextMode = button.getAttribute("data-whatif-mode") || "live";
+      if (nextMode === state.whatIfMode) {
+        return;
+      }
+      state.whatIfMode = nextMode;
+      state.whatIfSearchResult = null;
+      state.whatIfOpenResult = null;
+      state.whatIfExperimentResult = null;
+      state.whatIfRankedResult = null;
+      state.whatIfTimeline = null;
+      state.whatIfTimelineError = "";
+      state.whatIfSelectedEvent = null;
+      state.whatIfScene = null;
+      state.whatIfSceneLoading = false;
+      state.whatIfChosenOptionLabel = "";
+      state.whatIfCustomMovePrompt = "";
+      state.whatIfBusyStatus = null;
+      state.whatIfChat = [];
+      const historical = state.historicalWorkspace || {};
+      if (nextMode === "saved" && historical.branch_event_id) {
+        void loadWhatIfDecisionScene({
+          eventId: historical.branch_event_id,
+          threadId: historical.thread_id || null,
+        });
+      } else {
+        renderWhatIfStudio();
+      }
+    });
+  });
   renderWhatIfChat();
 
   if (objectiveSelect) {
@@ -1613,7 +1728,12 @@ async function searchWhatIfEvents() {
     renderWhatIfStudio();
     return;
   }
-  state.whatIfBusyStatus = { label: "Searching", detail: query };
+  const selection = whatIfSourceSelection();
+  const warming = selection.mode === "live" && whatIfLiveCacheState() === "warming";
+  state.whatIfBusyStatus = {
+    label: selection.mode === "live" ? whatIfLiveSearchLabel() : "Searching",
+    detail: warming ? "First search may take a moment." : query,
+  };
   state.whatIfSearchPending = true;
   updateWhatIfActionButtons();
   renderWhatIfStudio();
@@ -1622,7 +1742,7 @@ async function searchWhatIfEvents() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...selection,
         query,
         limit,
       }),
@@ -1648,7 +1768,7 @@ async function searchWhatIfEvents() {
 }
 
 async function loadWhatIfTimeline({ force = false } = {}) {
-  if (!state.whatIfStatus?.timeline_available) {
+  if (!whatIfCapabilities().timeline || whatIfSelectedMode() !== "live") {
     state.whatIfTimeline = { available: false, rows: [] };
     state.whatIfTimelineError = "";
     return;
@@ -1664,8 +1784,10 @@ async function loadWhatIfTimeline({ force = false } = {}) {
   state.whatIfTimelineError = "";
   renderWhatIfStudio();
   try {
+    const selection = whatIfSourceSelection();
     const params = new URLSearchParams({
-      source: whatIfSourceId(),
+      mode: selection.mode,
+      source: selection.source,
       limit: "40",
     });
     if (filters.surface) params.set("surface", filters.surface);
@@ -1700,7 +1822,7 @@ async function loadWhatIfDecisionScene({ eventId = null, threadId = null } = {})
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...whatIfSourceSelection(),
         event_id: eventId,
         thread_id: threadId,
       }),
@@ -1736,7 +1858,7 @@ async function materializeWhatIfEpisode() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...whatIfSourceSelection(),
         event_id: event.event_id,
         thread_id: event.thread_id,
         label,
@@ -1783,12 +1905,12 @@ async function runWhatIfExperimentFromUI() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...whatIfSourceSelection(),
         event_id: event.event_id,
         thread_id: event.thread_id,
         label,
         prompt,
-        mode: "both",
+        experiment_mode: "both",
         ...whatIfProviderOverrides(),
       }),
     });
@@ -1840,7 +1962,7 @@ async function runRankedWhatIfFromUI() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source: whatIfSourceId(),
+        ...whatIfSourceSelection(),
         event_id: event.event_id,
         thread_id: event.thread_id,
         label,

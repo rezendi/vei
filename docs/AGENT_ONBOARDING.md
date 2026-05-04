@@ -22,7 +22,7 @@ The practical job is usually one of five things:
 - compile company-specific draft skills from the normalized company bundle
 - train or apply the JEPA-style world model to forecast future state and rank counterfactual actions
 
-Do not treat VEI as a magic CEO oracle. Treat it as an offline benchmark and decision-support workflow. Factual prediction is the strongest evidence. Counterfactual rankings are hypotheses for human or expert review.
+Do not treat VEI as an autonomous business oracle. Treat it as an offline benchmark and decision-support workflow. Factual prediction is the strongest evidence. Counterfactual rankings are hypotheses for human or expert review.
 
 ## Start Here
 
@@ -83,9 +83,9 @@ Useful entrypoints:
 ```bash
 vei quickstart run
 vei eval benchmark --runner workflow --family security_containment
-vei skillmap build --source-dir _vei_out/<tenant>/context_snapshot.json --output _vei_out/<tenant>/skill_map
-vei ingest agent-activity --source agent_activity_jsonl --path ./logs --workspace _vei_out/<tenant>
-vei skillmap refresh --workspace _vei_out/<tenant> --output _vei_out/<tenant>/skill_map
+vei knowledge skillmap build --source-dir _vei_out/<tenant>/context_snapshot.json --output _vei_out/<tenant>/skill_map
+vei workspace ingest agent-activity --source agent_activity_jsonl --path ./logs --workspace _vei_out/<tenant>
+vei knowledge skillmap refresh --workspace _vei_out/<tenant> --output _vei_out/<tenant>/skill_map
 vei provenance access-review --agent-id <agent-id> --workspace _vei_out/<tenant>
 vei provenance verify --workspace _vei_out/<tenant>
 vei provenance export --format evidence-pack --workspace _vei_out/<tenant> --output _vei_out/<tenant>/evidence_pack.json
@@ -99,7 +99,9 @@ Eval runners:
 - `bc` is the tool-frequency baseline powered by `FrequencyPolicy`.
 - `llm` runs a real model through the MCP world.
 
-Same seed means same world. Determinism is part of the product.
+Same seed means same world. Determinism is part of the product. User-facing LLM
+generation defaults to the local Codex CLI using `gpt-5.3-codex-spark`; direct
+provider APIs are explicit overrides.
 
 ## Canonical Inputs
 
@@ -179,7 +181,7 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.4
+  --proposal-model gpt-5.3-codex-spark
 ```
 
 See [WHATIF.md](WHATIF.md) § Strategic state-point counterfactual runs for the full reference.

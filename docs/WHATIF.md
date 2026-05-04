@@ -76,14 +76,14 @@ The important constraint is honesty:
 
 ## Compare paths
 
-There are two compare paths today:
+VEI supports two compare paths:
 
 - **LLM actor continuation**
   - bounded continuation on the affected thread or ticket
-- supports mail, Slack or Teams-style chat, and Jira-style ticket comments
-- derives shared case ids across those surfaces and attaches linked docs or CRM records when the bundle includes them
+  - supports mail, Slack or Teams-style chat, and Jira-style ticket comments
+  - derives shared case ids across those surfaces and attaches linked docs or CRM records when the bundle includes them
   - limited to the known thread participants and allowed targets
-  - defaults to `gpt-5-mini` so the interactive run completes quickly and predictably
+  - defaults to the Codex-session model `gpt-5.3-codex-spark` for local interactive runs
   - useful for “what would someone have said or done next?”
 - **Learned backend forecast (optional, pluggable)**
   - real checkpoint-backed forecast for risk and volume deltas when the repo-local reference checkpoint or the optional JEPA runtime is available
@@ -133,7 +133,7 @@ vei whatif experiment \
   --artifacts-root _vei_out/whatif_experiments \
   --label master_agreement_internal_review \
   --event-id evt_1234 \
-  --model gpt-5-mini \
+  --provider codex --model gpt-5.3-codex-spark \
   --forecast-backend reference \
   --counterfactual-prompt "Keep the draft inside Enron, loop in Gerald Nemec for legal review, and hold the outside send until the clean version is approved."
 ```
@@ -198,7 +198,7 @@ Bring a new company into the what-if system with three files:
 For live onboarding, use the twin entrypoint when you want capture, canonical timeline files, workspace build, and a readiness readout in one command:
 
 ```bash
-vei twin onboard \
+vei workspace twin onboard \
   --root _vei_out/newco/twin \
   --org "NewCo" \
   --domain newco.example \
@@ -213,7 +213,7 @@ vei twin onboard \
 For offline exports, point the same entrypoint at local archive paths:
 
 ```bash
-vei twin onboard \
+vei workspace twin onboard \
   --root _vei_out/newco/twin \
   --org "NewCo" \
   --domain newco.example \
@@ -248,7 +248,7 @@ The saved workspace sidecar is always written as `workspace/whatif_public_contex
 
 The history bundle still needs at least one healthy event surface. VEI ignores raw providers that captured with `status: "error"` when it decides whether a bundle is usable for branching and replay.
 
-The repo now also carries three saved synthetic Clearwater bundles built through this same export path:
+The repo carries three saved synthetic Clearwater bundles built through this same export path:
 
 - `docs/examples/clearwater-dispatch-recovery`
 - `docs/examples/clearwater-billing-dispute-reopened`
@@ -330,9 +330,9 @@ vei ui serve \
   --port 3055
 ```
 
-Open `http://127.0.0.1:3055` and stay inside that workspace. This keeps the display tied to the actual Enron branch point and the actual saved result.
+Open `http://127.0.0.1:3055` and stay inside that workspace. Studio now separates the data source from the replay mode: **Live archive** explores the configured archive when one is available, while **Saved reference** replays the recorded branch artifacts that ship with the example.
 
-This repo-owned Studio path is a saved reference display first. The checkout carries the Rosetta sample under `data/enron/rosetta`, so a fresh clone can open the saved bundles and rebuild the sample-backed example surface immediately. Fetch the full archive with `make fetch-enron-full` when you want whole-history Enron search, full benchmark builds, full training runs, or archive validation.
+The checkout carries the Rosetta sample under `data/enron/rosetta`, so a fresh clone can open the saved bundles and rebuild the sample-backed example surface immediately. Fetch the full archive with `make fetch-enron-full` when you want whole-history Enron search, full benchmark builds, full training runs, or archive validation. When a live archive is configured, `/api/workspace/whatif` starts warming the archive in the UI server process and reports `Live archive warming` until the shared cache is ready; subsequent search, scene, open, run, and rank calls reuse that loaded world.
 
 Use the saved snapshot directly when you want a fresh-clone rerun of the same branch slice:
 
@@ -429,7 +429,7 @@ vei whatif benchmark train \
 # Judge the held-out counterfactual cases from dossiers only
 vei whatif benchmark judge \
   --root _vei_out/whatif_benchmarks/branch_point_ranking_v2/enron_business_outcome_public_context_20260412 \
-  --model gpt-4.1-mini
+  --model gpt-5.3-codex-spark
 
 # Evaluate the trained model against factual futures and judged rankings
 vei whatif benchmark eval \
@@ -506,12 +506,10 @@ and test on the held-out tenant's final-tail rows with its branch-safe doctrine
 packet, so transfer checks do not require manual split surgery.
 
 The default `template` candidate mode is deterministic and CI-safe. Live LLM
-generation is available as an explicit opt-in with `--candidate-mode llm`.
-Strategic proposal models route through Codex by default. The default is
-`gpt-5.4`, which is the newest model accepted by the current local Codex CLI.
-Override `--proposal-model` to `gpt-5.5` when the installed Codex runtime
-supports it. Set `VEI_STRATEGIC_PROPOSAL_BACKEND=api` only for an explicit
-direct-provider API run.
+generation is available as an explicit opt-in with `--candidate-mode llm` and
+defaults to the Codex-session model `gpt-5.3-codex-spark`. Set
+`VEI_STRATEGIC_PROPOSAL_BACKEND=api` only for an explicit direct-provider API
+run.
 
 ```bash
 vei whatif benchmark build-multitenant \
@@ -595,7 +593,7 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.4
+  --proposal-model gpt-5.3-codex-spark
 ```
 
 The doctrine packet is saved as `doctrine_packet.json` with mission, business
@@ -660,7 +658,7 @@ The latest local strategic state-point run selected `12` LLM-proposed decisions
 and scored `96` candidate actions under
 `_vei_out/world_model_strategic_state_points/enron_dispatch_powr_news_frontier_gpt54_statepoints_20260427/`.
 The saved proposal manifest records the exact proposal model used for that run.
-New strategic proposal reruns default to `gpt-5.4` through Codex and use the
+New strategic proposal reruns default to `gpt-5.3-codex-spark` through Codex and use the
 pooled action-conditioned JEPA checkpoint for scoring. Treat the current
 four-group export as a frontier shortlist with predicted deltas and observables,
 not as causal proof of what would definitely have happened.

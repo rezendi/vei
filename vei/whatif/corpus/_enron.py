@@ -3,13 +3,17 @@ from __future__ import annotations
 import json
 import logging
 from collections import Counter
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
 
 from ..cases import assign_case_ids, build_case_summaries
+from .._helpers import event_reference
 from ..models import (
     WhatIfArtifactFlags,
     WhatIfEvent,
+    WhatIfEventMatch,
+    WhatIfEventSearchResult,
     WhatIfScenario,
     WhatIfWorld,
     WhatIfWorldSummary,
@@ -19,7 +23,9 @@ from ..situations import build_situation_graph
 from ._aggregation import (
     build_actor_profiles,
     build_thread_summaries,
+    event_reason_labels,
     matches_custodian_filter,
+    _query_terms,
 )
 from ._time import safe_int, string_list, timestamp_to_ms, timestamp_to_text
 
@@ -224,6 +230,251 @@ def hydrate_event_snippets(
         snippet = content_by_id.get(event.event_id, event.snippet)
         hydrated.append(event.model_copy(update={"snippet": snippet}))
     return hydrated
+
+
+def search_enron_rosetta_events(
+    *,
+    rosetta_dir: str | Path,
+    actor: str | None = None,
+    participant: str | None = None,
+    thread_id: str | None = None,
+    event_type: str | None = None,
+    query: str | None = None,
+    flagged_only: bool = False,
+    limit: int = 20,
+    max_events: int | None = None,
+) -> WhatIfEventSearchResult:
+    try:
+        import pyarrow as pa
+        import pyarrow.compute as pc
+        import pyarrow.parquet as pq
+    except ImportError as exc:  # pragma: no cover - guarded by dependency
+        raise RuntimeError(
+            "pyarrow is required for `vei whatif` parquet loading"
+        ) from exc
+
+    base = Path(rosetta_dir).expanduser().resolve()
+    metadata_path = base / "enron_rosetta_events_metadata.parquet"
+    if not metadata_path.exists():
+        raise ValueError(f"metadata parquet not found: {metadata_path}")
+    table = pq.read_table(
+        metadata_path,
+        columns=[
+            "event_id",
+            "timestamp",
+            "actor_id",
+            "target_id",
+            "event_type",
+            "thread_task_id",
+            "artifacts",
+        ],
+    )
+    if max_events is not None:
+        table = table.sort_by(
+            [("timestamp", "ascending"), ("event_id", "ascending")]
+        ).slice(0, max(0, int(max_events)))
+
+    actor_token = (actor or "").strip().lower()
+    participant_token = (participant or "").strip().lower()
+    thread_token = (thread_id or "").strip()
+    event_type_token = (event_type or "").strip().lower()
+    query_token = (query or "").strip().lower()
+    query_terms = _query_terms(query_token)
+    effective_limit = max(1, int(limit))
+
+    text_columns = {
+        name: pc.utf8_lower(pc.cast(table[name], pa.string()))
+        for name in (
+            "event_id",
+            "actor_id",
+            "target_id",
+            "event_type",
+            "thread_task_id",
+            "artifacts",
+        )
+    }
+    mask = pc.equal(table["event_id"], table["event_id"])
+    if actor_token:
+        mask = pc.and_(
+            mask,
+            pc.match_substring(text_columns["actor_id"], actor_token),
+        )
+    if participant_token:
+        participant_mask = pc.or_(
+            pc.match_substring(text_columns["actor_id"], participant_token),
+            pc.match_substring(text_columns["target_id"], participant_token),
+        )
+        participant_mask = pc.or_(
+            participant_mask,
+            pc.match_substring(text_columns["artifacts"], participant_token),
+        )
+        mask = pc.and_(mask, participant_mask)
+    if thread_token:
+        mask = pc.and_(
+            mask,
+            pc.equal(pc.cast(table["thread_task_id"], pa.string()), thread_token),
+        )
+    if event_type_token:
+        mask = pc.and_(
+            mask,
+            pc.match_substring(text_columns["event_type"], event_type_token),
+        )
+    for term in query_terms:
+        term_mask = None
+        for column in text_columns.values():
+            column_mask = pc.match_substring(column, term)
+            term_mask = (
+                column_mask
+                if term_mask is None
+                else pc.or_(
+                    term_mask,
+                    column_mask,
+                )
+            )
+        if term_mask is not None:
+            mask = pc.and_(mask, term_mask)
+
+    raw_matches: list[tuple[WhatIfEvent, list[str], list[str], int, int]] = []
+    filtered_table = table.filter(mask)
+    total_match_count = int(pc.sum(mask).as_py() or 0)
+    if flagged_only:
+        candidate_rows = filtered_table.sort_by(
+            [("timestamp", "ascending"), ("event_id", "ascending")]
+        ).to_pylist()
+    else:
+        candidate_rows = (
+            filtered_table.sort_by(
+                [("timestamp", "ascending"), ("event_id", "ascending")]
+            )
+            .slice(0, effective_limit)
+            .to_pylist()
+        )
+
+    selected_rows: list[dict[str, Any]] = []
+    selected_events: list[WhatIfEvent] = []
+    selected_match_reasons: list[list[str]] = []
+    selected_reason_labels: list[list[str]] = []
+    flagged_match_count = 0
+    for row in candidate_rows:
+        match_reasons: list[str] = []
+        if actor_token:
+            match_reasons.append("actor")
+        if participant_token:
+            match_reasons.append("participant")
+        if thread_token:
+            match_reasons.append("thread")
+        if event_type_token:
+            match_reasons.append("event_type")
+        if query_terms:
+            match_reasons.append("query")
+
+        event = build_event(row, "")
+        if event is None:
+            continue
+        reason_labels = event_reason_labels(
+            event,
+            organization_domain=ENRON_DOMAIN,
+        )
+        if flagged_only and not reason_labels:
+            continue
+        if flagged_only:
+            match_reasons.append("flagged")
+            flagged_match_count += 1
+
+        if len(selected_events) >= effective_limit:
+            continue
+        selected_rows.append(row)
+        selected_events.append(event)
+        selected_match_reasons.append(match_reasons)
+        selected_reason_labels.append(reason_labels)
+
+    if flagged_only:
+        total_match_count = flagged_match_count
+
+    thread_event_counts: Counter[str] = Counter()
+    thread_actor_ids: dict[str, set[str]] = defaultdict(set)
+    selected_thread_ids = sorted(
+        {
+            str(row.get("thread_task_id", "") or row.get("event_id", "") or "")
+            for row in selected_rows
+            if str(row.get("thread_task_id", "") or row.get("event_id", "") or "")
+        }
+    )
+    if selected_thread_ids:
+        thread_mask = pc.is_in(
+            pc.cast(table["thread_task_id"], pa.string()),
+            value_set=pa.array(selected_thread_ids),
+        )
+        for row in table.filter(thread_mask).to_pylist():
+            event_id = str(row.get("event_id", "") or "")
+            thread_key = str(row.get("thread_task_id", "") or event_id)
+            thread_event_counts[thread_key] += 1
+            for participant_id in (
+                str(row.get("actor_id", "") or ""),
+                str(row.get("target_id", "") or ""),
+            ):
+                if participant_id:
+                    thread_actor_ids[thread_key].add(participant_id)
+    for event, row, match_reasons, reason_labels in zip(
+        selected_events,
+        selected_rows,
+        selected_match_reasons,
+        selected_reason_labels,
+        strict=True,
+    ):
+        event_id = str(row.get("event_id", "") or "")
+        thread_key = str(row.get("thread_task_id", "") or event_id)
+        raw_matches.append(
+            (
+                event,
+                match_reasons,
+                reason_labels,
+                thread_event_counts[thread_key],
+                len(thread_actor_ids[thread_key]),
+            )
+        )
+
+    hydrated_events = hydrate_event_snippets(
+        rosetta_dir=base,
+        events=[event for event, *_ in raw_matches],
+    )
+    matches = [
+        WhatIfEventMatch(
+            event=event_reference(event),
+            match_reasons=match_reasons,
+            reason_labels=reason_labels,
+            thread_event_count=thread_event_count,
+            participant_count=participant_count,
+        )
+        for event, (
+            _,
+            match_reasons,
+            reason_labels,
+            thread_event_count,
+            participant_count,
+        ) in zip(hydrated_events, raw_matches)
+    ]
+
+    filters: dict[str, str | int | bool] = {"limit": effective_limit}
+    if actor_token:
+        filters["actor"] = actor_token
+    if participant_token:
+        filters["participant"] = participant_token
+    if thread_token:
+        filters["thread_id"] = thread_token
+    if event_type_token:
+        filters["event_type"] = event_type_token
+    if query_token:
+        filters["query"] = query_token
+    if flagged_only:
+        filters["flagged_only"] = True
+    return WhatIfEventSearchResult(
+        source="enron",
+        filters=filters,
+        match_count=total_match_count,
+        truncated=total_match_count > len(matches),
+        matches=matches,
+    )
 
 
 def build_event(row: dict[str, Any], content: str) -> WhatIfEvent | None:

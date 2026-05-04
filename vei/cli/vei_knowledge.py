@@ -15,7 +15,7 @@ from vei.knowledge.api import (
     store_from_payload,
     utc_now_ms,
 )
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.workspace.api import (
     compile_workspace,
     load_workspace,
@@ -146,9 +146,9 @@ def compose(
         help="Composition mode: heuristic_baseline or llm.",
     ),
     provider: str = typer.Option(
-        "openai",
+        "",
         "--provider",
-        help="LLM provider when --mode llm is selected.",
+        help="LLM provider when --mode llm is selected. Defaults to .agents.yml interactive_provider.",
     ),
     model: str = typer.Option("", "--model", help="Model override."),
     output: str = typer.Option(
@@ -171,6 +171,10 @@ def compose(
         scenario_name=scenario_name or None,
         snapshot_path=overlay_path,
     )
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=provider,
+        model=model,
+    )
     result = compose_artifact(
         store,
         KnowledgeComposeRequest(
@@ -181,8 +185,8 @@ def compose(
             tags=list(tag),
             prompt=prompt,
             mode=mode,  # type: ignore[arg-type]
-            provider=provider,
-            model=model or default_model_for_provider(provider),
+            provider=resolved_provider,
+            model=resolved_model,
         ),
         now_ms=utc_now_ms(),
     )

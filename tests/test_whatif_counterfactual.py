@@ -10,7 +10,7 @@ import pytest
 
 from vei.dynamics.models import DynamicsResponse
 from vei.llm.providers import PlanResult, PlanUsage
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.whatif.filenames import HEURISTIC_FORECAST_FILE, REFERENCE_FORECAST_FILE
 from vei.whatif import (
     estimate_counterfactual_delta,
@@ -1022,7 +1022,7 @@ def test_run_ranked_counterfactual_experiment_writes_artifacts_and_keeps_shadow_
     rosetta_dir = tmp_path / "rosetta"
     _write_rosetta_fixture(rosetta_dir)
     world = load_world(source="enron", rosetta_dir=rosetta_dir)
-    expected_model = default_model_for_provider("openai")
+    expected_provider, expected_model = resolve_interactive_llm_defaults()
 
     def fake_run_llm_counterfactual(
         *_: object,
@@ -1031,7 +1031,7 @@ def test_run_ranked_counterfactual_experiment_writes_artifacts_and_keeps_shadow_
         model: str = "gpt-5",
         seed: int = 42042,
     ) -> WhatIfLLMReplayResult:
-        assert provider == "openai"
+        assert provider == expected_provider
         assert model == expected_model
         if "internal" in prompt.lower():
             return _make_llm_replay_result(
@@ -1135,8 +1135,9 @@ def test_run_ranked_counterfactual_experiment_can_use_ejepa_shadow_for_generic_a
         model: str = "gpt-5",
         seed: int = 42042,
     ) -> WhatIfLLMReplayResult:
-        assert provider == "openai"
-        assert model == default_model_for_provider("openai")
+        expected_provider, expected_model = resolve_interactive_llm_defaults()
+        assert provider == expected_provider
+        assert model == expected_model
         if "internal" in prompt.lower():
             return _make_llm_replay_result(
                 prompt=prompt,

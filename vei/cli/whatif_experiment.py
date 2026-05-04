@@ -5,7 +5,7 @@ from pathlib import Path
 
 import typer
 
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 
 from .whatif_shared import emit_payload, fail_if_artifact_validation_failed
 
@@ -69,12 +69,12 @@ def register_experiment_commands(app: typer.Typer) -> None:
             help="Forecast backend: auto | e_jepa | heuristic_baseline | reference",
         ),
         provider: str = typer.Option(
-            "openai",
-            help="LLM provider for the actor path",
+            "",
+            help="LLM provider for the actor path. Defaults to .agents.yml interactive_provider.",
         ),
         model: str = typer.Option(
-            default_model_for_provider("openai"),
-            help="LLM model for the actor path",
+            "",
+            help="LLM model for the actor path. Defaults to .agents.yml interactive_model.",
         ),
         seed: int = typer.Option(42042, help="Deterministic seed"),
         ejepa_epochs: int = typer.Option(
@@ -125,6 +125,10 @@ def register_experiment_commands(app: typer.Typer) -> None:
             resolved_forecast_backend = normalized_forecast_backend
         elif normalized_mode in {"e_jepa", "heuristic_baseline"}:
             resolved_forecast_backend = normalized_mode
+        resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+            provider=provider,
+            model=model,
+        )
         result = api.run_counterfactual_experiment(
             world,
             artifacts_root=artifacts_root,
@@ -136,8 +140,8 @@ def register_experiment_commands(app: typer.Typer) -> None:
             event_id=event_id,
             mode=normalized_mode,
             forecast_backend=resolved_forecast_backend,
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             seed=seed,
             ejepa_epochs=ejepa_epochs,
             ejepa_batch_size=ejepa_batch_size,
@@ -202,12 +206,12 @@ def register_experiment_commands(app: typer.Typer) -> None:
             help="How many LLM continuations to run per candidate",
         ),
         provider: str = typer.Option(
-            "openai",
-            help="LLM provider for the actor path",
+            "",
+            help="LLM provider for the actor path. Defaults to .agents.yml interactive_provider.",
         ),
         model: str = typer.Option(
-            default_model_for_provider("openai"),
-            help="LLM model for the actor path",
+            "",
+            help="LLM model for the actor path. Defaults to .agents.yml interactive_model.",
         ),
         seed: int = typer.Option(42042, help="Deterministic seed"),
         shadow_forecast_backend: str = typer.Option(
@@ -248,6 +252,10 @@ def register_experiment_commands(app: typer.Typer) -> None:
                 "shadow-forecast-backend must be one of: auto, e_jepa, heuristic_baseline, reference"
             )
         world = api.load_world(source=source, source_dir=source_dir)
+        resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+            provider=provider,
+            model=model,
+        )
         result = api.run_ranked_counterfactual_experiment(
             world,
             artifacts_root=artifacts_root,
@@ -259,8 +267,8 @@ def register_experiment_commands(app: typer.Typer) -> None:
             thread_id=thread_id,
             event_id=event_id,
             rollout_count=rollout_count,
-            provider=provider,
-            model=model,
+            provider=resolved_provider,
+            model=resolved_model,
             seed=seed,
             shadow_forecast_backend=(
                 None

@@ -270,7 +270,7 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
   - `GET /api/runs/diff-cross` — HTTP endpoint for cross-run snapshot comparison
   - `POST /api/missions/{run_id}/branch` with optional `snapshot_id` — fork from any snapshot via the UI
   - `GET /api/runs/{run_id}/policy-knobs` / `POST /api/runs/{run_id}/replay-with-policy` — service-ops policy replay endpoints used by the Studio outcome flow
-  - `GET /api/workspace/whatif` / `POST /api/workspace/whatif/search` / `POST /api/workspace/whatif/scene` / `POST /api/workspace/whatif/open` / `POST /api/workspace/whatif/run` / `POST /api/workspace/whatif/rank` — search-first historical what-if flow used by the Studio workspace view
+  - `GET /api/workspace/whatif` / `POST /api/workspace/whatif/search` / `POST /api/workspace/whatif/scene` / `POST /api/workspace/whatif/open` / `POST /api/workspace/whatif/run` / `POST /api/workspace/whatif/rank` — Studio historical what-if flow. Status returns public-safe `display`, `capabilities`, `defaults`, and developer-only `debug`; POST bodies use explicit `mode` (`live` or `saved`) plus `source` (`auto`, `enron`, `mail_archive`, or `company_history`). Live status warms a process-local `load_world()` cache so full-history search and branch actions reuse one loaded archive per source signature.
   - `GET /api/workspace/whatif/audit` / `POST /api/workspace/whatif/audit/{case_id}/{objective_pack_id}` — benchmark audit workflow used by the Studio audit view
   - Studio browser code is loaded as ordered plain scripts (`studio-core.js`, `studio-compare.js`, `studio-company.js`, `studio-whatif.js`, `studio-audit.js`, `studio-outcome.js`, `studio-bootstrap.js`) rather than one giant frontend file
 
@@ -373,16 +373,16 @@ For the canonical product demo, `vei project identity-demo` wraps that ladder in
 
 - `python -m vei.router`
   - stdio MCP transport
-  - agent-facing discoverability tools now include `vei.orientation`, `vei.structure_view`, `vei.capability_graphs`, `vei.graph_plan`, and `vei.graph_action`
+  - agent-facing discoverability tools include `vei.orientation`, `vei.structure_view`, `vei.capability_graphs`, `vei.graph_plan`, and `vei.graph_action`
 - `python -m vei.router.sse`
   - SSE MCP transport
 - Twin Gateway (FastAPI, default `:3012`)
   - provider-shaped HTTP routes (Slack Web API, Jira REST v3, MS Graph, Salesforce REST)
   - governor agent registration, event ingest, policy enforcement, approval endpoints, and connector status
-  - launched by `vei quickstart run`, `vei twin serve`, or `vei twin up`
+  - launched by `vei quickstart run`, `vei workspace twin serve`, or `vei workspace twin up`
 - `vei`
-  - unified CLI — all subcommands are now under `vei <group> <command>`
-  - `project`, `quickstart`, `contract`, `scenario`, `scenarios`, `run`, `inspect`, `showcase`, `studio`, `export`, `ui`, `world`, `blueprint`, `eval`, `llm-test`, `pack`, `twin`, `rollout`, `train`, `score`, `smoke`, `demo`, `det`, `context`, `knowledge`, `synthesize`, `release`, `report`, `visualize`, `whatif`
+  - unified CLI grouped under `vei <group> <command>`
+  - public groups: `admin`, `eval`, `inspect`, `knowledge`, `provenance`, `rollout`, `run`, `train`, `ui`, `whatif`, `wiki`, `workspace`
 
 ## Software Twins
 
@@ -458,7 +458,7 @@ VEI today is a deterministic enterprise simulator, governed twin, replay platfor
 - The reference backend (`vei.dynamics.backends.reference`) and benchmark bridge are real PyTorch forecasting paths trained on canonical event sequences with AUROC, ECE, business-head MAE, and held-out case evaluation.
 - Training reads `CanonicalEvent` streams, doctrine packet text, pre-branch state features, and candidate action text/schema. Raw provider payloads are not the training contract.
 - `vei whatif benchmark build-multitenant` builds the pooled learned world-model experiment from multiple company-history or public-news snapshots, with per-tenant temporal holdouts and leave-one-tenant-out roots.
-- `vei whatif benchmark strategic-state-points` is the counterfactual product surface. It asks an LLM or human for as-of strategic decisions and candidate actions from pre-as-of evidence only, then scores those actions through the learned future-vector path. Proposal generation defaults to Codex with `gpt-5.4`; override to newer Codex-supported models such as `gpt-5.5` when available. Direct-provider API calls are explicit opt-in with `VEI_STRATEGIC_PROPOSAL_BACKEND=api`.
+- `vei whatif benchmark strategic-state-points` is the counterfactual product surface. It asks an LLM or human for as-of strategic decisions and candidate actions from pre-as-of evidence only, then scores those actions through the learned future-vector path. Proposal generation defaults to Codex with `gpt-5.3-codex-spark`; direct-provider API calls are explicit opt-in with `VEI_STRATEGIC_PROPOSAL_BACKEND=api`.
 - The learned model predicts future heads and, for JEPA checkpoints, exposes a
   predicted latent future identifier for each branch. The default
   `balanced_operator_score`, frontier/display ranks, or objective views are
