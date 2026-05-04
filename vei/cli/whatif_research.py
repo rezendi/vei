@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 from importlib import import_module
 
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.whatif.api import load_world
 from vei.whatif.research import (
     list_research_packs,
@@ -58,12 +58,12 @@ def register_pack_commands(pack_app: typer.Typer) -> None:
             help="Research pack id or path to a research-pack JSON file",
         ),
         provider: str = typer.Option(
-            "openai",
-            help="LLM provider for the actor path",
+            "",
+            help="LLM provider for the actor path. Defaults to .agents.yml interactive_provider.",
         ),
         model: str = typer.Option(
-            default_model_for_provider("openai"),
-            help="LLM model for the actor path",
+            "",
+            help="LLM model for the actor path. Defaults to .agents.yml interactive_model.",
         ),
         ejepa_epochs: int = typer.Option(
             4, help="Training epochs for the JEPA backend"
@@ -95,14 +95,18 @@ def register_pack_commands(pack_app: typer.Typer) -> None:
         except KeyError as exc:
             raise typer.BadParameter(str(exc)) from exc
         world = load_world(source=source, source_dir=source_dir)
+        resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+            provider=provider,
+            model=model,
+        )
         try:
             result = cli_module.run_research_pack(
                 world,
                 artifacts_root=artifacts_root,
                 label=label,
                 research_pack=research_pack,
-                provider=provider,
-                model=model,
+                provider=resolved_provider,
+                model=resolved_model,
                 ejepa_epochs=ejepa_epochs,
                 ejepa_batch_size=ejepa_batch_size,
                 ejepa_force_retrain=ejepa_force_retrain,

@@ -58,6 +58,39 @@ def test_skillmap_cli_builds_outputs_and_validates(
     assert payload["draft_skill_count"] >= 1
 
 
+def test_skillmap_cli_reports_llm_failures_without_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot_path = _write_cli_snapshot(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    def fail_build(*_args: object, **_kwargs: object) -> CompanySkillMap:
+        raise TimeoutError("codex call timed out")
+
+    monkeypatch.setattr(
+        "vei.cli.vei_skillmap.build_company_skill_map_from_context_path",
+        fail_build,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build",
+            "--source-dir",
+            str(snapshot_path),
+            "--output",
+            str(tmp_path / "skillmap"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Skill map build failed: codex call timed out" in result.output
+    assert "--provider codex --model gpt-5.3-codex-spark" in result.output
+    assert "Traceback" not in result.output
+    assert (tmp_path / ".artifacts" / "skillmap_build_error.txt").exists()
+
+
 def test_skillmap_cli_refreshes_workspace_control_map(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

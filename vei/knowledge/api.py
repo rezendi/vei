@@ -17,7 +17,7 @@ from vei.events.api import (
     emit_event,
 )
 from vei.llm.providers import plan_once_with_usage
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 
 from .compaction import apply_compaction, classify_freshness
 from .models import (
@@ -581,6 +581,8 @@ def _heuristic_compose(
 
 
 def _llm_available(provider: str) -> bool:
+    if provider.strip().lower() == "codex":
+        return True
     provider_key_map = {
         "openai": ("OPENAI_API_KEY",),
         "anthropic": ("ANTHROPIC_API_KEY",),
@@ -684,10 +686,14 @@ def _llm_compose(
         },
         "required": ["title", "summary", "body", "sections", "claims"],
     }
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+        provider=request.provider,
+        model=request.model,
+    )
     result = _run_async(
         plan_once_with_usage(
-            provider=request.provider,
-            model=request.model or default_model_for_provider(request.provider),
+            provider=resolved_provider,
+            model=resolved_model,
             system=system,
             user=user,
             plan_schema=schema,
@@ -890,7 +896,9 @@ def compose_artifact(
         mode=mode,
         provider=(request.provider if mode == "llm" else None),
         model=(
-            request.model or default_model_for_provider(request.provider)
+            resolve_interactive_llm_defaults(
+                provider=request.provider, model=request.model
+            )[1]
             if mode == "llm"
             else None
         ),

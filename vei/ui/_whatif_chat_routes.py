@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -9,13 +8,18 @@ from vei.whatif.api import answer_saved_historical_chat
 
 from ._api_models import WhatIfChatRequest
 from ._whatif_helpers import can_use_saved_bundle
+from ._workspace_route_context import WorkspaceRouteContext
 
 
-def register_workspace_whatif_chat_route(app: FastAPI, root: Path) -> None:
+def register_workspace_whatif_chat_route(
+    app: FastAPI,
+    ctx: WorkspaceRouteContext,
+) -> None:
     @app.post("/api/workspace/whatif/chat")
     def api_workspace_whatif_chat(request: WhatIfChatRequest) -> JSONResponse:
         if not can_use_saved_bundle(
-            root,
+            ctx.root,
+            requested_mode=request.mode,
             requested_source=request.source,
             event_id=request.event_id,
             thread_id=request.thread_id,
@@ -29,7 +33,7 @@ def register_workspace_whatif_chat_route(app: FastAPI, root: Path) -> None:
             )
         try:
             response = answer_saved_historical_chat(
-                root,
+                ctx.root,
                 message=request.message,
                 selected_citation_ids=request.selected_citation_ids,
             )

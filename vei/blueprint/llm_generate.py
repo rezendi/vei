@@ -10,7 +10,7 @@ import asyncio
 import json
 from typing import Any
 
-from vei.project_settings import resolve_llm_defaults
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.blueprint.models import (
     BlueprintAsset,
     BlueprintCapabilityGraphsAsset,
@@ -86,7 +86,7 @@ Return ONLY the JSON object, no markdown fences, no commentary.
 def generate_blueprint_from_prompt(
     prompt: str,
     *,
-    provider: str = "openai",
+    provider: str | None = None,
     model: str | None = None,
 ) -> BlueprintAsset:
     """Generate a BlueprintAsset from a natural language description.
@@ -94,7 +94,7 @@ def generate_blueprint_from_prompt(
     Uses the configured LLM provider to produce structured scenario data,
     then maps it into a proper BlueprintAsset.
     """
-    resolved_provider, resolved_model = resolve_llm_defaults(
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
         provider=provider,
         model=model,
     )

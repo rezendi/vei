@@ -53,7 +53,7 @@ vei quickstart run    # launches Studio + Twin Gateway
 - a seeded workspace with visible activity already in motion
 - connection details in `.vei/quickstart.json`
 
-**Requirements:** Python 3.11, ports 3011 and 3012 free. `OPENAI_API_KEY` in `.env` only when you want live LLM runs. VEI also supports Anthropic, Google, OpenRouter, and local Codex CLI for live planning backends.
+**Requirements:** Python 3.11, ports 3011 and 3012 free. Local interactive LLM generation defaults to the Codex CLI (`gpt-5.3-codex-spark`). `OPENAI_API_KEY` in `.env` is only needed for explicit direct-provider runs or CI-style `llm-live`.
 
 For the optional JEPA backend by itself:
 
@@ -73,14 +73,16 @@ vei ui serve \
   --host 127.0.0.1 --port 3055
 ```
 
+Studio exposes the what-if surface as two explicit modes when both are available: **Live archive** for full-history exploration and **Saved reference** for the committed branch replay. Live archive remains the default and warms its loaded world in the UI server after status loads, so whole-history exploration stays visible without hiding behind the saved reference path.
+
 ![Decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-top.png)
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public history, Clearwater).
 
 ## CLI Map
 
-All commands live under `vei <group> <command>`. After the recent regroup the
-top-level surface looks like this (legacy names still work as hidden aliases):
+All commands live under `vei <group> <command>`. The top-level surface is
+grouped by product workflow:
 
 | Surface | Key commands |
 |---|---|
@@ -106,7 +108,7 @@ vei context normalize \
 vei context verify --snapshot _vei_out/yourco/context_snapshot.json
 
 # Or: onboard from live sources (GitHub, ClickUp, Gmail, Notion, etc.)
-vei twin onboard \
+vei workspace twin onboard \
   --root _vei_out/yourco/twin \
   --org "YourCo" --domain "yourco.example" \
   --provider gmail --provider notion \
@@ -145,6 +147,14 @@ vei knowledge skillmap build \
 vei knowledge skillmap refresh --workspace _vei_out/yourco \
   --output _vei_out/yourco/skill_map
 vei wiki refresh --workspace _vei_out/yourco
+```
+
+Hardening smokes for public-facing paths:
+
+```bash
+make codex-live-smoke      # Codex-backed planning, skillmap, and what-if smoke
+make worldmodel-smoke      # JEPA/reference world-model contracts
+make public-demo-smoke     # strangelab.ai/enron and /public-history assets
 ```
 
 Run a real LLM agent against the resulting twin via MCP stdio:

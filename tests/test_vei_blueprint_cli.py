@@ -7,7 +7,7 @@ import pytest
 import typer.testing
 
 from vei.cli.vei_blueprint import app
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 
 pytestmark = pytest.mark.integration
 
@@ -151,11 +151,11 @@ def test_vei_blueprint_orient_command() -> None:
 def test_vei_blueprint_generate_command_uses_stubbed_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    expected_model = default_model_for_provider("openai")
+    expected_provider, expected_model = resolve_interactive_llm_defaults()
 
     def _fake_call_llm(prompt: str, *, provider: str, model: str) -> dict[str, object]:
         assert "finance" in prompt.lower()
-        assert provider == "openai"
+        assert provider == expected_provider
         assert model == expected_model
         return {
             "company_name": "Northwind Finance",

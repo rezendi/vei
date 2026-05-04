@@ -7,6 +7,9 @@ llm:
   latency_p95_ms: 20000
   provider: openai
   model: "gpt-5-mini"
+  interactive_provider: codex
+  interactive_model: "gpt-5.3-codex-spark"
+  interactive_timeout_s: 240
   temperature: 0
   top_p: 1
   retry_attempts: 3

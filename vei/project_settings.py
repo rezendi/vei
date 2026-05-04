@@ -15,6 +15,9 @@ _DEFAULT_SETTINGS: dict[str, Any] = {
         "latency_p95_ms": 3000,
         "provider": "openai",
         "model": "gpt-5-mini",
+        "interactive_provider": "codex",
+        "interactive_model": "gpt-5.3-codex-spark",
+        "interactive_timeout_s": 240,
         "temperature": 0,
         "top_p": 1,
         "retry_attempts": 3,
@@ -27,6 +30,7 @@ _DEFAULT_SETTINGS: dict[str, Any] = {
 
 _PROVIDER_MODEL_FALLBACKS = {
     "openai": "gpt-5-mini",
+    "codex": "gpt-5.3-codex-spark",
     "anthropic": "claude-sonnet-4-5",
     "google": "gemini-2.5-pro",
     "openrouter": "grok-4",
@@ -143,6 +147,14 @@ def get_default_llm_provider(path: str | Path | None = None) -> str:
     return str(_DEFAULT_SETTINGS["llm"]["provider"])
 
 
+def get_default_interactive_llm_provider(path: str | Path | None = None) -> str:
+    llm = get_llm_defaults(path)
+    provider = llm.get("interactive_provider")
+    if isinstance(provider, str) and provider.strip():
+        return provider.strip().lower()
+    return str(_DEFAULT_SETTINGS["llm"]["interactive_provider"])
+
+
 def default_model_for_provider(provider: str, *, path: str | Path | None = None) -> str:
     normalized_provider = provider.strip().lower()
     llm = get_llm_defaults(path)
@@ -158,6 +170,22 @@ def default_model_for_provider(provider: str, *, path: str | Path | None = None)
         normalized_provider,
         str(_DEFAULT_SETTINGS["llm"]["model"]),
     )
+
+
+def default_interactive_model_for_provider(
+    provider: str, *, path: str | Path | None = None
+) -> str:
+    normalized_provider = provider.strip().lower()
+    llm = get_llm_defaults(path)
+    configured_provider = get_default_interactive_llm_provider(path)
+    configured_model = llm.get("interactive_model")
+    if (
+        normalized_provider == configured_provider
+        and isinstance(configured_model, str)
+        and configured_model.strip()
+    ):
+        return configured_model.strip()
+    return default_model_for_provider(normalized_provider, path=path)
 
 
 def resolve_llm_defaults(
@@ -179,17 +207,51 @@ def resolve_llm_defaults(
     return resolved_provider, resolved_model
 
 
+def resolve_interactive_llm_defaults(
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    path: str | Path | None = None,
+) -> tuple[str, str]:
+    resolved_provider = (
+        provider.strip().lower()
+        if isinstance(provider, str) and provider.strip()
+        else None
+    )
+    if not resolved_provider:
+        resolved_provider = get_default_interactive_llm_provider(path)
+    resolved_model = model.strip() if isinstance(model, str) and model.strip() else None
+    if not resolved_model:
+        resolved_model = default_interactive_model_for_provider(
+            resolved_provider, path=path
+        )
+    return resolved_provider, resolved_model
+
+
+def get_interactive_llm_timeout_s(path: str | Path | None = None) -> int:
+    raw = get_llm_defaults(path).get("interactive_timeout_s")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = int(_DEFAULT_SETTINGS["llm"]["interactive_timeout_s"])
+    return max(1, value)
+
+
 def get_llm_threshold(name: str, *, path: str | Path | None = None) -> Any:
     return get_llm_defaults(path).get(name)
 
 
 __all__ = [
     "default_model_for_provider",
+    "default_interactive_model_for_provider",
     "find_agents_file",
     "get_default_llm_provider",
+    "get_default_interactive_llm_provider",
+    "get_interactive_llm_timeout_s",
     "get_llm_defaults",
     "get_llm_threshold",
     "load_agents_settings",
     "repo_root",
+    "resolve_interactive_llm_defaults",
     "resolve_llm_defaults",
 ]

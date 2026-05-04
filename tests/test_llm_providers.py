@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from vei.llm import codex_cli
 from vei.llm import providers
+from vei.project_settings import resolve_interactive_llm_defaults
 
 
 def test_build_usage_uses_builtin_openai_pricing_when_env_is_absent(
@@ -40,7 +41,7 @@ def test_plan_once_with_usage_supports_codex_provider(monkeypatch) -> None:
     result = asyncio.run(
         providers.plan_once_with_usage(
             provider="codex",
-            model="gpt-5.4",
+            model="gpt-5.3-codex-spark",
             system="system prompt",
             user="user prompt",
             plan_schema={
@@ -56,8 +57,8 @@ def test_plan_once_with_usage_supports_codex_provider(monkeypatch) -> None:
 
     assert result.plan == {"tool": "tickets.list", "args": {"limit": 3}}
     assert result.usage.provider == "codex"
-    assert result.usage.model == "gpt-5.4"
-    assert recorded["model"] == "gpt-5.4"
+    assert result.usage.model == "gpt-5.3-codex-spark"
+    assert recorded["model"] == "gpt-5.3-codex-spark"
     assert recorded["timeout_s"] == 240
 
 
@@ -123,6 +124,26 @@ def test_codex_schema_normalizer_closes_objects_and_requires_all_keys() -> None:
     assert normalized["properties"]["args"]["required"] == ["doc_id"]
 
 
+def test_codex_schema_normalizer_requires_all_object_properties() -> None:
+    normalized = codex_cli._normalize_output_schema(
+        {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string"},
+                "optional_note": {"type": "string"},
+            },
+            "required": ["summary"],
+        }
+    )
+
+    assert normalized["additionalProperties"] is False
+    assert normalized["required"] == ["summary", "optional_note"]
+
+
+def test_interactive_llm_defaults_use_codex_spark() -> None:
+    assert resolve_interactive_llm_defaults() == ("codex", "gpt-5.3-codex-spark")
+
+
 def test_codex_exec_skips_ignore_rules_when_cli_does_not_support_it(
     monkeypatch,
 ) -> None:
@@ -140,7 +161,7 @@ def test_codex_exec_skips_ignore_rules_when_cli_does_not_support_it(
     monkeypatch.setattr(codex_cli.subprocess, "run", fake_run)
 
     result = codex_cli.run_codex_exec(
-        model="gpt-5.4",
+        model="gpt-5.3-codex-spark",
         prompt="Return a tool call.",
         output_schema={
             "type": "object",

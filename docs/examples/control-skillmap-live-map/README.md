@@ -14,21 +14,21 @@ mkdir -p _vei_out/control-skillmap-live-map
 cp docs/examples/control-skillmap-live-map/workspace/context_snapshot.json \
   _vei_out/control-skillmap-live-map/context_snapshot.json
 
-vei ingest agent-activity \
+vei workspace ingest agent-activity \
   --source agent_activity_jsonl \
   --path docs/examples/control-skillmap-live-map/agent_activity.jsonl \
   --workspace _vei_out/control-skillmap-live-map \
   --tenant-id apex.example \
   --format json
 
-vei skillmap refresh \
+vei knowledge skillmap refresh \
   --workspace _vei_out/control-skillmap-live-map \
   --output _vei_out/control-skillmap-live-map/skill_map \
   --limit 4 \
   --no-replay
 ```
 
-`vei skillmap refresh` reads the workspace context and imported Control events
+`vei knowledge skillmap refresh` reads the workspace context and imported Control events
 as one canonical event spine, preserves the previous map from the output
 directory when one exists, writes refreshed draft skills, and leaves a
 `control_evidence_pack.json` beside the skill-map reports. The example uses

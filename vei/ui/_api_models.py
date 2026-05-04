@@ -3,12 +3,15 @@ from __future__ import annotations
 import http.client
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import (
+    default_interactive_model_for_provider,
+    get_default_interactive_llm_provider,
+)
 from vei.whatif.filenames import EPISODE_MANIFEST_FILE
 from vei.whatif.api import (
     load_episode_manifest,
@@ -106,8 +109,16 @@ class OrchestratorApprovalDecisionRequest(BaseModel):
     decision_note: str | None = None
 
 
-class WhatIfSearchRequest(BaseModel):
-    source: str = "auto"
+WhatIfDataMode = Literal["live", "saved"]
+WhatIfSourceId = Literal["auto", "enron", "mail_archive", "company_history"]
+
+
+class WhatIfModeSourceRequest(BaseModel):
+    mode: WhatIfDataMode = "live"
+    source: WhatIfSourceId = "auto"
+
+
+class WhatIfSearchRequest(WhatIfModeSourceRequest):
     actor: str | None = None
     participant: str | None = None
     thread_id: str | None = None
@@ -118,39 +129,39 @@ class WhatIfSearchRequest(BaseModel):
     max_events: int | None = None
 
 
-class WhatIfOpenRequest(BaseModel):
-    source: str = "auto"
+class WhatIfOpenRequest(WhatIfModeSourceRequest):
     event_id: str | None = None
     thread_id: str | None = None
     label: str | None = None
     max_events: int | None = None
 
 
-class WhatIfSceneRequest(BaseModel):
-    source: str = "auto"
+class WhatIfSceneRequest(WhatIfModeSourceRequest):
     event_id: str | None = None
     thread_id: str | None = None
     max_events: int | None = None
 
 
-class WhatIfChatRequest(BaseModel):
-    source: str = "auto"
+class WhatIfChatRequest(WhatIfModeSourceRequest):
     message: str
     event_id: str | None = None
     thread_id: str | None = None
     selected_citation_ids: list[str] = Field(default_factory=list)
 
 
-class WhatIfRunRequest(BaseModel):
-    source: str = "auto"
+class WhatIfRunRequest(WhatIfModeSourceRequest):
     prompt: str
     label: str
     event_id: str | None = None
     thread_id: str | None = None
-    mode: WhatIfExperimentMode = "both"
+    experiment_mode: WhatIfExperimentMode = "both"
     max_events: int | None = None
-    model: str = Field(default_factory=lambda: default_model_for_provider("openai"))
-    provider: str = "openai"
+    model: str = Field(
+        default_factory=lambda: default_interactive_model_for_provider(
+            get_default_interactive_llm_provider()
+        )
+    )
+    provider: str = Field(default_factory=get_default_interactive_llm_provider)
     ejepa_epochs: int = 4
     ejepa_batch_size: int = 64
     ejepa_force_retrain: bool = False
@@ -162,8 +173,7 @@ class WhatIfRankCandidateRequest(BaseModel):
     prompt: str
 
 
-class WhatIfRankRequest(BaseModel):
-    source: str = "auto"
+class WhatIfRankRequest(WhatIfModeSourceRequest):
     label: str
     objective_pack_id: WhatIfObjectivePackId = "contain_exposure"
     candidates: list[WhatIfRankCandidateRequest]
@@ -171,8 +181,12 @@ class WhatIfRankRequest(BaseModel):
     thread_id: str | None = None
     rollout_count: int = 4
     max_events: int | None = None
-    model: str = Field(default_factory=lambda: default_model_for_provider("openai"))
-    provider: str = "openai"
+    model: str = Field(
+        default_factory=lambda: default_interactive_model_for_provider(
+            get_default_interactive_llm_provider()
+        )
+    )
+    provider: str = Field(default_factory=get_default_interactive_llm_provider)
     shadow_forecast_backend: str = "auto"
     ejepa_epochs: int = 4
     ejepa_batch_size: int = 64

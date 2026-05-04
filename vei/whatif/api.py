@@ -36,6 +36,7 @@ from .counterfactual import (
     estimate_counterfactual_delta,
     run_llm_counterfactual,
 )
+from .corpus._enron import search_enron_rosetta_events
 from .news_state_points import (
     NewsStatePointCandidateInput,
     NewsStatePointRunResult,
@@ -226,6 +227,7 @@ __all__ = [
     "run_research_pack",
     "run_whatif",
     "score_historical_tail",
+    "search_enron_rosetta_events",
     "search_events",
     "select_specific_event",
     "train_branch_point_benchmark_model",

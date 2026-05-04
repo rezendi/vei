@@ -38,7 +38,7 @@ def test_skill_map_builds_shadow_skills_from_context_bundle(
     assert skill_map.organization_name == "Acme Ops"
     assert skill_map.canonical_event_count >= 3
     assert skill_map.metadata["skill_extractor"] == "llm"
-    assert skill_map.metadata["llm_provider"] == "openai"
+    assert skill_map.metadata["llm_provider"] == "codex"
     assert skill_map.metadata["llm_accepted_skill_count"] == 1
     assert skill_map.validation.ok is True
     assert all(skill.status == "draft" for skill in skill_map.skills)

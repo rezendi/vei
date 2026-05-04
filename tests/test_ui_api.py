@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event
+from time import monotonic, sleep
 from types import SimpleNamespace
 
 from fastapi import HTTPException
@@ -29,7 +31,9 @@ from vei.twin.models import (
 from vei.run.api import launch_workspace_run
 from vei.twin.models import CompatibilitySurfaceSpec, WorkspaceGovernorStatus
 from vei.ui import api as ui_api
-from vei.ui import _workspace_routes as workspace_routes
+from vei.ui import _whatif_routes as whatif_routes
+from vei.ui import _workspace_governor_routes as workspace_governor_routes
+from vei.ui import _workspace_route_context as workspace_route_context
 from vei.workspace.api import (
     create_workspace_from_template,
     generate_workspace_scenarios_from_import,
@@ -757,6 +761,148 @@ def test_ui_api_whatif_search_and_open_routes(tmp_path: Path, monkeypatch) -> No
     assert open_payload["materialization"]["future_event_count"] == 2
 
 
+def test_ui_api_whatif_status_warms_and_reuses_live_world(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    rosetta_dir = tmp_path / "rosetta"
+    _write_rosetta_fixture(rosetta_dir)
+    monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+    monkeypatch.setattr(workspace_route_context, "Thread", _ImmediateThread)
+    real_load_world = workspace_route_context.load_world
+    calls = []
+
+    def counted_load_world(**kwargs):
+        calls.append(kwargs)
+        return real_load_world(**kwargs)
+
+    monkeypatch.setattr(workspace_route_context, "load_world", counted_load_world)
+
+    client = TestClient(ui_api.create_ui_app(root))
+
+    status_response = client.get("/api/workspace/whatif")
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["debug"]["world_cache"]["state"] == "ready"
+
+    search_response = client.post(
+        "/api/workspace/whatif/search",
+        json={"mode": "live", "source": "enron", "query": "draft term sheet"},
+    )
+    assert search_response.status_code == 200
+    open_response = client.post(
+        "/api/workspace/whatif/open",
+        json={
+            "mode": "live",
+            "source": "enron",
+            "event_id": "evt-001",
+            "label": "term-sheet",
+        },
+    )
+    assert open_response.status_code == 200
+    assert len(calls) == 1
+
+
+def test_ui_api_whatif_status_reports_live_warming(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    rosetta_dir = tmp_path / "rosetta"
+    _write_rosetta_fixture(rosetta_dir)
+    monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+    release = Event()
+    real_load_world = workspace_route_context.load_world
+
+    def slow_load_world(**kwargs):
+        release.wait(timeout=2)
+        return real_load_world(**kwargs)
+
+    monkeypatch.setattr(workspace_route_context, "load_world", slow_load_world)
+
+    client = TestClient(ui_api.create_ui_app(root))
+    try:
+        status_response = client.get("/api/workspace/whatif")
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        assert status_payload["display"]["label"] == "Live archive warming"
+        assert "First search may take a moment" in status_payload["display"]["detail"]
+        assert status_payload["debug"]["world_cache"]["state"] == "warming"
+    finally:
+        release.set()
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        payload = client.get("/api/workspace/whatif").json()
+        if payload["debug"]["world_cache"]["state"] == "ready":
+            break
+        sleep(0.01)
+
+
+def test_ui_api_whatif_enron_search_uses_fast_metadata_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    rosetta_dir = tmp_path / "rosetta"
+    _write_rosetta_fixture(rosetta_dir)
+    monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+
+    def blocked_load_world(**_kwargs):
+        raise AssertionError("search should not load the full Enron world")
+
+    monkeypatch.setattr(workspace_route_context, "load_world", blocked_load_world)
+    client = TestClient(ui_api.create_ui_app(root))
+
+    search_response = client.post(
+        "/api/workspace/whatif/search",
+        json={"mode": "live", "source": "enron", "query": "Jeff Skilling draft"},
+    )
+
+    assert search_response.status_code == 200
+    payload = search_response.json()
+    assert payload["source"] == "enron"
+    assert payload["match_count"] == 1
+    assert payload["matches"][0]["event"]["event_id"] == "evt-001"
+    assert (
+        payload["matches"][0]["event"]["snippet"]
+        == "External draft attached for review."
+    )
+
+
+def test_studio_whatif_mode_switch_resets_branch_scene_state() -> None:
+    studio_whatif = (
+        Path(__file__).resolve().parents[1]
+        / "vei"
+        / "ui"
+        / "static"
+        / "studio-whatif.js"
+    ).read_text(encoding="utf-8")
+    mode_handler = studio_whatif[
+        studio_whatif.index('querySelectorAll("[data-whatif-mode]")') :
+    ]
+
+    assert "state.whatIfSelectedEvent = null;" in mode_handler
+    assert "state.whatIfScene = null;" in mode_handler
+    assert "state.whatIfSceneLoading = false;" in mode_handler
+
+
 def test_ui_api_whatif_routes_support_generic_mail_archive(
     tmp_path: Path,
     monkeypatch,
@@ -777,8 +923,14 @@ def test_ui_api_whatif_routes_support_generic_mail_archive(
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["available"] is True
+    assert status_payload["mode"] == "live"
     assert status_payload["source"] == "mail_archive"
-    assert status_payload["source_dir"] == str(archive_path.resolve())
+    assert status_payload["debug"]["source_dir"] == str(archive_path.resolve())
+    assert status_payload["display"]["detail"].startswith("Historical mail archive")
+    assert status_payload["capabilities"]["live"] is True
+    assert "source_dir" not in status_payload
+    assert "saved_bundle_active" not in status_payload
+    assert "default_provider" not in status_payload
 
     search_response = client.post(
         "/api/workspace/whatif/search",
@@ -821,7 +973,7 @@ def test_ui_api_whatif_routes_support_company_history_bundle(
     status_payload = status_response.json()
     assert status_payload["available"] is True
     assert status_payload["source"] == "company_history"
-    assert status_payload["source_dir"] == str(snapshot_path.resolve())
+    assert status_payload["debug"]["source_dir"] == str(snapshot_path.resolve())
 
     search_response = client.post(
         "/api/workspace/whatif/search",
@@ -896,9 +1048,9 @@ def test_ui_api_whatif_timeline_supports_company_history_filters(
     assert all(row["case_id"] == "case:LEGAL-7" for row in payload["rows"])
 
     status_payload = client.get("/api/workspace/whatif").json()
-    assert status_payload["timeline_available"] is True
-    assert status_payload["timeline_readiness"]["available"] is True
-    assert status_payload["timeline_readiness"]["surface_count"] >= 4
+    assert status_payload["capabilities"]["timeline"] is True
+    assert status_payload["debug"]["timeline_readiness"]["available"] is True
+    assert status_payload["debug"]["timeline_readiness"]["surface_count"] >= 4
 
 
 def test_ui_api_whatif_scene_route_returns_playable_enron_decision(
@@ -1051,7 +1203,7 @@ def test_ui_api_historical_workspace_prefers_saved_mail_archive(
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["source"] == "mail_archive"
-    assert status_payload["source_dir"].endswith("context_snapshot.json")
+    assert status_payload["debug"]["source_dir"].endswith("context_snapshot.json")
 
     search_response = client.post(
         "/api/workspace/whatif/search",
@@ -1130,7 +1282,7 @@ def test_ui_api_historical_workspace_prefers_manifest_rosetta_dir(
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["source"] == "enron"
-    assert status_payload["source_dir"] == str(primary_rosetta.resolve())
+    assert status_payload["debug"]["source_dir"] == str(primary_rosetta.resolve())
 
 
 def test_ui_api_saved_enron_workspace_without_rosetta_uses_saved_context_snapshot(
@@ -1147,7 +1299,7 @@ def test_ui_api_saved_enron_workspace_without_rosetta_uses_saved_context_snapsho
         source_kind="vertical",
         source_ref="b2b_saas",
     )
-    snapshot_path = _write_saved_context_snapshot(workspace_root)
+    _write_saved_context_snapshot(workspace_root)
     episode = WhatIfEpisodeManifest(
         source="enron",
         source_dir="/missing/rosetta",
@@ -1202,12 +1354,14 @@ def test_ui_api_saved_enron_workspace_without_rosetta_uses_saved_context_snapsho
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["available"] is True
-    assert status_payload["source"] == "mail_archive"
-    assert status_payload["source_dir"] == str(snapshot_path.resolve())
+    assert status_payload["mode"] == "saved"
+    assert status_payload["source"] == "enron"
+    assert status_payload["capabilities"]["saved"] is True
 
     scene_response = client.post(
         "/api/workspace/whatif/scene",
         json={
+            "mode": "saved",
             "source": status_payload["source"],
             "event_id": "enron_bcda1b925800af8c",
             "thread_id": "thr-master-agreement",
@@ -1274,8 +1428,9 @@ def test_ui_api_saved_bundle_routes_recheck_bundle_after_app_start(
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["available"] is True
-    assert status_payload["source"] == "mail_archive"
-    assert status_payload["source_dir"] == str(snapshot_path.resolve())
+    assert status_payload["mode"] == "saved"
+    assert status_payload["source"] == "enron"
+    assert status_payload["capabilities"]["saved"] is True
 
     bundle_root = workspace_root.parent
     (bundle_root / "whatif_experiment_result.json").write_text(
@@ -1339,6 +1494,7 @@ def test_ui_api_saved_bundle_routes_recheck_bundle_after_app_start(
     open_response = client.post(
         "/api/workspace/whatif/open",
         json={
+            "mode": "saved",
             "source": status_payload["source"],
             "event_id": "enron_bcda1b925800af8c",
             "thread_id": "thr-master-agreement",
@@ -1354,6 +1510,7 @@ def test_ui_api_saved_bundle_routes_recheck_bundle_after_app_start(
     run_response = client.post(
         "/api/workspace/whatif/run",
         json={
+            "mode": "saved",
             "source": status_payload["source"],
             "event_id": "enron_bcda1b925800af8c",
             "thread_id": "thr-master-agreement",
@@ -1369,6 +1526,7 @@ def test_ui_api_saved_bundle_routes_recheck_bundle_after_app_start(
     rank_response = client.post(
         "/api/workspace/whatif/rank",
         json={
+            "mode": "saved",
             "source": status_payload["source"],
             "event_id": "enron_bcda1b925800af8c",
             "thread_id": "thr-master-agreement",
@@ -1500,12 +1658,14 @@ def test_ui_api_saved_bundle_routes_support_non_enron_saved_branches(
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["available"] is True
+    assert status_payload["mode"] == "saved"
     assert status_payload["source"] == "mail_archive"
-    assert status_payload["source_dir"] == str(workspace_root.resolve())
+    assert status_payload["capabilities"]["saved"] is True
 
     open_response = client.post(
         "/api/workspace/whatif/open",
         json={
+            "mode": "saved",
             "source": "auto",
             "event_id": "py-msg-002",
             "thread_id": "py-legal-001",
@@ -1520,6 +1680,7 @@ def test_ui_api_saved_bundle_routes_support_non_enron_saved_branches(
     run_response = client.post(
         "/api/workspace/whatif/run",
         json={
+            "mode": "saved",
             "source": "auto",
             "event_id": "py-msg-002",
             "thread_id": "py-legal-001",
@@ -1534,6 +1695,7 @@ def test_ui_api_saved_bundle_routes_support_non_enron_saved_branches(
     rank_response = client.post(
         "/api/workspace/whatif/rank",
         json={
+            "mode": "saved",
             "source": "auto",
             "event_id": "py-msg-002",
             "thread_id": "py-legal-001",
@@ -1627,7 +1789,7 @@ def test_ui_api_saved_enron_workspace_prefers_live_rosetta_for_auto_actions(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_ranked_counterfactual_experiment",
         fake_run_ranked_counterfactual_experiment,
     )
@@ -1639,19 +1801,19 @@ def test_ui_api_saved_enron_workspace_prefers_live_rosetta_for_auto_actions(
     status_payload = status_response.json()
     assert status_payload["available"] is True
     assert status_payload["source"] == "enron"
-    assert status_payload["source_dir"] == str(rosetta_dir.resolve())
+    assert status_payload["debug"]["source_dir"] == str(rosetta_dir.resolve())
 
     scene_response = client.post(
         "/api/workspace/whatif/scene",
         json={
             "source": "auto",
-            "event_id": "enron_bcda1b925800af8c",
-            "thread_id": "thr-master-agreement",
+            "event_id": "evt-001",
+            "thread_id": "thr-external",
         },
     )
     assert scene_response.status_code == 200
     scene_payload = scene_response.json()
-    assert scene_payload["branch_event_id"] == "enron_bcda1b925800af8c"
+    assert scene_payload["branch_event"]["event_id"] == "evt-001"
 
     rank_response = client.post(
         "/api/workspace/whatif/rank",
@@ -1742,7 +1904,7 @@ def test_ui_api_saved_bundle_respects_explicit_company_history_source(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "materialize_episode",
         fake_materialize_episode,
     )
@@ -1815,7 +1977,7 @@ def test_ui_api_whatif_run_route_returns_experiment_payload(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_counterfactual_experiment",
         fake_run_counterfactual_experiment,
     )
@@ -1866,7 +2028,7 @@ def test_ui_api_whatif_run_route_respects_anthropic_key(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_counterfactual_experiment",
         fake_run_counterfactual_experiment,
     )
@@ -1875,7 +2037,7 @@ def test_ui_api_whatif_run_route_respects_anthropic_key(
 
     status_response = client.get("/api/workspace/whatif")
     assert status_response.status_code == 200
-    assert status_response.json()["llm_available"] is True
+    assert status_response.json()["capabilities"]["llm"] is True
 
     response = client.post(
         "/api/workspace/whatif/run",
@@ -1884,7 +2046,8 @@ def test_ui_api_whatif_run_route_respects_anthropic_key(
             "event_id": "evt-001",
             "label": "anthropic alternate path",
             "prompt": "What if Jeff had kept the term sheet internal?",
-            "mode": "llm",
+            "mode": "live",
+            "experiment_mode": "llm",
             "provider": "anthropic",
         },
     )
@@ -1911,21 +2074,59 @@ def test_ui_api_whatif_status_lists_available_providers(
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test-key")
+    monkeypatch.setattr(workspace_route_context.shutil, "which", lambda _cmd: None)
 
     client = TestClient(ui_api.create_ui_app(root))
     payload = client.get("/api/workspace/whatif").json()
 
-    assert payload["llm_available"] is True
-    assert payload["available_providers"] == ["anthropic"]
-    assert payload["default_provider"] == "anthropic"
-    assert payload["default_model"]
+    assert payload["capabilities"]["llm"] is True
+    assert payload["debug"]["available_providers"] == ["anthropic"]
+    assert payload["defaults"]["provider"] == "anthropic"
+    assert payload["defaults"]["model"]
+
+
+def test_ui_api_whatif_status_defaults_to_codex_when_cli_is_available(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "workspace"
+    create_workspace_from_template(
+        root=root,
+        source_kind="example",
+        source_ref="acquired_user_cutover",
+    )
+    rosetta_dir = tmp_path / "rosetta"
+    _write_rosetta_fixture(rosetta_dir)
+    monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+    monkeypatch.setattr(workspace_route_context.shutil, "which", lambda _cmd: None)
+    for env_name in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENROUTER_API_KEY",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setattr(
+        workspace_route_context.shutil,
+        "which",
+        lambda cmd: "/usr/local/bin/codex" if cmd == "codex" else None,
+    )
+
+    client = TestClient(ui_api.create_ui_app(root))
+    payload = client.get("/api/workspace/whatif").json()
+
+    assert payload["capabilities"]["llm"] is True
+    assert payload["debug"]["available_providers"] == ["codex"]
+    assert payload["defaults"]["provider"] == "codex"
+    assert payload["defaults"]["model"] == "gpt-5.3-codex-spark"
 
 
 def test_ui_api_whatif_run_route_falls_back_to_available_provider(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """Default provider is openai, but only anthropic key is set.
+    """Default interactive provider is unavailable, but anthropic is set.
 
     The server must transparently swap to anthropic instead of silently
     downgrading to heuristic_baseline.
@@ -1945,6 +2146,7 @@ def test_ui_api_whatif_run_route_falls_back_to_available_provider(
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test-key")
+    monkeypatch.setattr(workspace_route_context.shutil, "which", lambda _cmd: None)
 
     captured: dict[str, object] = {}
 
@@ -1959,7 +2161,7 @@ def test_ui_api_whatif_run_route_falls_back_to_available_provider(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_counterfactual_experiment",
         fake_run_counterfactual_experiment,
     )
@@ -1973,8 +2175,9 @@ def test_ui_api_whatif_run_route_falls_back_to_available_provider(
             "event_id": "evt-001",
             "label": "fallback path",
             "prompt": "What if Jeff had kept the term sheet internal?",
-            "mode": "both",
-            # Note: no provider override, so default is "openai"
+            "mode": "live",
+            "experiment_mode": "both",
+            # Note: no provider override, and Codex is unavailable in this test.
         },
     )
 
@@ -1998,6 +2201,7 @@ def test_ui_api_whatif_run_route_downgrades_to_heuristic_when_no_key(
     rosetta_dir = tmp_path / "rosetta"
     _write_rosetta_fixture(rosetta_dir)
     monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+    monkeypatch.setattr(workspace_route_context.shutil, "which", lambda _cmd: None)
     for env_name in (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
@@ -2020,16 +2224,16 @@ def test_ui_api_whatif_run_route_downgrades_to_heuristic_when_no_key(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_counterfactual_experiment",
         fake_run_counterfactual_experiment,
     )
 
     client = TestClient(ui_api.create_ui_app(root))
     status = client.get("/api/workspace/whatif").json()
-    assert status["llm_available"] is False
-    assert status["available_providers"] == []
-    assert status["default_provider"] is None
+    assert status["capabilities"]["llm"] is False
+    assert status["debug"]["available_providers"] == []
+    assert status["defaults"]["provider"] is None
 
     response = client.post(
         "/api/workspace/whatif/run",
@@ -2038,7 +2242,8 @@ def test_ui_api_whatif_run_route_downgrades_to_heuristic_when_no_key(
             "event_id": "evt-001",
             "label": "no key path",
             "prompt": "What if Jeff had kept the term sheet internal?",
-            "mode": "both",
+            "mode": "live",
+            "experiment_mode": "both",
         },
     )
 
@@ -2131,7 +2336,7 @@ def test_ui_api_whatif_rank_route_returns_ranked_payload(
         )
 
     monkeypatch.setattr(
-        workspace_routes,
+        whatif_routes,
         "run_ranked_counterfactual_experiment",
         fake_run_ranked_counterfactual_experiment,
     )
@@ -2178,6 +2383,7 @@ def test_ui_api_whatif_rank_route_requires_llm_key(
     rosetta_dir = tmp_path / "rosetta"
     _write_rosetta_fixture(rosetta_dir)
     monkeypatch.setenv("VEI_WHATIF_ROSETTA_DIR", str(rosetta_dir))
+    monkeypatch.setattr(workspace_route_context.shutil, "which", lambda _cmd: None)
     for env_name in (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
@@ -2862,10 +3068,10 @@ def test_ui_api_live_source_ignores_malformed_manifest_without_saved_bundle(
     payload = response.json()
     assert payload["available"] is True
     assert payload["source"] == "company_history"
-    assert payload["source_dir"] == str(snapshot_path.resolve())
-    assert payload["saved_bundle_active"] is False
-    assert payload["timeline_available"] is True
-    assert payload["timeline_readiness"]["available"] is True
+    assert payload["debug"]["source_dir"] == str(snapshot_path.resolve())
+    assert payload["mode"] == "live"
+    assert payload["capabilities"]["timeline"] is True
+    assert payload["debug"]["timeline_readiness"]["available"] is True
 
 
 def test_ui_api_supports_benchmark_audit_root(tmp_path: Path) -> None:
@@ -3315,9 +3521,9 @@ def test_ui_api_serves_workforce_payload_from_gateway_fallback(
     def fake_gateway(*_args, **_kwargs):
         raise HTTPException(status_code=503, detail="gateway unavailable")
 
-    monkeypatch.setattr(workspace_routes, "gateway_json_request", fake_gateway)
+    monkeypatch.setattr(workspace_governor_routes, "gateway_json_request", fake_gateway)
     monkeypatch.setattr(
-        workspace_routes,
+        workspace_governor_routes,
         "load_workspace_workforce_payload",
         lambda _root: expected,
     )

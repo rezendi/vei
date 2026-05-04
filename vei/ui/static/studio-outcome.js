@@ -684,6 +684,14 @@ async function loadWorkspace() {
   state.generatedImportScenarios = generatedImportScenarios;
   state.provenanceIndex = provenanceIndex;
   state.whatIfStatus = whatIfStatus;
+  const whatIfCapabilities = state.whatIfStatus?.capabilities || {};
+  if (state.whatIfMode === "saved" && !whatIfCapabilities.saved) {
+    state.whatIfMode = whatIfCapabilities.live ? "live" : state.whatIfStatus?.mode || "live";
+  } else if (state.whatIfMode === "live" && !whatIfCapabilities.live && whatIfCapabilities.saved) {
+    state.whatIfMode = "saved";
+  } else if (!state.whatIfMode) {
+    state.whatIfMode = state.whatIfStatus?.mode || "live";
+  }
   state.publicDemoStatus = publicDemoStatus;
   window.VEIStudio?.bus?.emit("workspace-loaded", {
     workspace: state.workspace,
@@ -692,10 +700,10 @@ async function loadWorkspace() {
     publicDemoStatus: state.publicDemoStatus,
   });
   const evalProviderInput = document.getElementById("eval-provider-input");
-  if (evalProviderInput && state.whatIfStatus?.default_provider) {
+  if (evalProviderInput && state.whatIfStatus?.defaults?.provider) {
     const currentValue = evalProviderInput.value?.trim() || "";
     if (!currentValue || currentValue === "openai") {
-      evalProviderInput.value = state.whatIfStatus.default_provider;
+      evalProviderInput.value = state.whatIfStatus.defaults.provider;
     }
   }
   renderWorkspaceHero();

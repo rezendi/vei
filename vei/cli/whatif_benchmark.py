@@ -268,14 +268,14 @@ def register_benchmark_commands(benchmark_app: typer.Typer) -> None:
         candidate_mode: str = typer.Option(
             "template",
             help=(
-                "Candidate generation mode: template | llm. API LLM mode is "
-                "explicit opt-in; Codex-session models must be tested through Codex."
+                "Candidate generation mode: template | llm. LLM mode defaults "
+                "to a Codex-session model."
             ),
         ),
         candidate_model: str = typer.Option(
-            "gpt-5-mini",
+            "gpt-5.3-codex-spark",
             help=(
-                "Locked API model used to generate broad candidate actions when "
+                "Locked model used to generate broad candidate actions when "
                 "candidate-mode=llm"
             ),
         ),
@@ -595,7 +595,7 @@ def register_benchmark_commands(benchmark_app: typer.Typer) -> None:
     @benchmark_app.command("judge")
     def judge_benchmark_command(
         root: Path = typer.Option(..., help="Benchmark build root"),
-        model: str = typer.Option("gpt-4.1-mini", help="Locked LLM judge model"),
+        model: str = typer.Option("gpt-5.3-codex-spark", help="Locked LLM judge model"),
         judge_id: str = typer.Option(
             "benchmark_llm_judge",
             help="Judge id written into the ranking artifacts",

@@ -21,7 +21,7 @@ from vei.knowledge.api import (
     store_from_payload,
     supersede,
 )
-from vei.project_settings import default_model_for_provider
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.world.api import Scenario
 
 from .errors import MCPError
@@ -241,10 +241,14 @@ class KnowledgeSim:
         seed_outline: Optional[List[str]] = None,
         prompt: str = "",
         mode: str = "heuristic_baseline",
-        provider: str = "openai",
+        provider: str = "",
         model: str = "",
         limit: int = 8,
     ) -> Dict[str, Any]:
+        resolved_provider, resolved_model = resolve_interactive_llm_defaults(
+            provider=provider,
+            model=model,
+        )
         try:
             request = KnowledgeComposeRequest(
                 target=target,  # type: ignore[arg-type]
@@ -256,8 +260,8 @@ class KnowledgeSim:
                 seed_outline=list(seed_outline or []),
                 prompt=prompt,
                 mode=mode,  # type: ignore[arg-type]
-                provider=provider,
-                model=model or default_model_for_provider(provider),
+                provider=resolved_provider,
+                model=resolved_model,
                 limit=limit,
             )
         except ValidationError as exc:
@@ -440,7 +444,7 @@ class KnowledgeToolProvider(PrefixToolProvider):
                 seed_outline=args.get("seed_outline"),
                 prompt=str(args.get("prompt", "")),
                 mode=str(args.get("mode", "heuristic_baseline")),
-                provider=str(args.get("provider", "openai")),
+                provider=str(args.get("provider", "")),
                 model=str(args.get("model", "")),
                 limit=int(args.get("limit", 8) or 8),
             )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import traceback
 
 import typer
 
@@ -59,7 +60,7 @@ def build(
     model: str | None = typer.Option(
         None,
         "--model",
-        help="LLM model for skill synthesis. Defaults to .agents.yml/provider fallback.",
+        help="LLM model for skill synthesis. Defaults to .agents.yml interactive_model.",
     ),
     previous_map: str | None = typer.Option(
         None,
@@ -81,16 +82,19 @@ def build(
 ) -> None:
     """Build an evidence-backed company skill map from a context bundle."""
     load_dotenv(override=False)
-    skill_map = build_company_skill_map_from_context_path(
-        source_dir,
-        limit=limit,
-        include_replay=replay,
-        provider=provider,
-        model=model,
-        previous_map_path=previous_map,
-        timeout_s=timeout_s,
-        catalog_shard_size=catalog_shard_size,
-    )
+    try:
+        skill_map = build_company_skill_map_from_context_path(
+            source_dir,
+            limit=limit,
+            include_replay=replay,
+            provider=provider,
+            model=model,
+            previous_map_path=previous_map,
+            timeout_s=timeout_s,
+            catalog_shard_size=catalog_shard_size,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _exit_skillmap_failure("build", exc)
     paths = write_company_skill_map_outputs(skill_map, output)
     typer.echo(
         "Wrote "
@@ -138,7 +142,7 @@ def refresh(
     model: str | None = typer.Option(
         None,
         "--model",
-        help="LLM model for skill synthesis. Defaults to .agents.yml/provider fallback.",
+        help="LLM model for skill synthesis. Defaults to .agents.yml interactive_model.",
     ),
     previous_map: str | None = typer.Option(
         None,
@@ -168,17 +172,20 @@ def refresh(
         Path(output).expanduser().resolve() if output else workspace_path / "skill_map"
     )
     previous_map_path = previous_map or _default_previous_map(output_dir)
-    skill_map = build_company_skill_map_from_workspace(
-        workspace_path,
-        context_path=context,
-        limit=limit,
-        include_replay=replay,
-        provider=provider,
-        model=model,
-        previous_map_path=previous_map_path,
-        timeout_s=timeout_s,
-        catalog_shard_size=catalog_shard_size,
-    )
+    try:
+        skill_map = build_company_skill_map_from_workspace(
+            workspace_path,
+            context_path=context,
+            limit=limit,
+            include_replay=replay,
+            provider=provider,
+            model=model,
+            previous_map_path=previous_map_path,
+            timeout_s=timeout_s,
+            catalog_shard_size=catalog_shard_size,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _exit_skillmap_failure("refresh", exc)
     paths = write_company_skill_map_outputs(skill_map, output_dir)
     evidence_pack_path = output_dir / "control_evidence_pack.json"
     events = load_agent_activity_events(str(workspace_path))
@@ -233,6 +240,30 @@ def validate(
 def _default_previous_map(output_dir: Path) -> str | None:
     candidate = output_dir / "company_skill_map.json"
     return str(candidate) if candidate.exists() else None
+
+
+def _exit_skillmap_failure(action: str, exc: Exception) -> None:
+    message = str(exc).strip() or type(exc).__name__
+    if len(message) > 800:
+        message = message[:800].rstrip() + "..."
+    typer.echo(f"Skill map {action} failed: {message}", err=True)
+    typer.echo(
+        "Try the Codex-backed default "
+        "`--provider codex --model gpt-5.3-codex-spark`, increase "
+        "`--timeout-s`, or pass a direct API provider/model explicitly.",
+        err=True,
+    )
+    debug_path = Path(".artifacts") / f"skillmap_{action}_error.txt"
+    try:
+        debug_path.parent.mkdir(parents=True, exist_ok=True)
+        debug_path.write_text(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            encoding="utf-8",
+        )
+        typer.echo(f"Debug traceback written to {debug_path}", err=True)
+    except OSError:
+        pass
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":

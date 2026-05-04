@@ -24,7 +24,7 @@ from vei.context.api import (
 from vei.events.api import CanonicalEvent
 from vei.ingest.api import load_agent_activity_events
 from vei.llm.providers import plan_once_with_usage
-from vei.project_settings import resolve_llm_defaults
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.structure.api import build_structure_view_from_canonical_events
 from vei.whatif.api import WhatIfWorld, list_branch_candidates, load_world
 from vei.world.api import WorldSessionAPI
@@ -1302,7 +1302,7 @@ def _extract_context_skills_with_llm(
     timeout_s: int,
     catalog_shard_size: int,
 ) -> tuple[list[CompanySkill], dict[str, Any], list[SkillMapGap]]:
-    resolved_provider, resolved_model = resolve_llm_defaults(
+    resolved_provider, resolved_model = resolve_interactive_llm_defaults(
         provider=provider,
         model=model,
     )

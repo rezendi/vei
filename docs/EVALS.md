@@ -45,9 +45,9 @@ The judge does **not** see rollout futures, model predictions, or any post-branc
 
 The judge performs **pairwise comparisons** over the candidate set (for 4 candidates, 6 pairs). For each pair it returns a preferred candidate, confidence, evidence references, and rationale. VEI aggregates the pairwise wins into a total ordering.
 
-The call uses `temperature=0.0` and `json_mode=true`. Default model is
-`gpt-4.1-mini`. Codex-session models are not called through provider API keys;
-when a Codex-only model is being tested, run that test through Codex itself.
+The default judge model is `gpt-5.3-codex-spark`, which routes through the
+local Codex CLI. Direct provider models remain available when explicitly
+requested.
 
 ### Uncertainty detection
 

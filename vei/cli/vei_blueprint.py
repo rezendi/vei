@@ -5,7 +5,7 @@ from typing import Optional
 
 import typer
 
-from vei.project_settings import default_model_for_provider, resolve_llm_defaults
+from vei.project_settings import resolve_interactive_llm_defaults
 from vei.blueprint.api import (
     build_blueprint_asset_for_example,
     build_blueprint_asset_for_family,
@@ -303,11 +303,11 @@ def generate_command(
         ..., help="Natural language description of the company, tools, and scenario"
     ),
     provider: str = typer.Option(
-        "openai", help="LLM provider: openai|anthropic|google"
+        "", help="LLM provider. Defaults to .agents.yml interactive_provider."
     ),
     model: str | None = typer.Option(
-        default_model_for_provider("openai"),
-        help="Model name",
+        None,
+        help="Model name. Defaults to .agents.yml interactive_model.",
     ),
     output: Optional[str] = typer.Option(
         None, help="Output path for the generated blueprint JSON"
@@ -319,7 +319,7 @@ def generate_command(
     from vei.blueprint.llm_generate import generate_blueprint_from_prompt
 
     try:
-        resolved_provider, resolved_model = resolve_llm_defaults(
+        resolved_provider, resolved_model = resolve_interactive_llm_defaults(
             provider=provider,
             model=model,
         )
