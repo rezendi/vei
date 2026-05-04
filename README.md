@@ -36,6 +36,8 @@ flowchart LR
 
 **5. Knowledge / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; compose proposals or briefs with citations. Compile company-specific agent skills from the normalized bundle, with replay checks and evidence backing.
 
+Workflow intelligence now sits across these surfaces: `vei workflow` mines repeated work from canonical company history, promotes evidence-backed Business Task Specs, and packages only reviewed RL-ready specs into process environments.
+
 ## Quick Start
 
 ```bash
@@ -90,8 +92,9 @@ grouped by product workflow:
 | **Test / Eval** | `vei eval benchmark`, `vei eval demo`, `vei eval showcase`, `vei eval llm-test run`, `vei run start`, `vei admin report` |
 | **Governor / Control** | `vei workspace twin serve`, `vei workspace twin onboard`, `vei workspace ingest agent-activity`, `vei provenance access-review`, `vei provenance verify`, `vei provenance export` |
 | **Sandbox / What-if** | `vei whatif candidates`, `vei whatif events`, `vei whatif open`, `vei whatif experiment` (`--mode e_jepa` for the trained backend), `vei whatif rank`, `vei whatif pack run` |
-| **Train / Data** | `vei rollout procurement`, `vei train bc` |
+| **Train / Data** | `vei rollout procurement`, `vei train bc`, `vei workflow package-env` |
 | **Knowledge / Skills / Wiki** | `vei knowledge compose`, `vei knowledge ingest`, `vei knowledge skillmap build`, `vei knowledge skillmap refresh`, `vei wiki build`, `vei wiki refresh`, `vei wiki query` |
+| **Workflow intelligence** | `vei workflow mine`, `vei workflow label`, `vei workflow promote`, `vei workflow refresh` |
 | **Inspect / Debug** | `vei admin world list`, `vei inspect fidelity`, `vei workspace context timeline`, `vei workspace context readiness`, `vei admin visualize`, `vei ui serve` |
 | **Project / Workspace** | `vei workspace project init`, `vei workspace project show`, `vei admin blueprint`, `vei admin contract`, `vei admin release` |
 | **Static-site exports** | `python scripts/export_enron_static_assets.py`, `python scripts/export_public_history_static_assets.py` (powers `strangelab.ai/enron` and `strangelab.ai/public-history`) |
@@ -147,6 +150,15 @@ vei knowledge skillmap build \
 vei knowledge skillmap refresh --workspace _vei_out/yourco \
   --output _vei_out/yourco/skill_map
 vei wiki refresh --workspace _vei_out/yourco
+
+# 6. Mine recurring work and promote an evidence-backed task spec.
+vei workflow mine \
+  --source-dir _vei_out/yourco/context_snapshot.json \
+  --output _vei_out/yourco/workflows
+vei workflow promote \
+  --root _vei_out/yourco/workflows \
+  --candidate-id <candidate-id> \
+  --output _vei_out/yourco/workflows/task_spec.json
 ```
 
 Hardening smokes for public-facing paths:
@@ -155,6 +167,7 @@ Hardening smokes for public-facing paths:
 make codex-live-smoke      # Codex-backed planning, skillmap, and what-if smoke
 make worldmodel-smoke      # JEPA/reference world-model contracts
 make public-demo-smoke     # strangelab.ai/enron and /public-history assets
+make workflow-intel-smoke  # workflow mining/spec/package gates
 ```
 
 Run a real LLM agent against the resulting twin via MCP stdio:

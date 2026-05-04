@@ -10,6 +10,24 @@ This document describes a defensible, scoped path for using VEI as an RL environ
 
 The objective is to use VEI to RL-train agents on **process correctness and compliance**, where correctness is expressible as deterministic predicates over event-spine state. This is RL for *process*, not RL for *outcomes*. The agent learns to follow well-specified procedural and governance properties: cross-surface referential integrity, permission and scope adherence, audit-trail completeness, idempotency under retry, required-step coverage, schema validity on tool calls. The agent does not learn to make business judgments, and the trained policy makes no claims about real-world business performance. The narrower scope is what allows the rigor claims to hold.
 
+## Business Task Spec gate
+
+`vei workflow` adds a declarative Business Task Spec above contracts and RL
+packages. A task spec describes objective, context, evidence, constraints,
+examples, rubrics, labels, and escalation points. It is not an ordered script.
+
+The evaluation ladder is:
+
+- `descriptive`: recurring work and context needs are useful to inspect
+- `labeled`: humans have marked examples, outcomes, gaps, or escalation points
+- `rubric_evaluable`: a human or calibrated judge can score outputs against a rubric
+- `contract_evaluable`: deterministic success/failure predicates exist
+- `rl_packaged`: the reviewed contract is strong enough to export as an environment
+
+`vei workflow package-env` only accepts `rl_packaged` specs carrying a contract
+payload. Descriptive, labeled, and rubric-evaluable workflows remain valuable;
+they should not be forced into process RL just to produce a reward file.
+
 ## Why this scoping holds up
 
 ### The value of determinism

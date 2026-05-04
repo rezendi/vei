@@ -14,12 +14,13 @@ This is the one starting document for anyone — human or AI agent — working o
 
 VEI builds a runnable replica of any organisation or situation from real records. The same event spine supports the CLI, Studio UI, twin gateway, branch-point what-if experiments, company skill-map compilation, and learned world-model benchmarks.
 
-The practical job is usually one of five things:
+The practical job is usually one of these things:
 
 - run a deterministic enterprise scenario and score an agent
 - turn real historical records into a canonical timeline
 - ingest agent-activity evidence and review VEI Control reports
 - compile company-specific draft skills from the normalized company bundle
+- mine repeated work into evidence-backed Business Task Specs for review
 - train or apply the JEPA-style world model to forecast future state and rank counterfactual actions
 
 Do not treat VEI as an autonomous business oracle. Treat it as an offline benchmark and decision-support workflow. Factual prediction is the strongest evidence. Counterfactual rankings are hypotheses for human or expert review.
@@ -58,6 +59,7 @@ make test-full    # full suite with coverage
 - `vei/ingest/agent_activity/` captures external agent behavior from JSONL landing zones, MCP transcripts, and OpenAI org usage/audit evidence.
 - `vei/provenance/` builds Control reports: timeline, activity graph, access review, blast radius, policy replay, and OTel export.
 - `vei/whatif/` handles branch-point replay, counterfactuals, benchmarks, and saved example bundles.
+- `vei/workflow/` mines recurring work and promotes declarative Business Task Specs. It does not define a generic orchestrator or deterministic script by default.
 - `vei/verticals/` holds seeded business packs and overlays.
 - `tests/` covers the repo. `tests/dynamics/` also emits `_vei_out/dynamics_eval/metrics.json`.
 
@@ -89,6 +91,9 @@ vei knowledge skillmap refresh --workspace _vei_out/<tenant> --output _vei_out/<
 vei provenance access-review --agent-id <agent-id> --workspace _vei_out/<tenant>
 vei provenance verify --workspace _vei_out/<tenant>
 vei provenance export --format evidence-pack --workspace _vei_out/<tenant> --output _vei_out/<tenant>/evidence_pack.json
+vei workflow mine --source-dir _vei_out/<tenant>/context_snapshot.json --output _vei_out/<tenant>/workflows
+vei workflow label --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --label good_example --note "source-backed example"
+vei workflow promote --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --output _vei_out/<tenant>/workflows/task_spec.json
 vei ui serve --root docs/examples/enron-master-agreement-public-context/workspace --host 127.0.0.1 --port 3055
 ```
 
@@ -118,6 +123,14 @@ Check readiness before training:
 ```bash
 python scripts/check_tenant_world_model.py --root _vei_out/<tenant>/context_snapshot.json
 ```
+
+Workflow mining consumes the same bundle. Business Task Specs start as
+descriptive or labeled artifacts. Promote them to contract/RL packaging only
+when deterministic success and failure predicates are actually present.
+Use the `metadata` field for tenant-specific or experimental context, but keep
+common workflow concepts in typed fields. If the same metadata key starts
+appearing across companies, promote it into the `BusinessTaskSpec` schema instead
+of letting metadata become the real product contract.
 
 ## Advanced: World Model
 

@@ -12,6 +12,7 @@ def test_root_help_shows_grouped_top_level_commands() -> None:
     assert "workspace" in result.output
     assert "admin" in result.output
     assert "knowledge" in result.output
+    assert "workflow" in result.output
     lines = result.output.splitlines()
     assert not any("│ project" in line for line in lines)
     assert not any("│ twin" in line for line in lines)

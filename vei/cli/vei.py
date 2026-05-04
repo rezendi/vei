@@ -43,6 +43,10 @@ class VEILazyGroup(LazyTyperGroup):
             module_path="vei.cli.vei_wiki",
             help="Build, refresh, and query the materialized company wiki.",
         ),
+        "workflow": LazyCommandSpec(
+            module_path="vei.cli.vei_workflow",
+            help="Mine, label, promote, and package evidence-backed business task specs.",
+        ),
         "rollout": LazyCommandSpec(
             module_path="vei.cli.vei_rollout",
             help="Generate scripted rollouts from the simulated company for RL training.",
