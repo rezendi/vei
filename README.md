@@ -6,22 +6,39 @@
 
 Try it now: [strangelab.ai/enron](https://strangelab.ai/enron) · [strangelab.ai/public-history](https://strangelab.ai/public-history)
 
-One deterministic kernel powers every path: one world state, one event spine, one replay model, one CLI.
+VEI keeps company activity in one evidence ledger. From that ledger it builds the
+company wiki, workflow specs, what-if replays, audit views, evals, and training
+packages.
 
 ```mermaid
 flowchart LR
-    A[Real or seeded\ncompany data] --> B[Canonical\nevent spine]
-    B --> C[WorldSession\nkernel]
-    C --> D[Test / Eval]
-    C --> E[Governor / Control]
-    C --> F["Sandbox / What-if"]
-    C --> G[Train / Data]
-    C --> H["Knowledge / Skill Map"]
-    D --> I[Scores, traces,\nreplays]
-    E --> I
-    F --> I
-    G --> I
-    H --> I
+    subgraph ORG["How the organisation works"]
+        A["People"]
+        B["Agents"]
+        C["Systems of record<br/>email, Slack, docs, tickets,<br/>CRM, GitHub, admin, observability"]
+    end
+
+    ORG --> INGEST["Evidence ingest<br/>archives, exports, traces, connectors"]
+
+    INGEST --> SPINE["Canonical event spine<br/>one evidence ledger for company activity"]
+
+    SPINE --> WIKI["Company Wiki<br/>what is known"]
+    SPINE --> WORKFLOW["Workflow Intelligence<br/>what work repeats, where judgment happens"]
+    SPINE --> CONTROL["Control / Audit<br/>what happened, who touched what, what risk exists"]
+    SPINE --> WHATIF["What-if / World Model<br/>what could have happened, what may happen next"]
+
+    WORKFLOW --> SPEC["Business Task Specs<br/>objective, context, evidence,<br/>constraints, labels, rubrics, escalation"]
+    WIKI --> SPEC
+    CONTROL --> SPEC
+
+    SPEC --> SKILLS["Skill Map<br/>draft reusable capabilities"]
+    SPEC --> EVALS["Evals<br/>rubric or contract depending on evidence"]
+    SPEC --> PACKAGES["RL / training packages<br/>only when contract-ready"]
+
+    SKILLS --> IMPROVE["Improvement loop<br/>frontier model, small model,<br/>deterministic tool, human escalation"]
+    EVALS --> IMPROVE
+    WHATIF --> IMPROVE
+    PACKAGES --> IMPROVE
 ```
 
 ## The Five Surfaces
