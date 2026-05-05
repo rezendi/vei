@@ -28,6 +28,12 @@ The evaluation ladder is:
 payload. Descriptive, labeled, and rubric-evaluable workflows remain valuable;
 they should not be forced into process RL just to produce a reward file.
 
+The checked-in walkthrough at
+[examples/workflow-intelligence-walkthrough](examples/workflow-intelligence-walkthrough/)
+exercises this gate end to end: mine a company-history bundle, label and promote
+a Business Task Spec, reject premature packaging, and package only a reviewed
+RL-ready spec.
+
 ## Why this scoping holds up
 
 ### The value of determinism

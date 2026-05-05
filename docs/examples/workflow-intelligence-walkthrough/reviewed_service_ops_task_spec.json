@@ -1,0 +1,601 @@
+{
+  "task_id": "bts_7e10e1b008a8cef6",
+  "title": "Morning Dispatch Board",
+  "company_name": "Clearwater Field Services",
+  "company_domain": "cfs.example.com",
+  "objective": "Understand and improve the recurring business work around Morning Dispatch Board.",
+  "business_context": "Morning Dispatch Board appears across 9 events on docs, slack.",
+  "context_requirements": [
+    "Thread or case history",
+    "Relevant actors and recipients",
+    "Source event timestamps",
+    "catalog: technician_no_show"
+  ],
+  "required_evidence": [
+    "SR-CFS-100 dispatch approval updated. Status: pending_approval. Emergency dispatch reroute approved for Clearwater Medical.",
+    "WO-CFS-100 reassigned. Technician: TECH-CFS-02. Backup controls technician assigned and VIP appointment stabilized.",
+    "BILL-CFS-100 placed on billing hold. Billing remains stable while dispatch recovers the technician gap.",
+    "Calling out sick. I can't take WO-CFS-100 this morning.",
+    "Copy. Looking for backup with rooftop controls certification now.",
+    "dispatch recovered",
+    "billing held",
+    "exception trail resolved",
+    "customer story aligned"
+  ],
+  "permitted_tools": [
+    "vei.graph_action:comm_graph.post_message",
+    "vei.graph_action:doc_graph.update_document",
+    "vei.graph_action:ops_graph.assign_dispatch",
+    "vei.graph_action:ops_graph.clear_exception",
+    "vei.graph_action:ops_graph.hold_billing",
+    "vei.graph_action:work_graph.add_issue_comment",
+    "vei.graph_action:work_graph.update_request_approval"
+  ],
+  "constraints": [
+    "Dispatch, billing, and follow-through must stay coherent across the same customer account."
+  ],
+  "policies": [
+    "dispatch: approval from ops-manager"
+  ],
+  "acceptable_outputs": [
+    "dispatch recovered",
+    "billing held",
+    "exception trail resolved",
+    "customer story aligned"
+  ],
+  "accept_reject_criteria": [
+    "state_equals:components.service_ops.work_orders.WO-CFS-100.technician_id",
+    "state_equals:components.service_ops.appointments.APT-CFS-100.dispatch_status",
+    "state_equals:components.service_ops.billing_cases.BILL-CFS-100.hold",
+    "state_equals:components.service_ops.exceptions.EXC-CFS-101.status",
+    "state_contains:components.docs.docs.DOC-CFS-HANDOFF.body",
+    "state_contains:components.tickets.metadata.JRA-CFS-10.comments",
+    "state_contains:components.slack.channels.#clearwater-dispatch.messages",
+    "time_max_ms"
+  ],
+  "evaluation_rubric": [
+    "state_equals:components.service_ops.work_orders.WO-CFS-100.technician_id",
+    "state_equals:components.service_ops.appointments.APT-CFS-100.dispatch_status",
+    "state_equals:components.service_ops.billing_cases.BILL-CFS-100.hold",
+    "state_equals:components.service_ops.exceptions.EXC-CFS-101.status",
+    "state_contains:components.docs.docs.DOC-CFS-HANDOFF.body",
+    "state_contains:components.tickets.metadata.JRA-CFS-10.comments",
+    "state_contains:components.slack.channels.#clearwater-dispatch.messages",
+    "time_max_ms"
+  ],
+  "escalation_paths": [
+    "service_loop_fragmentation: Branch if dispatch recovers but the billing or exception trail still drifts.",
+    "dispatch: request approval from ops-manager"
+  ],
+  "observed_examples": [
+    {
+      "example_id": "wex_de6660a03ad3c18d",
+      "case_id": "case:CFS-100",
+      "thread_ref": "slack:#clearwater-dispatch:1776571919.000000",
+      "summary": "Morning Dispatch Board appears across 9 events on docs, slack.",
+      "event_ids": [
+        "history_5dc15ff183243fb8",
+        "history_aa36eec30a4cd6a5",
+        "history_ff37c647b1ae05d7",
+        "history_8427068109beb867",
+        "history_51cfaf03ac3d816f",
+        "history_90e797e63d8cb914",
+        "history_4933377963cb1ca1",
+        "history_ca21c8335107b252",
+        "history_f651c2064b27680c"
+      ],
+      "surfaces": [
+        "docs",
+        "slack"
+      ],
+      "actor_ids": [
+        "#billing-ops",
+        "#clearwater-dispatch",
+        "#field-techs",
+        "DOC-CFS-BILLING",
+        "DOC-CFS-DISPATCH",
+        "DOC-CFS-RUNBOOK",
+        "dispatch",
+        "troy",
+        "workflow",
+        "workflow.workflow-baseline"
+      ],
+      "object_refs": [
+        "#billing-ops",
+        "#clearwater-dispatch",
+        "#field-techs",
+        "1712000480.000900",
+        "1776571919.000000",
+        "1776571920.079000",
+        "1776571921.111000",
+        "DOC-CFS-BILLING",
+        "DOC-CFS-DISPATCH",
+        "DOC-CFS-RUNBOOK",
+        "workflow_baseline-call-1",
+        "workflow_baseline-call-2",
+        "workflow_baseline-call-3"
+      ],
+      "start_ts_ms": 1004,
+      "end_ts_ms": 1776571921111,
+      "labels": [],
+      "metadata": {}
+    }
+  ],
+  "reference_paths": [
+    {
+      "path_id": "wrp_cc0eb797340989a9",
+      "title": "Observed example: Morning Dispatch Board",
+      "description": "Evidence-backed example path; not a mandated script.",
+      "event_ids": [
+        "history_5dc15ff183243fb8",
+        "history_aa36eec30a4cd6a5",
+        "history_ff37c647b1ae05d7",
+        "history_8427068109beb867",
+        "history_51cfaf03ac3d816f",
+        "history_90e797e63d8cb914",
+        "history_4933377963cb1ca1",
+        "history_ca21c8335107b252",
+        "history_f651c2064b27680c"
+      ],
+      "case_ids": [
+        "case:CFS-100"
+      ],
+      "evidence_refs": [
+        {
+          "event_id": "history_5dc15ff183243fb8",
+          "case_id": "case:CFS-100",
+          "ts_ms": 1004,
+          "surface": "slack",
+          "kind": "slack.message",
+          "actor_id": "workflow",
+          "object_refs": [
+            "#clearwater-dispatch",
+            "1776571919.000000"
+          ],
+          "snippet": "SR-CFS-100 dispatch approval updated. Status: pending_approval. Emergency dispatch reroute approved for Clearwater Medical."
+        },
+        {
+          "event_id": "history_aa36eec30a4cd6a5",
+          "case_id": "case:CFS-100",
+          "ts_ms": 1005,
+          "surface": "slack",
+          "kind": "slack.message",
+          "actor_id": "workflow",
+          "object_refs": [
+            "#clearwater-dispatch",
+            "1776571920.079000"
+          ],
+          "snippet": "WO-CFS-100 reassigned. Technician: TECH-CFS-02. Backup controls technician assigned and VIP appointment stabilized."
+        },
+        {
+          "event_id": "history_ff37c647b1ae05d7",
+          "case_id": "case:CFS-100",
+          "ts_ms": 3003,
+          "surface": "slack",
+          "kind": "slack.message",
+          "actor_id": "workflow",
+          "object_refs": [
+            "#billing-ops",
+            "1776571921.111000"
+          ],
+          "snippet": "BILL-CFS-100 placed on billing hold. Billing remains stable while dispatch recovers the technician gap."
+        },
+        {
+          "event_id": "history_8427068109beb867",
+          "case_id": "case:CFS-100",
+          "ts_ms": 4000,
+          "surface": "slack",
+          "kind": "slack.message",
+          "actor_id": "troy",
+          "object_refs": [
+            "#field-techs",
+            "1712000480.000900"
+          ],
+          "snippet": "Calling out sick. I can't take WO-CFS-100 this morning."
+        },
+        {
+          "event_id": "history_51cfaf03ac3d816f",
+          "case_id": "case:CFS-100",
+          "ts_ms": 4001,
+          "surface": "slack",
+          "kind": "slack.reply",
+          "actor_id": "dispatch",
+          "object_refs": [
+            "#field-techs",
+            "1712000480.000900"
+          ],
+          "snippet": "Copy. Looking for backup with rooftop controls certification now."
+        },
+        {
+          "event_id": "history_90e797e63d8cb914",
+          "case_id": "case:CFS-100",
+          "ts_ms": 1776571919000,
+          "surface": "docs",
+          "kind": "google.comment",
+          "actor_id": "workflow.workflow-baseline",
+          "object_refs": [
+            "DOC-CFS-RUNBOOK",
+            "workflow_baseline-call-1"
+          ],
+          "snippet": "SR-CFS-100 dispatch approval updated. Status: pending_approval. Emergency dispatch reroute approved for Clearwater Medical."
+        },
+        {
+          "event_id": "history_4933377963cb1ca1",
+          "case_id": "case:CFS-100",
+          "ts_ms": 1776571920079,
+          "surface": "docs",
+          "kind": "google.document",
+          "actor_id": "",
+          "object_refs": [
+            "DOC-CFS-DISPATCH"
+          ],
+          "snippet": "WO-CFS-100 currently unassigned after technician sick call. Need controls-certified backup tech in the south zone."
+        },
+        {
+          "event_id": "history_ca21c8335107b252",
+          "case_id": "case:CFS-100",
+          "ts_ms": 1776571920079,
+          "surface": "docs",
+          "kind": "google.comment",
+          "actor_id": "workflow.workflow-baseline",
+          "object_refs": [
+            "DOC-CFS-DISPATCH",
+            "workflow_baseline-call-2"
+          ],
+          "snippet": "WO-CFS-100 reassigned. Technician: TECH-CFS-02. Backup controls technician assigned and VIP appointment stabilized."
+        }
+      ],
+      "labels": [],
+      "metadata": {}
+    }
+  ],
+  "source_event_ids": [
+    "history_5dc15ff183243fb8",
+    "history_aa36eec30a4cd6a5",
+    "history_ff37c647b1ae05d7",
+    "history_8427068109beb867",
+    "history_51cfaf03ac3d816f",
+    "history_90e797e63d8cb914",
+    "history_4933377963cb1ca1",
+    "history_ca21c8335107b252",
+    "history_f651c2064b27680c"
+  ],
+  "source_case_ids": [
+    "case:CFS-100"
+  ],
+  "labels": [
+    {
+      "label_id": "wfl_workflow_walkthrough_good_example",
+      "candidate_id": "wfc_140309889b0c4241",
+      "task_id": null,
+      "label": "good_example",
+      "note": "Repo walkthrough fixture: public Clearwater evidence path reviewed for process packaging.",
+      "event_ids": [
+        "history_5dc15ff183243fb8",
+        "history_aa36eec30a4cd6a5"
+      ],
+      "example_ids": [],
+      "created_at": "2026-05-05T00:00:00+00:00",
+      "metadata": {}
+    }
+  ],
+  "open_questions": [],
+  "spec_confidence": 0.8,
+  "status": "reviewed",
+  "evaluation_level": "rl_packaged",
+  "metadata": {
+    "source_workflow_name": "service_ops",
+    "source_workflow_tags": [
+      "benchmark-family",
+      "vertical",
+      "service",
+      "technician_no_show"
+    ],
+    "source_kind": "WorkflowScenarioSpec",
+    "reference_path_semantics": "example-only",
+    "contract": {
+      "name": "service_ops.contract",
+      "workflow_name": "service_ops",
+      "scenario_name": "technician_no_show",
+      "success_predicates": [
+        {
+          "name": "predicate_1",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_equals",
+            "field": "components.service_ops.work_orders.WO-CFS-100.technician_id",
+            "contains": null,
+            "equals": "TECH-CFS-02",
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "dispatch"
+          }
+        },
+        {
+          "name": "predicate_2",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_equals",
+            "field": "components.service_ops.appointments.APT-CFS-100.dispatch_status",
+            "contains": null,
+            "equals": "assigned",
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "dispatch"
+          }
+        },
+        {
+          "name": "predicate_3",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_equals",
+            "field": "components.service_ops.billing_cases.BILL-CFS-100.hold",
+            "contains": null,
+            "equals": true,
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "billing"
+          }
+        },
+        {
+          "name": "predicate_4",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_equals",
+            "field": "components.service_ops.exceptions.EXC-CFS-101.status",
+            "contains": null,
+            "equals": "resolved",
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "billing"
+          }
+        },
+        {
+          "name": "predicate_5",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_contains",
+            "field": "components.docs.docs.DOC-CFS-HANDOFF.body",
+            "contains": "Backup dispatch assigned, billing hold linked to the dispute, and field-to-billing handoff aligned.",
+            "equals": null,
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "communication"
+          }
+        },
+        {
+          "name": "predicate_6",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_contains",
+            "field": "components.tickets.metadata.JRA-CFS-10.comments",
+            "contains": "VIP service loop stabilized: dispatch reassigned, billing held safely, and exceptions explicitly resolved.",
+            "equals": null,
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "communication"
+          }
+        },
+        {
+          "name": "predicate_7",
+          "source": "oracle_state",
+          "assertion": {
+            "kind": "state_contains",
+            "field": "components.slack.channels.#clearwater-dispatch.messages",
+            "contains": "Backup dispatch locked in and the SLA stays intact for Clearwater Medical.",
+            "equals": null,
+            "focus": null,
+            "max_value": null,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "communication"
+          }
+        }
+      ],
+      "forbidden_predicates": [
+        {
+          "name": "predicate_8",
+          "source": "time",
+          "assertion": {
+            "kind": "time_max_ms",
+            "field": null,
+            "contains": null,
+            "equals": null,
+            "focus": null,
+            "max_value": 180000,
+            "description": null,
+            "params": {}
+          },
+          "description": null,
+          "metadata": {
+            "category": "sla_timing"
+          }
+        }
+      ],
+      "observation_boundary": {
+        "allowed_tools": [
+          "vei.graph_action",
+          "vei.graph_plan"
+        ],
+        "focus_hints": [
+          "comm_graph",
+          "doc_graph",
+          "ops_graph",
+          "work_graph"
+        ],
+        "hidden_state_fields": [
+          "components.docs.docs.DOC-CFS-HANDOFF.body",
+          "components.service_ops.appointments.APT-CFS-100.dispatch_status",
+          "components.service_ops.billing_cases.BILL-CFS-100.hold",
+          "components.service_ops.exceptions.EXC-CFS-101.status",
+          "components.service_ops.work_orders.WO-CFS-100.technician_id",
+          "components.slack.channels.#clearwater-dispatch.messages",
+          "components.tickets.metadata.JRA-CFS-10.comments"
+        ],
+        "description": "Agent-visible observations remain bounded to declared focuses."
+      },
+      "policy_invariants": [
+        {
+          "name": "single_service_loop",
+          "description": "Dispatch, billing, and follow-through must stay coherent across the same customer account.",
+          "required": true,
+          "evidence": null,
+          "metadata": {}
+        },
+        {
+          "name": "approval:dispatch",
+          "description": "Approval required from ops-manager at dispatch",
+          "required": true,
+          "evidence": null,
+          "metadata": {}
+        }
+      ],
+      "reward_terms": [
+        {
+          "name": "predicate_1",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_2",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_3",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_4",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_5",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_6",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_7",
+          "weight": 0.143,
+          "term_type": "success",
+          "description": null,
+          "metadata": {}
+        },
+        {
+          "name": "predicate_8",
+          "weight": 1.0,
+          "term_type": "penalty",
+          "description": null,
+          "metadata": {}
+        }
+      ],
+      "intervention_rules": [
+        {
+          "name": "approval:dispatch",
+          "trigger": "approval:dispatch",
+          "action": "request_approval",
+          "actor": "ops-manager",
+          "required": true,
+          "evidence": null
+        },
+        {
+          "name": "service_loop_fragmentation",
+          "trigger": "assign_backup_technician",
+          "action": "hold_disputed_billing -> resolve_finance_exception -> update_handoff_note",
+          "actor": null,
+          "required": true,
+          "evidence": "Branch if dispatch recovers but the billing or exception trail still drifts."
+        }
+      ],
+      "metadata": {
+        "benchmark_family": "service_ops",
+        "workflow_variant": "technician_no_show",
+        "workflow_parameters": {
+          "request_id": "SR-CFS-100",
+          "work_order_id": "WO-CFS-100",
+          "appointment_id": "APT-CFS-100",
+          "technician_id": "TECH-CFS-02",
+          "billing_case_id": "BILL-CFS-100",
+          "exception_id": "EXC-CFS-101",
+          "ticket_id": "JRA-CFS-10",
+          "doc_id": "DOC-CFS-HANDOFF",
+          "slack_channel": "#clearwater-dispatch",
+          "dispatch_note": "Backup controls technician assigned and VIP appointment stabilized.",
+          "billing_note": "Billing remains stable while dispatch recovers the technician gap.",
+          "doc_update_note": "Backup dispatch assigned, billing hold linked to the dispute, and field-to-billing handoff aligned.",
+          "ticket_note": "VIP service loop stabilized: dispatch reassigned, billing held safely, and exceptions explicitly resolved.",
+          "slack_summary": "Backup dispatch locked in and the SLA stays intact for Clearwater Medical.",
+          "deadline_max_ms": 180000
+        },
+        "workflow_tags": [
+          "benchmark-family",
+          "vertical",
+          "service",
+          "technician_no_show"
+        ],
+        "objective": "Stabilize a bad service morning by recovering dispatch, holding billing safely, and resolving the visible exception trail.",
+        "success_outcomes": [
+          "dispatch recovered",
+          "billing held",
+          "exception trail resolved",
+          "customer story aligned"
+        ]
+      }
+    },
+    "reviewed_from_candidate_id": "wfc_140309889b0c4241",
+    "source_fixture": "docs/examples/clearwater-technician-no-show/workspace/context_snapshot.json",
+    "claim_boundary": "reviewed deterministic service-ops contract for process/compliance packaging only"
+  }
+}

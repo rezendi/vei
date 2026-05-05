@@ -7,6 +7,8 @@ import pytest
 import typer.testing
 from pydantic import ValidationError
 
+from vei.benchmark import get_benchmark_family_workflow_spec
+from vei.cli.vei import app as vei_cli_app
 from vei.cli.vei_workflow import app as workflow_cli_app
 from vei.contract.api import build_contract_from_workflow
 from vei.events.api import ActorRef, EventDomain, ObjectRef, build_event
@@ -25,6 +27,19 @@ from vei.workflow.api import (
     package_workflow_environment,
     promote_workflow_candidate,
     refresh_workflows,
+)
+
+REPO_EXAMPLES_ROOT = Path("docs/examples")
+CLEARWATER_WALKTHROUGH_CONTEXT = (
+    REPO_EXAMPLES_ROOT
+    / "clearwater-technician-no-show"
+    / "workspace"
+    / "context_snapshot.json"
+)
+WORKFLOW_WALKTHROUGH_SPEC = (
+    REPO_EXAMPLES_ROOT
+    / "workflow-intelligence-walkthrough"
+    / "reviewed_service_ops_task_spec.json"
 )
 
 
@@ -349,6 +364,151 @@ def test_workflow_cli_mines_labels_and_promotes_specs(tmp_path: Path) -> None:
     assert payload["labels"][0]["note"] == "CLI label"
 
 
+def test_repo_owned_workflow_walkthrough_cli_ladder(tmp_path: Path) -> None:
+    output = tmp_path / "workflows"
+    runner = typer.testing.CliRunner()
+
+    mine_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "mine",
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(output),
+            "--limit",
+            "3",
+        ],
+    )
+    assert mine_result.exit_code == 0, mine_result.output
+    mined_payload = json.loads(mine_result.output)
+    candidate = mined_payload["candidates"][0]
+    candidate_id = candidate["candidate_id"]
+    event_id = candidate["source_event_ids"][0]
+
+    assert mined_payload["company_name"] == "Clearwater Field Services"
+    assert mined_payload["company_domain"] == "cfs.example.com"
+    assert mined_payload["event_count"] == 45
+    assert candidate_id == "wfc_140309889b0c4241"
+    assert candidate["title"] == "Morning Dispatch Board"
+    assert candidate["draft_task_spec"]["evaluation_level"] == "descriptive"
+    assert candidate["draft_task_spec"]["metadata"]["claim_boundary"] == (
+        "descriptive evidence summary, not a deterministic workflow"
+    )
+
+    label_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "label",
+            "--root",
+            str(output),
+            "--candidate-id",
+            candidate_id,
+            "--label",
+            "good_example",
+            "--note",
+            "walkthrough evidence path",
+            "--event-id",
+            event_id,
+        ],
+    )
+    assert label_result.exit_code == 0, label_result.output
+    label_payload = json.loads(label_result.output)
+    assert label_payload["label"] == "good_example"
+    assert label_payload["event_ids"] == [event_id]
+
+    spec_path = tmp_path / "task_spec.json"
+    promote_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "promote",
+            "--root",
+            str(output),
+            "--candidate-id",
+            candidate_id,
+            "--output",
+            str(spec_path),
+        ],
+    )
+    assert promote_result.exit_code == 0, promote_result.output
+    promoted_payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    assert promoted_payload["evaluation_level"] == "labeled"
+    assert promoted_payload["status"] == "draft"
+    assert promoted_payload["labels"][0]["note"] == "walkthrough evidence path"
+
+    package_rejected = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "package-env",
+            "--spec",
+            str(spec_path),
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(tmp_path / "rejected_env"),
+        ],
+    )
+    assert package_rejected.exit_code != 0
+    assert "requires evaluation_level=rl_packaged" in package_rejected.output
+
+    reviewed_payload = json.loads(WORKFLOW_WALKTHROUGH_SPEC.read_text(encoding="utf-8"))
+    current_contract = build_contract_from_workflow(
+        get_benchmark_family_workflow_spec(
+            "service_ops",
+            variant_name="technician_no_show",
+        )
+    )
+
+    assert reviewed_payload["metadata"]["reviewed_from_candidate_id"] == candidate_id
+    assert reviewed_payload["title"] == candidate["title"]
+    assert reviewed_payload["source_event_ids"] == candidate["source_event_ids"]
+    assert reviewed_payload["source_case_ids"] == candidate["source_case_ids"]
+    assert reviewed_payload["evaluation_level"] == "rl_packaged"
+    assert reviewed_payload["status"] == "reviewed"
+    assert reviewed_payload["metadata"]["contract"] == current_contract.model_dump(
+        mode="json"
+    )
+
+    package_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "package-env",
+            "--spec",
+            str(WORKFLOW_WALKTHROUGH_SPEC),
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(tmp_path / "env"),
+        ],
+    )
+    assert package_result.exit_code == 0, package_result.output
+    package_payload = json.loads(package_result.output)
+    assert package_payload["evaluation_level"] == "rl_packaged"
+    assert package_payload["metadata"]["contract_name"] == "service_ops.contract"
+    assert {
+        "environment_manifest.json",
+        "task_spec.json",
+        "contract.json",
+        "observation_schema.json",
+        "action_schema.json",
+        "reward_spec.json",
+        "reset_cases.jsonl",
+        "example_traces.jsonl",
+        "splits.json",
+        "README.md",
+    }.issubset(set(package_payload["files"]))
+    assert package_payload["claim_boundaries"] == [
+        "Rewards are deterministic process/compliance predicates.",
+        "The package does not claim to optimize business outcomes.",
+        "Held-out splits are stable by case/thread hash.",
+    ]
+
+
 def test_package_env_rejects_descriptive_specs_and_writes_rl_package(
     tmp_path: Path,
 ) -> None:
@@ -381,15 +541,21 @@ def test_package_env_rejects_descriptive_specs_and_writes_rl_package(
         update={
             "evaluation_level": EvaluationLevel.RL_PACKAGED,
             "status": BusinessTaskStatus.REVIEWED,
-            "source_event_ids": event_ids[:2],
-            "source_case_ids": ["case-pilot"],
+            "source_event_ids": event_ids[:3],
+            "source_case_ids": ["case-pilot", "case-renewal"],
             "observed_examples": [
                 WorkflowObservedExample(
                     example_id="example-1",
                     case_id="case-pilot",
                     event_ids=event_ids[:2],
                     summary="Pilot request example",
-                )
+                ),
+                WorkflowObservedExample(
+                    example_id="example-2",
+                    case_id="case-renewal",
+                    event_ids=[event_ids[2]],
+                    summary="Renewal request example",
+                ),
             ],
         },
         deep=True,
@@ -421,6 +587,14 @@ def test_package_env_rejects_descriptive_specs_and_writes_rl_package(
         .read_text(encoding="utf-8")
         .startswith("# Customer Pilot Review")
     )
+    traces = [
+        json.loads(line)
+        for line in (tmp_path / "env" / "example_traces.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert [event["event_id"] for event in traces[0]["events"]] == event_ids[:2]
+    assert [event["event_id"] for event in traces[1]["events"]] == [event_ids[2]]
 
 
 def test_workflow_default_authoring_path_does_not_import_openai_sdk() -> None:

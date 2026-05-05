@@ -178,6 +178,9 @@ vei workflow promote \
   --output _vei_out/yourco/workflows/task_spec.json
 ```
 
+For a checked-in end-to-end example of the workflow-intelligence ladder, see
+[docs/examples/workflow-intelligence-walkthrough](docs/examples/workflow-intelligence-walkthrough/).
+
 Hardening smokes for public-facing paths:
 
 ```bash
