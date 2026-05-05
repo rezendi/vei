@@ -2,7 +2,7 @@
   "version": "1",
   "name": "news_public_history_demo",
   "title": "Public History Demo",
-  "description": "Bounded historical news world for as-of public decision support.",
+  "description": "Bounded 1,150-record AmericanStories public-history workspace from 1859-01-10 through 1865-12-29.",
   "created_at": "2026-04-28T00:00:00Z",
   "source_kind": "example",
   "source_ref": "news-public-history-demo",
@@ -13,7 +13,18 @@
   "metadata": {
     "ui_mode": "public_history",
     "public_demo": {
-      "source_id": "news_americanstories_public_world"
+      "source_id": "news_americanstories_public_world",
+      "record_count": 1150,
+      "date_range": {
+        "start": "1859-01-10",
+        "end": "1865-12-29"
+      },
+      "launch_command": "vei ui serve --root docs/examples/news-public-history-demo/workspace --host 127.0.0.1 --port 3057",
+      "refresh_path": {
+        "source_snapshot": "python scripts/build_news_world_model_snapshot.py --dataset americanstories --output-root _vei_out/datasets/news_americanstories_1859_1865 --start-date 1859-01-01 --end-date 1865-12-31 --max-pages-per-day 18 --max-pages-per-source-per-day 3",
+        "workspace_fixture": "python scripts/build_public_history_demo_fixture.py --input _vei_out/datasets/news_americanstories_1859_1865 --workspace docs/examples/news-public-history-demo/workspace",
+        "static_assets": "python scripts/export_public_history_static_assets.py --workspace docs/examples/news-public-history-demo/workspace --output /path/to/strangelab.ai/public/public-history"
+      }
     }
   }
 }

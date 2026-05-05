@@ -234,7 +234,8 @@ make package-enron-full
 
 - A dated world model built from public newspaper articles (AmericanStories or PleIAs archives)
 - Strategic state-point decisions proposed from pre-cutoff public evidence, scored by JEPA
-- A Studio demo with a compact shipped checkpoint spanning 1859–1865 American history
+- A Studio demo with a compact shipped checkpoint over a bounded
+  American-history slice
 
 News timelines are the public outside-in example. Use them when you want to test
 whether VEI can build a dated world model from public articles, propose
@@ -248,13 +249,14 @@ emails, tickets, customer records, or meeting notes. It sees dated public
 articles or newspaper pages and turns them into canonical timeline events.
 
 The repo also ships a no-key Studio demo with a compact checked-in JEPA
-checkpoint and an expanded 1,150-record AmericanStories public-news fixture:
+checkpoint and an expanded 1,150-record AmericanStories public-news fixture
+from 1859-01-10 through 1865-12-29:
 
 ```bash
 vei ui serve \
   --root docs/examples/news-public-history-demo/workspace \
   --host 127.0.0.1 \
-  --port 3055
+  --port 3057
 ```
 
 Open the **Public History** tab to choose a cutoff date, inspect cited
@@ -312,19 +314,31 @@ python scripts/build_news_world_model_snapshot.py \
 The output is a normal VEI context snapshot, so it can be pooled with company
 tenants in the multi-tenant world-model benchmark.
 
-To refresh the checked-in Public History demo from that broader local bundle:
+The full refresh path for the checked-in Public History demo is:
 
 ```bash
+python scripts/build_news_world_model_snapshot.py \
+  --dataset americanstories \
+  --output-root _vei_out/datasets/news_americanstories_1859_1865 \
+  --start-date 1859-01-01 \
+  --end-date 1865-12-31 \
+  --max-pages-per-day 18 \
+  --max-pages-per-source-per-day 3
+
 python scripts/build_public_history_demo_fixture.py \
   --input _vei_out/datasets/news_americanstories_1859_1865 \
   --workspace docs/examples/news-public-history-demo/workspace
+
+python scripts/export_public_history_static_assets.py \
+  --workspace docs/examples/news-public-history-demo/workspace \
+  --output /path/to/strangelab.ai/public/public-history
 ```
 
 By default the fixture builder selects 1,150 records stratified by month and
 source topic from the broader local bundle. The checked-in demo currently spans
-1859 through 1865 and includes markets, policy, secession and war, local civic
-life, slavery and emancipation, labor, agriculture and weather, public health
-and disasters, crime and courts, and transport infrastructure.
+1859-01-10 through 1865-12-29 and includes markets, policy, secession and war,
+local civic life, slavery and emancipation, labor, agriculture and weather,
+public health and disasters, crime and courts, and transport infrastructure.
 
 ### Decision Point Shape
 

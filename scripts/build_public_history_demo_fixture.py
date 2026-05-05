@@ -9,7 +9,7 @@ import re
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from vei.whatif.api import WhatIfEvent, load_world
 
@@ -17,6 +17,28 @@ DEFAULT_INPUT = Path("_vei_out/datasets/news_americanstories_1859_1865")
 DEFAULT_WORKSPACE = Path("docs/examples/news-public-history-demo/workspace")
 DEFAULT_AS_OF = "1861-04-12"
 SOURCE_ID = "news_americanstories_public_world"
+DEMO_LAUNCH_COMMAND = (
+    "vei ui serve --root docs/examples/news-public-history-demo/workspace "
+    "--host 127.0.0.1 --port 3057"
+)
+DEMO_REFRESH_PATH = {
+    "source_snapshot": (
+        "python scripts/build_news_world_model_snapshot.py --dataset americanstories "
+        "--output-root _vei_out/datasets/news_americanstories_1859_1865 "
+        "--start-date 1859-01-01 --end-date 1865-12-31 "
+        "--max-pages-per-day 18 --max-pages-per-source-per-day 3"
+    ),
+    "workspace_fixture": (
+        "python scripts/build_public_history_demo_fixture.py "
+        "--input _vei_out/datasets/news_americanstories_1859_1865 "
+        "--workspace docs/examples/news-public-history-demo/workspace"
+    ),
+    "static_assets": (
+        "python scripts/export_public_history_static_assets.py "
+        "--workspace docs/examples/news-public-history-demo/workspace "
+        "--output /path/to/strangelab.ai/public/public-history"
+    ),
+}
 
 TARGET_TOPIC_LABELS = {
     "news:banking_markets": "Banking Markets",
@@ -105,7 +127,9 @@ def main() -> None:
         output_path=args.workspace / "context_snapshot.json",
         source_event_count=args.source_event_count or len(world.events),
     )
-    write_manifest(args.workspace / "public_demo_manifest.json", selected)
+    manifest = build_manifest_payload(selected)
+    write_manifest(args.workspace / "public_demo_manifest.json", manifest)
+    write_project_manifest(args.workspace / "vei_project.json", manifest)
 
 
 def select_events(
@@ -231,25 +255,64 @@ def write_context_snapshot(
     output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def write_manifest(path: Path, events: list[WhatIfEvent]) -> None:
+def build_manifest_payload(events: list[WhatIfEvent]) -> dict[str, Any]:
     start_date = events[0].timestamp[:10] if events else "1859-01-01"
     end_date = events[-1].timestamp[:10] if events else "1865-12-31"
-    start_year = start_date[:4]
-    end_year = end_date[:4]
-    range_label = start_year if start_year == end_year else f"{start_year}-{end_year}"
-    payload = {
+    date_range_label = f"{start_date} through {end_date}"
+    record_count_label = f"{len(events):,}"
+    return {
         "source_id": SOURCE_ID,
         "title": "Public History: AmericanStories News World",
         "summary": (
-            f"Choose a point from an expanded {range_label} public-news record, inspect "
-            "what was visible by then, and test a scenario from that state."
+            f"Choose a point from an expanded {record_count_label}-record "
+            f"{date_range_label} public-news record, inspect what was visible "
+            "by then, and test a scenario from that state."
         ),
+        "record_count": len(events),
+        "date_range": {"start": start_date, "end": end_date},
+        "launch_command": DEMO_LAUNCH_COMMAND,
+        "refresh_path": DEMO_REFRESH_PATH,
         "source_path": "context_snapshot.json",
         "saved_result_path": "public_demo_saved_result.json",
         "jepa_checkpoint_path": "jepa_model.pt",
         "default_topic": "all_public_record",
         "default_as_of": DEFAULT_AS_OF,
     }
+
+
+def write_manifest(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def write_project_manifest(path: Path, public_manifest: dict[str, Any]) -> None:
+    if not path.exists():
+        return
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return
+    record_count = int(public_manifest["record_count"])
+    date_range = public_manifest["date_range"]
+    payload["description"] = (
+        f"Bounded {record_count:,}-record AmericanStories public-history workspace "
+        f"from {date_range['start']} through {date_range['end']}."
+    )
+    metadata = payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        payload["metadata"] = metadata
+    metadata["ui_mode"] = "public_history"
+    public_demo = metadata.setdefault("public_demo", {})
+    if not isinstance(public_demo, dict):
+        public_demo = {}
+        metadata["public_demo"] = public_demo
+    for key in (
+        "source_id",
+        "record_count",
+        "date_range",
+        "launch_command",
+        "refresh_path",
+    ):
+        public_demo[key] = public_manifest[key]
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
