@@ -853,11 +853,12 @@ def package_workflow_environment(
 
     package_id = _stable_id(spec.task_id, contract.name, prefix="wenv")
     selected_event_ids = set(spec.source_event_ids)
-    selected_events = [
-        events_by_id[event_id].model_dump(mode="json")
+    selected_events_by_id = {
+        event_id: events_by_id[event_id].model_dump(mode="json")
         for event_id in spec.source_event_ids
         if event_id in events_by_id
-    ]
+    }
+    selected_events = list(selected_events_by_id.values())
     reset_cases = [
         {
             "case_id": case_id,
@@ -933,7 +934,12 @@ def package_workflow_environment(
     with (output_root / "example_traces.jsonl").open("w", encoding="utf-8") as handle:
         for example in spec.observed_examples:
             payload = example.model_dump(mode="json")
-            payload["events"] = selected_events
+            example_events = [
+                selected_events_by_id[event_id]
+                for event_id in example.event_ids
+                if event_id in selected_events_by_id
+            ]
+            payload["events"] = example_events if example.event_ids else selected_events
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
     readme = (
         f"# {spec.title}\n\n"
