@@ -1,7 +1,18 @@
 {
   "source_id": "news_americanstories_public_world",
   "title": "Public History: AmericanStories News World",
-  "summary": "Choose a point from an expanded 1859-1865 public-news record, inspect what was visible by then, and test a scenario from that state.",
+  "summary": "Choose a point from an expanded 1,150-record 1859-01-10 through 1865-12-29 public-news record, inspect what was visible by then, and test a scenario from that state.",
+  "record_count": 1150,
+  "date_range": {
+    "start": "1859-01-10",
+    "end": "1865-12-29"
+  },
+  "launch_command": "vei ui serve --root docs/examples/news-public-history-demo/workspace --host 127.0.0.1 --port 3057",
+  "refresh_path": {
+    "source_snapshot": "python scripts/build_news_world_model_snapshot.py --dataset americanstories --output-root _vei_out/datasets/news_americanstories_1859_1865 --start-date 1859-01-01 --end-date 1865-12-31 --max-pages-per-day 18 --max-pages-per-source-per-day 3",
+    "workspace_fixture": "python scripts/build_public_history_demo_fixture.py --input _vei_out/datasets/news_americanstories_1859_1865 --workspace docs/examples/news-public-history-demo/workspace",
+    "static_assets": "python scripts/export_public_history_static_assets.py --workspace docs/examples/news-public-history-demo/workspace --output /path/to/strangelab.ai/public/public-history"
+  },
   "source_path": "context_snapshot.json",
   "saved_result_path": "public_demo_saved_result.json",
   "jepa_checkpoint_path": "jepa_model.pt",

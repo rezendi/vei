@@ -14,6 +14,53 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_DEMO_ROOT = REPO_ROOT / "docs/examples/news-public-history-demo/workspace"
 
 
+def test_public_demo_checked_in_manifests_match_workspace_snapshot() -> None:
+    snapshot = json.loads(
+        (PUBLIC_DEMO_ROOT / "context_snapshot.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (PUBLIC_DEMO_ROOT / "public_demo_manifest.json").read_text(encoding="utf-8")
+    )
+    project = json.loads(
+        (PUBLIC_DEMO_ROOT / "vei_project.json").read_text(encoding="utf-8")
+    )
+
+    documents = snapshot["sources"][0]["data"]["documents"]
+    metadata = snapshot["metadata"]
+    expected_count = len(documents)
+    expected_date_range = {
+        "start": metadata["start_date"],
+        "end": metadata["end_date"],
+    }
+
+    assert metadata["selected_event_count"] == expected_count
+    assert snapshot["sources"][0]["record_counts"]["documents"] == expected_count
+    assert manifest["record_count"] == expected_count
+    assert manifest["date_range"] == expected_date_range
+    assert f"{expected_count:,}-record" in manifest["summary"]
+    assert expected_date_range["start"] in manifest["summary"]
+    assert expected_date_range["end"] in manifest["summary"]
+
+    public_demo_metadata = project["metadata"]["public_demo"]
+    for key in (
+        "source_id",
+        "record_count",
+        "date_range",
+        "launch_command",
+        "refresh_path",
+    ):
+        assert public_demo_metadata[key] == manifest[key]
+    assert manifest["launch_command"] == (
+        "vei ui serve --root docs/examples/news-public-history-demo/workspace "
+        "--host 127.0.0.1 --port 3057"
+    )
+    assert set(manifest["refresh_path"]) == {
+        "source_snapshot",
+        "workspace_fixture",
+        "static_assets",
+    }
+
+
 def test_public_demo_models_validate_defaults() -> None:
     request = ui_api.PublicDemoChatRequest(message="What was visible?")
 
