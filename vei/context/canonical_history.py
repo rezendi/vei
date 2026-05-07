@@ -349,7 +349,7 @@ def load_canonical_history_bundle(path: str | Path) -> CanonicalHistoryBundle | 
     if not paths.events_path.exists() or not paths.index_path.exists():
         return None
     events: list[CanonicalEvent] = []
-    raw_events = paths.events_path.read_text(encoding="utf-8").splitlines()
+    raw_events = paths.events_path.read_text(encoding="utf-8").split("\n")
     for line in raw_events:
         stripped = line.strip()
         if not stripped:
@@ -1476,6 +1476,8 @@ def _case_link_for_entry(
     thread_token = thread_tokens.get(entry.thread_ref, "")
     if thread_token:
         return f"case:{thread_token}", 0.72, "thread_token"
+    if entry.surface in {"tickets", "docs", "crm"} and entry.thread_ref:
+        return f"object:{entry.thread_ref}", 0.9, "provider_object_ref"
     if entry.thread_ref:
         return f"thread:{entry.thread_ref}", 0.4, "thread_ref"
     return "", 0.0, ""
