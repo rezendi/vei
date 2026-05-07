@@ -277,11 +277,11 @@ def test_strategic_state_point_run_scores_template_proposals(
                     "participant_fanout": 4,
                 },
                 "business_heads": {
-                    "enterprise_risk": 0.22,
-                    "commercial_position_proxy": 0.60,
-                    "org_strain_proxy": 0.18,
-                    "stakeholder_trust": 0.47,
-                    "execution_drag": 0.28,
+                    "enterprise_risk": 0.18 + (index * 0.01),
+                    "commercial_position_proxy": 0.68 - (index * 0.005),
+                    "org_strain_proxy": 0.12 + (index * 0.005),
+                    "stakeholder_trust": 0.54 - (index * 0.005),
+                    "execution_drag": 0.20 + (index * 0.005),
                 },
                 "future_state_heads": {
                     "regulatory_exposure": 0.21,
@@ -351,11 +351,105 @@ def test_strategic_state_point_run_scores_template_proposals(
     assert first["prediction_uncertainty_available"] is False
     assert first["actual_outcome_vector_available"] is False
     assert first["prediction_error_available"] is False
+    assert first["saturation_guard_status"] == "passed"
+    assert first["saturation_guard_trusted_for_ranking"] is True
+    assert payload["saturation_guard"]["status"] == "passed"
+    assert payload["saturation_guard"]["trusted_for_daily_advice"] is True
+    assert result.saturation_guard is not None
+    assert result.saturation_guard.status == "passed"
+    assert result.artifacts.saturation_guard_path is not None
+    assert result.artifacts.saturation_guard_path.exists()
     assert "objective_policy_summary" not in first
     markdown = result.artifacts.result_markdown_path.read_text(encoding="utf-8")
     assert "not learned scores" in markdown
+    assert "Scoring guard: `passed`" in markdown
     assert "Delta vs baseline" in markdown
     assert "Shortlist lead" in markdown
+
+
+def test_strategic_state_point_run_marks_saturated_scores_untrusted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    world = _news_world()
+
+    def fake_predict(**kwargs: Any) -> list[dict[str, Any]]:
+        return [
+            {
+                "model_id": "fixture_jepa",
+                "jepa_checkpoint_id": "fixture-checkpoint",
+                "latent_future_vector": [1.0, 1.0, 1.0],
+                "latent_future_id": f"latent-{index}",
+                "latent_future_norm": 1.0,
+                "encoder_versions": {},
+                "prediction_head_version": "business_future_heads_v1",
+                "prediction_probe_version": "linear_heads_v1",
+                "evidence_heads": {
+                    "any_external_spread": 0.0,
+                    "participant_fanout": 0,
+                },
+                "business_heads": {
+                    "enterprise_risk": 0.0,
+                    "commercial_position_proxy": 1.0,
+                    "org_strain_proxy": 0.0,
+                    "stakeholder_trust": 1.0,
+                    "execution_drag": 0.0,
+                },
+                "future_state_heads": {
+                    "regulatory_exposure": 0.0,
+                    "accounting_control_pressure": 0.0,
+                    "liquidity_stress": 0.0,
+                    "governance_response": 0.0,
+                    "evidence_control": 0.0,
+                    "external_confidence_pressure": 0.0,
+                },
+                "objective_scores": {},
+            }
+            for index, _row in enumerate(kwargs["rows"], start=1)
+        ]
+
+    monkeypatch.setattr(
+        "vei.whatif.strategic_state_points.run_branch_point_benchmark_predictions",
+        fake_predict,
+    )
+
+    result = run_strategic_state_point_counterfactuals(
+        [
+            StrategicStatePointSource(
+                tenant_id="news",
+                world=world,
+                display_name="Historical News Fixture",
+                as_of="1837-09-06",
+            )
+        ],
+        checkpoint_path=tmp_path / "model.pt",
+        artifacts_root=tmp_path / "strategic",
+        label="strategic_saturated_fixture",
+        decisions_per_source=1,
+        candidates_per_decision=8,
+        proposal_mode="template",
+        proposal_model="template-fixture",
+    )
+
+    payload = json.loads(result.artifacts.result_json_path.read_text(encoding="utf-8"))
+    guard = payload["saturation_guard"]
+    first = payload["candidates"][0]
+
+    assert guard["status"] == "failed"
+    assert guard["trusted_for_daily_advice"] is False
+    assert guard["score_spread"] == 0.0
+    assert guard["unique_score_count"] == 1
+    assert guard["high_boundary_score_count"] == 8
+    assert guard["zero_delta_candidate_count"] == 8
+    assert first["saturation_guard_status"] == "failed"
+    assert first["saturation_guard_trusted_for_ranking"] is False
+    assert "do not use this rank" in first["ranking_caveat"]
+    assert result.saturation_guard is not None
+    assert result.saturation_guard.status == "failed"
+
+    markdown = result.artifacts.result_markdown_path.read_text(encoding="utf-8")
+    assert "Scoring guard: `failed`" in markdown
+    assert "Trusted for daily advice: `false`" in markdown
 
 
 def test_strategic_state_point_cli_wires_sources_and_checkpoint(
