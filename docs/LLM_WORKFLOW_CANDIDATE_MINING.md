@@ -60,7 +60,7 @@ canonical events
          • used at readout, never at mining
 ```
 
-The two mining tracks are independent. They both consume the same `CanonicalEvent` stream and both emit `WorkflowCandidate` records into the same downstream pipeline. Each candidate carries `generated_by: "deterministic"` or `generated_by: "llm"` provenance. The reviewer sees a merged, sorted list; downstream tools (label, promote) do not care about the source.
+The two mining tracks are independent. They both consume the same `CanonicalEvent` stream and both emit `WorkflowCandidate` records into the same downstream pipeline. Each candidate uses the existing schema: cited LLM members are stored in `source_event_ids`, and source/ranking provenance is stored under `metadata` (`generated_by: "deterministic"` or `generated_by: "llm"`). The reviewer sees a merged, sorted list; downstream tools (label, promote) do not care about the source.
 
 ## Methodology
 
@@ -110,7 +110,7 @@ Behavior:
 4. **Verify citations deterministically.** A post-check rejects any candidate whose `member_event_ids` are not all present in the input window. Rejected candidates are logged with the reason; they do not silently propagate.
 5. **Cluster across windows.** A second LLM pass takes the per-window candidates and clusters synonymous and continuation candidates — "this is the same process as that one in the next window." Output: cross-window candidate groups, each with merged `member_event_ids` and a single canonical title. Verified the same way.
 6. **Cluster across cases.** A third pass identifies multi-case processes — "these candidates from 30 different cases are all instances of the same workflow." This is where weekly billing reconciliation surfaces. Optional in v1 if cost or latency is a concern; the architecture supports it without schema change.
-7. **Emit `WorkflowCandidate` records** in the existing schema with `generated_by: "llm"` and full provenance: model id, prompt cache key, window id, salience, salience_reason.
+7. **Emit `WorkflowCandidate` records** in the existing schema. LLM `member_event_ids` map directly to `source_event_ids`; no unknown top-level Pydantic extras are passed. Full provenance lives in `metadata`: `generated_by: "llm"`, model id, prompt cache key, window id, variant class, LLM salience, and salience_reason.
 
 Determinism: `temperature=0`, fixed model id, prompt-and-window hash as cache key. Re-runs hit cache and produce bit-identical output. Cache invalidates when prompt template version, model id, or window content changes.
 
@@ -118,7 +118,7 @@ Determinism: `temperature=0`, fixed model id, prompt-and-window hash as cache ke
 
 A new helper `merge_candidate_streams` takes the deterministic and LLM candidate sets and produces the merged stream the downstream pipeline reads. Merge logic:
 
-- Deterministic candidates whose `member_event_ids` overlap heavily with an LLM candidate are absorbed into the LLM candidate, with `merged_from: [det_candidate_id, ...]` provenance. The LLM title and salience win.
+- Deterministic candidates whose `source_event_ids` overlap heavily with an LLM candidate's `source_event_ids` are absorbed into the LLM candidate, with `metadata.merged_from: [det_candidate_id, ...]` provenance. The LLM title and salience win.
 - LLM candidates that do not overlap any deterministic candidate stand alone. The deterministic structural rank is computed for them post-hoc to give the merged sort key a stable baseline.
 - Deterministic candidates that have no LLM overlap stand alone with their structural rank.
 
@@ -130,7 +130,9 @@ final_rank = 0.5 * structural_rank + 0.5 * llm_salience
 
 For deterministic-only candidates, `llm_salience = 0`. For LLM-only candidates, `structural_rank` is computed against the candidate's events. Ties broken by `event_count`, then `cross_surface_score`, then candidate id.
 
-The reviewer sees the merged ranked list. Each candidate's row shows `generated_by`, `final_rank`, `structural_rank`, `llm_salience`, and the LLM's `salience_reason` if present. Sort can be flipped to either source-only.
+For downstream compatibility, `rank_score` is set to `final_rank`. The component scores are retained in `metadata.structural_rank`, `metadata.llm_salience`, and `metadata.final_rank`; this avoids a `WorkflowCandidate` schema migration for v1 while keeping the audit data available.
+
+The reviewer sees the merged ranked list. Each candidate's row reads `generated_by`, `final_rank`, `structural_rank`, `llm_salience`, and the LLM's `salience_reason` from metadata when present. Sort can be flipped to either source-only.
 
 ### Stage 4 — Provenance manifest
 
