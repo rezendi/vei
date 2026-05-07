@@ -52,9 +52,9 @@ The artifact at the end of this stage is a checkpoint, a held-out evaluation rep
 
 ### Stage 2 — Train sparse autoencoders over hidden states
 
-Train SAEs on two activation sites: the output of the context encoder (the 96-dim representation pre-prediction) and the predicted latent (the 96-dim post-prediction representation). These represent different stages of the computation; running both lets us distinguish features the model uses to *understand the current state* from features it constructs to *predict the future state*.
+Train SAEs on two activation sites: the output of the context encoder (currently the 128-dim representation pre-prediction) and the predicted latent (currently the 128-dim post-prediction representation). These represent different stages of the computation; running both lets us distinguish features the model uses to *understand the current state* from features it constructs to *predict the future state*.
 
-Use top-K or L1-regularized SAE with dictionary size 768–1536 (8–16× model dim). Train at least three seeds per activation site for stability analysis. Use a large activation cache covering all training and validation branch points; do not train SAEs only on training-set activations because that introduces a memorization confound.
+Use top-K or L1-regularized SAE with dictionary size 8–16× the model dim (1024–2048 for the current 128-dim JEPA). Train at least three seeds per activation site for stability analysis. Use a large activation cache covering all training and validation branch points; do not train SAEs only on training-set activations because that introduces a memorization confound.
 
 Stop condition for this stage is dual: (a) reconstruction loss on held-out activations is acceptable (the SAE represents the activation space well enough to be informative), and (b) features show non-trivial sparsity (each input activates a small fraction of the dictionary, with a long-tailed distribution). If the SAE can only reconstruct by activating most features densely, the dictionary is not finding sparse structure and the rest of the analysis is unreliable.
 
