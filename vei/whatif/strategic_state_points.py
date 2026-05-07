@@ -38,6 +38,7 @@ from .models import (
 )
 
 StrategicProposalMode = Literal["llm", "template"]
+SaturationGuardStatus = Literal["passed", "warning", "failed"]
 DEFAULT_STRATEGIC_PROPOSAL_MODEL = "gpt-5.3-codex-spark"
 OPERATOR_SCORE_FORMULA_VERSION = "balanced_operator_v1"
 OPERATOR_SCORE_FORMULA = (
@@ -46,6 +47,12 @@ OPERATOR_SCORE_FORMULA = (
 )
 _NEAR_TIE_MARGIN = 0.01
 _DELTA_EPSILON = 0.005
+_SATURATION_SCORE_EPSILON = 0.000001
+_SATURATION_MIN_SCORE_SPREAD = 0.01
+_SATURATION_MIN_UNIQUE_SCORES = 3
+_SATURATION_MAX_ZERO_DELTA_FRACTION = 0.75
+_SATURATION_MAX_BOUNDARY_SCORE_FRACTION = 0.90
+_SATURATION_ROUND_DECIMALS = 6
 _BUSINESS_HEADS: tuple[tuple[str, str, bool], ...] = (
     ("predicted_enterprise_risk", "risk", False),
     ("predicted_commercial_position", "commercial", True),
@@ -91,12 +98,59 @@ class StrategicDecisionInput(BaseModel):
     candidates: list[StrategicCandidateInput] = Field(default_factory=list)
 
 
+class StrategicScoreSaturationGuardGroup(BaseModel):
+    case_id: str
+    decision_point: str
+    candidate_count: int
+    score_min: float | None = None
+    score_max: float | None = None
+    score_spread: float | None = None
+    unique_score_count: int
+    invalid_score_count: int
+    high_boundary_score_count: int
+    low_boundary_score_count: int
+    zero_delta_candidate_count: int
+    zero_delta_fraction: float
+    status: SaturationGuardStatus
+    trusted_for_ranking: bool
+    reasons: list[str] = Field(default_factory=list)
+
+
+class StrategicScoreSaturationGuardReport(BaseModel):
+    version: str = "strategic_score_saturation_guard_v1"
+    status: SaturationGuardStatus
+    trusted_for_daily_advice: bool
+    candidate_count: int
+    decision_group_count: int
+    failed_decision_group_count: int
+    warning_decision_group_count: int
+    score_min: float | None = None
+    score_max: float | None = None
+    score_spread: float | None = None
+    unique_score_count: int
+    invalid_score_count: int
+    high_boundary_score_count: int
+    low_boundary_score_count: int
+    zero_delta_candidate_count: int
+    zero_delta_fraction: float
+    min_required_score_spread: float = _SATURATION_MIN_SCORE_SPREAD
+    min_required_unique_scores: int = _SATURATION_MIN_UNIQUE_SCORES
+    max_allowed_zero_delta_fraction: float = _SATURATION_MAX_ZERO_DELTA_FRACTION
+    max_allowed_boundary_score_fraction: float = _SATURATION_MAX_BOUNDARY_SCORE_FRACTION
+    score_rounding_decimals: int = _SATURATION_ROUND_DECIMALS
+    reasons: list[str] = Field(default_factory=list)
+    decision_groups: list[StrategicScoreSaturationGuardGroup] = Field(
+        default_factory=list
+    )
+
+
 class StrategicStatePointArtifacts(BaseModel):
     root: Path
     proposal_manifest_path: Path
     result_json_path: Path
     result_csv_path: Path
     result_markdown_path: Path
+    saturation_guard_path: Path | None = None
 
 
 class StrategicStatePointRunResult(BaseModel):
@@ -108,6 +162,7 @@ class StrategicStatePointRunResult(BaseModel):
     proposal_mode: StrategicProposalMode
     proposal_model: str
     artifacts: StrategicStatePointArtifacts
+    saturation_guard: StrategicScoreSaturationGuardReport | None = None
     notes: list[str] = Field(default_factory=list)
 
 
@@ -160,6 +215,7 @@ def run_strategic_state_point_counterfactuals(
     result_json_path = root / "strategic_state_point_results.json"
     result_csv_path = root / "strategic_state_point_results.csv"
     result_markdown_path = root / "strategic_state_point_results.md"
+    saturation_guard_path = root / "strategic_state_point_saturation_guard.json"
 
     state_points: list[_StrategicStatePoint] = []
     proposal_manifest: list[dict[str, Any]] = []
@@ -194,6 +250,8 @@ def run_strategic_state_point_counterfactuals(
             )
         )
     rows = _rank_rows(rows)
+    saturation_guard = _build_saturation_guard(rows)
+    _attach_saturation_guard_to_rows(rows, saturation_guard)
     result_payload = {
         "version": "1",
         "label": label,
@@ -205,17 +263,35 @@ def run_strategic_state_point_counterfactuals(
         "state_points": [
             _state_point_payload(state_point) for state_point in state_points
         ],
+        "saturation_guard": saturation_guard.model_dump(mode="json"),
         "candidates": rows,
     }
     proposal_manifest_path.write_text(
         json.dumps(proposal_manifest, indent=2),
         encoding="utf-8",
     )
+    saturation_guard_path.write_text(
+        json.dumps(saturation_guard.model_dump(mode="json"), indent=2),
+        encoding="utf-8",
+    )
     result_json_path.write_text(json.dumps(result_payload, indent=2), encoding="utf-8")
     _write_rows_csv(rows, result_csv_path)
     _write_markdown_result(
-        rows=rows, state_points=state_points, path=result_markdown_path
+        rows=rows,
+        state_points=state_points,
+        saturation_guard=saturation_guard,
+        path=result_markdown_path,
     )
+    notes = [
+        "Strategic state-point run: decision points may be proposed, not historical branch events.",
+        "LLM/template proposal uses only pre-as-of evidence and archive-derived doctrine.",
+        "JEPA predicts future heads for each candidate action; ranks are deterministic over those predictions.",
+        "Saturation guard marks flat or boundary-clipped score outputs as untrusted for daily advice.",
+    ]
+    if saturation_guard.status != "passed":
+        notes.append(
+            "Saturation guard did not pass; inspect saturation_guard before using rankings."
+        )
     return StrategicStatePointRunResult(
         label=label,
         source_count=len(sources),
@@ -229,12 +305,10 @@ def run_strategic_state_point_counterfactuals(
             result_json_path=result_json_path,
             result_csv_path=result_csv_path,
             result_markdown_path=result_markdown_path,
+            saturation_guard_path=saturation_guard_path,
         ),
-        notes=[
-            "Strategic state-point run: decision points may be proposed, not historical branch events.",
-            "LLM/template proposal uses only pre-as-of evidence and archive-derived doctrine.",
-            "JEPA predicts future heads for each candidate action; ranks are deterministic over those predictions.",
-        ],
+        saturation_guard=saturation_guard,
+        notes=notes,
     )
 
 
@@ -762,6 +836,211 @@ def _rank_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
     )
     return ranked
+
+
+def _build_saturation_guard(
+    rows: Sequence[dict[str, Any]],
+) -> StrategicScoreSaturationGuardReport:
+    groups_by_case: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        groups_by_case.setdefault(str(row.get("case_id", "")), []).append(row)
+    group_reports = [
+        _build_saturation_guard_group(case_id, group_rows)
+        for case_id, group_rows in sorted(groups_by_case.items())
+    ]
+    stats = _score_saturation_stats(rows)
+    run_reasons = _saturation_reasons(stats)
+    failed_group_count = sum(1 for group in group_reports if group.status == "failed")
+    warning_group_count = sum(1 for group in group_reports if group.status == "warning")
+    if group_reports and failed_group_count == len(group_reports):
+        run_reasons.append("all decision groups failed score-sensitivity checks")
+    elif failed_group_count:
+        run_reasons.append(
+            f"{failed_group_count} decision group(s) failed score-sensitivity checks"
+        )
+    if run_reasons:
+        status: SaturationGuardStatus = (
+            "failed"
+            if _saturation_reasons(stats) or failed_group_count == len(group_reports)
+            else "warning"
+        )
+    else:
+        status = "passed"
+    return StrategicScoreSaturationGuardReport(
+        status=status,
+        trusted_for_daily_advice=status == "passed",
+        candidate_count=stats["candidate_count"],
+        decision_group_count=len(group_reports),
+        failed_decision_group_count=failed_group_count,
+        warning_decision_group_count=warning_group_count,
+        score_min=stats["score_min"],
+        score_max=stats["score_max"],
+        score_spread=stats["score_spread"],
+        unique_score_count=stats["unique_score_count"],
+        invalid_score_count=stats["invalid_score_count"],
+        high_boundary_score_count=stats["high_boundary_score_count"],
+        low_boundary_score_count=stats["low_boundary_score_count"],
+        zero_delta_candidate_count=stats["zero_delta_candidate_count"],
+        zero_delta_fraction=stats["zero_delta_fraction"],
+        reasons=run_reasons,
+        decision_groups=group_reports,
+    )
+
+
+def _build_saturation_guard_group(
+    case_id: str,
+    rows: Sequence[dict[str, Any]],
+) -> StrategicScoreSaturationGuardGroup:
+    stats = _score_saturation_stats(rows)
+    reasons = _saturation_reasons(stats)
+    status: SaturationGuardStatus = "failed" if reasons else "passed"
+    return StrategicScoreSaturationGuardGroup(
+        case_id=case_id,
+        decision_point=str(rows[0].get("decision_point", "")) if rows else "",
+        candidate_count=stats["candidate_count"],
+        score_min=stats["score_min"],
+        score_max=stats["score_max"],
+        score_spread=stats["score_spread"],
+        unique_score_count=stats["unique_score_count"],
+        invalid_score_count=stats["invalid_score_count"],
+        high_boundary_score_count=stats["high_boundary_score_count"],
+        low_boundary_score_count=stats["low_boundary_score_count"],
+        zero_delta_candidate_count=stats["zero_delta_candidate_count"],
+        zero_delta_fraction=stats["zero_delta_fraction"],
+        status=status,
+        trusted_for_ranking=status == "passed",
+        reasons=reasons,
+    )
+
+
+def _score_saturation_stats(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    scores: list[float] = []
+    invalid_score_count = 0
+    for row in rows:
+        try:
+            score = float(row.get("balanced_operator_score", ""))
+        except (TypeError, ValueError):
+            invalid_score_count += 1
+            continue
+        if not bool(np.isfinite(score)):
+            invalid_score_count += 1
+            continue
+        scores.append(score)
+    rounded_scores = {round(score, _SATURATION_ROUND_DECIMALS) for score in scores}
+    high_boundary_score_count = sum(
+        1 for score in scores if score >= 1.0 - _SATURATION_SCORE_EPSILON
+    )
+    low_boundary_score_count = sum(
+        1 for score in scores if score <= _SATURATION_SCORE_EPSILON
+    )
+    zero_delta_candidate_count = sum(
+        1 for row in rows if _row_has_zero_prediction_delta(row)
+    )
+    candidate_count = len(rows)
+    zero_delta_fraction = (
+        zero_delta_candidate_count / candidate_count if candidate_count else 0.0
+    )
+    if scores:
+        score_min = round(min(scores), _SATURATION_ROUND_DECIMALS)
+        score_max = round(max(scores), _SATURATION_ROUND_DECIMALS)
+        score_spread = round(score_max - score_min, _SATURATION_ROUND_DECIMALS)
+    else:
+        score_min = None
+        score_max = None
+        score_spread = None
+    return {
+        "candidate_count": candidate_count,
+        "score_min": score_min,
+        "score_max": score_max,
+        "score_spread": score_spread,
+        "unique_score_count": len(rounded_scores),
+        "invalid_score_count": invalid_score_count,
+        "high_boundary_score_count": high_boundary_score_count,
+        "low_boundary_score_count": low_boundary_score_count,
+        "zero_delta_candidate_count": zero_delta_candidate_count,
+        "zero_delta_fraction": round(zero_delta_fraction, 6),
+    }
+
+
+def _saturation_reasons(stats: dict[str, Any]) -> list[str]:
+    candidate_count = int(stats["candidate_count"])
+    if candidate_count == 0:
+        return ["no candidate rows were scored"]
+    reasons: list[str] = []
+    invalid_count = int(stats["invalid_score_count"])
+    if invalid_count:
+        reasons.append(f"{invalid_count} candidate score(s) were invalid")
+    score_spread = stats["score_spread"]
+    if score_spread is None:
+        reasons.append("no finite candidate scores were available")
+    elif float(score_spread) < _SATURATION_MIN_SCORE_SPREAD:
+        reasons.append(
+            "score spread "
+            f"{float(score_spread):.6f} is below required "
+            f"{_SATURATION_MIN_SCORE_SPREAD:.6f}"
+        )
+    min_unique = min(_SATURATION_MIN_UNIQUE_SCORES, candidate_count)
+    unique_count = int(stats["unique_score_count"])
+    if unique_count < min_unique:
+        reasons.append(
+            f"only {unique_count} unique rounded score(s); at least {min_unique} required"
+        )
+    high_boundary_fraction = int(stats["high_boundary_score_count"]) / candidate_count
+    if high_boundary_fraction >= _SATURATION_MAX_BOUNDARY_SCORE_FRACTION:
+        reasons.append(
+            "too many scores are clipped at the high boundary "
+            f"({high_boundary_fraction:.3f})"
+        )
+    low_boundary_fraction = int(stats["low_boundary_score_count"]) / candidate_count
+    if low_boundary_fraction >= _SATURATION_MAX_BOUNDARY_SCORE_FRACTION:
+        reasons.append(
+            "too many scores are clipped at the low boundary "
+            f"({low_boundary_fraction:.3f})"
+        )
+    zero_delta_fraction = float(stats["zero_delta_fraction"])
+    if zero_delta_fraction >= _SATURATION_MAX_ZERO_DELTA_FRACTION:
+        reasons.append(
+            "too many candidates have no predicted movement vs baseline "
+            f"({zero_delta_fraction:.3f})"
+        )
+    return reasons
+
+
+def _row_has_zero_prediction_delta(row: dict[str, Any]) -> bool:
+    for _key, short_name, _higher_is_better in _DELTA_HEADS:
+        value = row.get(f"delta_{short_name}_vs_baseline")
+        try:
+            if abs(float(value)) > _SATURATION_SCORE_EPSILON:
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
+def _attach_saturation_guard_to_rows(
+    rows: Sequence[dict[str, Any]],
+    report: StrategicScoreSaturationGuardReport,
+) -> None:
+    group_by_case = {group.case_id: group for group in report.decision_groups}
+    for row in rows:
+        group = group_by_case.get(str(row.get("case_id", "")))
+        if group is None:
+            row["saturation_guard_status"] = report.status
+            row["saturation_guard_trusted_for_ranking"] = False
+            row["saturation_guard_reasons"] = "; ".join(report.reasons)
+            row["saturation_guard_score_spread"] = report.score_spread or ""
+            continue
+        row["saturation_guard_status"] = group.status
+        row["saturation_guard_trusted_for_ranking"] = group.trusted_for_ranking
+        row["saturation_guard_reasons"] = "; ".join(group.reasons)
+        row["saturation_guard_score_spread"] = (
+            "" if group.score_spread is None else group.score_spread
+        )
+        if group.status != "passed":
+            row["ranking_caveat"] = (
+                "saturation guard failed; do not use this rank until the scorer "
+                "is recalibrated"
+            )
 
 
 def _dominates(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -1565,6 +1844,7 @@ def _write_markdown_result(
     *,
     rows: Sequence[dict[str, Any]],
     state_points: Sequence[_StrategicStatePoint],
+    saturation_guard: StrategicScoreSaturationGuardReport,
     path: Path,
 ) -> None:
     lines = [
@@ -1578,10 +1858,19 @@ def _write_markdown_result(
         "",
         "Score direction: the operator readout rewards higher Commercial and Trust and lower Risk, Drag, and Strain. Inspect the vector and deltas before treating the rank as a decision.",
         "",
+        f"Scoring guard: `{saturation_guard.status}`. Trusted for daily advice: "
+        f"`{str(saturation_guard.trusted_for_daily_advice).lower()}`.",
+        "",
     ]
+    if saturation_guard.reasons:
+        lines.append("Guard reasons:")
+        for reason in saturation_guard.reasons:
+            lines.append(f"- {_md(reason)}")
+        lines.append("")
     rows_by_case: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         rows_by_case.setdefault(str(row["case_id"]), []).append(row)
+    guard_by_case = {group.case_id: group for group in saturation_guard.decision_groups}
     for state_point in state_points:
         case_rows = rows_by_case.get(state_point.branch_event.case_id, [])
         if not case_rows:
@@ -1589,6 +1878,16 @@ def _write_markdown_result(
         ordered = sorted(case_rows, key=lambda row: int(row["display_rank"]))
         top = ordered[0]
         baseline = top.get("baseline_action_label", "")
+        group_guard = guard_by_case.get(state_point.branch_event.case_id)
+        group_guard_summary = (
+            "`unknown`"
+            if group_guard is None
+            else (
+                f"`{group_guard.status}`; score spread "
+                f"`{group_guard.score_spread}`; trusted "
+                f"`{str(group_guard.trusted_for_ranking).lower()}`"
+            )
+        )
         lines.extend(
             [
                 f"## {_md(state_point.display_name)}: {_md(state_point.decision.title)}",
@@ -1605,6 +1904,7 @@ def _write_markdown_result(
                 "- Score basis: "
                 f"`{OPERATOR_SCORE_FORMULA_VERSION}` is a non-learned operator "
                 "sorting aid over five predicted heads.",
+                f"- Scoring guard: {group_guard_summary}",
                 f"- Shortlist lead: **{_md(str(top['candidate_label']))}**",
                 "",
                 "| Display | Frontier | Score rank | Candidate action | Operator score | Predicted future vector | Delta vs baseline | Tradeoff summary | Success observable |",
@@ -1642,6 +1942,8 @@ __all__ = [
     "StrategicCandidateInput",
     "StrategicDecisionInput",
     "StrategicProposalMode",
+    "StrategicScoreSaturationGuardGroup",
+    "StrategicScoreSaturationGuardReport",
     "StrategicStatePointArtifacts",
     "StrategicStatePointRunResult",
     "StrategicStatePointSource",

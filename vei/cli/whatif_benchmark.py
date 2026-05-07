@@ -535,6 +535,18 @@ def register_benchmark_commands(benchmark_app: typer.Typer) -> None:
                 f"- Markdown: `{result.artifacts.result_markdown_path}`",
                 f"- Proposals: `{result.artifacts.proposal_manifest_path}`",
             ]
+            if result.saturation_guard is not None:
+                lines.extend(
+                    [
+                        f"- Saturation guard: `{result.saturation_guard.status}`",
+                        "- Trusted for daily advice: "
+                        f"`{str(result.saturation_guard.trusted_for_daily_advice).lower()}`",
+                    ]
+                )
+                if result.artifacts.saturation_guard_path is not None:
+                    lines.append(
+                        f"- Saturation guard JSON: `{result.artifacts.saturation_guard_path}`"
+                    )
             emit_payload("\n".join(lines), format=format)
             return
         emit_payload(result.model_dump(mode="json"), format=format)
