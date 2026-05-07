@@ -120,30 +120,40 @@ Tradeoffs accepted for v1: vendor lock to Supabase (mitigated because Postgres i
 
 ### Canonical events table
 
-Single table, partitioned later if needed:
+Single table, partitioned later if needed. The storage shape must be lossless with respect to the frozen `CanonicalEvent` envelope: the database can expose scalar columns for query speed, but it must also retain enough JSONB to reconstruct the original canonical event byte-for-byte at the schema boundary. Event identity is tenant-scoped; existing deterministic event ids are often provider/raw ids and are not guaranteed to be globally unique across tenants.
 
 ```sql
 CREATE TABLE canonical_event (
-  event_id        TEXT PRIMARY KEY,
-  tenant_id       UUID NOT NULL,
-  bundle_id       UUID NOT NULL,
-  ts_ms           BIGINT NOT NULL,
-  surface         TEXT NOT NULL,
-  kind            TEXT NOT NULL,
-  case_id         TEXT,
-  actor_id        TEXT,
-  participants    JSONB NOT NULL DEFAULT '[]',
-  object_refs     JSONB NOT NULL DEFAULT '[]',
-  delta           JSONB NOT NULL DEFAULT '{}',
-  ingested_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  tenant_id          UUID NOT NULL,
+  event_id           TEXT NOT NULL,
+  bundle_id          UUID NOT NULL,
+  schema_version     INTEGER NOT NULL,
+  ts_ms              BIGINT NOT NULL,
+  domain             TEXT NOT NULL,
+  kind               TEXT NOT NULL,
+  case_id            TEXT,
+  actor_ref          JSONB,
+  participants       JSONB NOT NULL DEFAULT '[]',
+  object_refs        JSONB NOT NULL DEFAULT '[]',
+  internal_external  TEXT NOT NULL DEFAULT 'unknown',
+  provenance         JSONB NOT NULL DEFAULT '{}',
+  text_handle        JSONB,
+  policy_tags        JSONB NOT NULL DEFAULT '[]',
+  delta              JSONB,
+  event_hash         TEXT NOT NULL DEFAULT '',
+  envelope           JSONB NOT NULL,
+  ingested_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, event_id)
 );
 CREATE INDEX ON canonical_event (tenant_id, case_id, ts_ms);
-CREATE INDEX ON canonical_event (tenant_id, surface, ts_ms);
+CREATE INDEX ON canonical_event (tenant_id, domain, kind, ts_ms);
 CREATE INDEX ON canonical_event (tenant_id, ts_ms);
 ALTER TABLE canonical_event ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON canonical_event
   USING (tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid);
 ```
+
+Adapters insert the full `CanonicalEvent.model_dump(mode="json")` into `envelope`, duplicate hot query fields into columns, and verify on read that `envelope.event_id` and `envelope.tenant_id` match the primary key. If v2 globally namespaces event ids, the composite key can remain as a harmless tenant-isolation guard.
 
 Per-tenant volumes for early customers will sit in the millions of events, comfortably handled by a single Supabase instance. If a customer's volume grows past Postgres comfort (tens of millions of events with frequent full-stream scans for JEPA training), the migration is to point training at a columnar export (Parquet on S3) while keeping the live store in Postgres for queries.
 
