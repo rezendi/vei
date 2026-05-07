@@ -229,6 +229,12 @@ The repo also includes a local-only helper for the real Dispatch startup archive
 python scripts/build_dispatch_local_example.py
 ```
 
+A matching local-only helper exists for the private Powr of You Gmail, ClickUp, and Drive exports. It reads from `~/Downloads/onedrive dload` by default, writes `_vei_out/datasets/powrofyou`, and emits the same `context_snapshot.json`, canonical timeline sidecars, readiness report, and bundle build report:
+
+```bash
+python scripts/build_powrofyou_private_bundle.py
+```
+
 ### From a quickstart / playable workspace
 
 If you already have a quickstart or vertical workspace (e.g. `vei quickstart run --world service_ops --governor-demo`), the company graph is in the blueprint asset, not in a `context_snapshot.json`. Project it into the canonical shape with one command:
