@@ -20,7 +20,7 @@ behavior rather than only the static context bundle.
 
 Enron is the repo-owned public company example. Use it when you want a
 fresh-clone demonstration of historical replay, public-context slicing,
-business-outcome forecasting, and saved Studio bundles.
+decision-support forecasting, and saved Studio bundles.
 
 ### What you'll see
 

@@ -12,7 +12,7 @@ This is the one starting document for anyone — human or AI agent — working o
 
 ## What VEI Is
 
-VEI builds a runnable replica of any organisation or situation from real records. The same event spine supports the CLI, Studio UI, twin gateway, branch-point what-if experiments, company skill-map compilation, and learned world-model benchmarks.
+VEI is infrastructure for enterprise AI agents. It turns company or historical records and agent traces into one canonical event spine, then exposes that spine through the CLI, Studio UI, twin gateway, branch-point what-if experiments, company wiki, skill-map compilation, and learned world-model benchmarks.
 
 The practical job is usually one of these things:
 
@@ -21,16 +21,16 @@ The practical job is usually one of these things:
 - ingest agent-activity evidence and review VEI Control reports
 - compile company-specific draft skills from the normalized company bundle
 - mine repeated work into evidence-backed Business Task Specs for review
-- train or apply the JEPA-style world model to forecast future state and rank counterfactual actions
+- train or apply the JEPA-style world model to score alternate actions as decision support
 
-Do not treat VEI as an autonomous business oracle. Treat it as an offline benchmark and decision-support workflow. Factual prediction is the strongest evidence. Counterfactual rankings are hypotheses for human or expert review.
+Use counterfactual rankings as decision-support hypotheses for human or expert review. Factual prediction is the strongest evidence.
 
 ## Start Here
 
 Read these next when needed:
 
 - `README.md` for setup and operator flows
-- `docs/ARCHITECTURE.md` for the module map, five surfaces, and what is and isn't learned
+- `docs/ARCHITECTURE.md` for the module map, five infrastructure surfaces, and what is and isn't learned
 - `docs/GLOSSARY.md` for every term of art defined in one place
 - `docs/EXAMPLES.md` for worked examples (Enron, public history, Clearwater)
 - `docs/WHATIF.md` for the world-model and what-if command reference

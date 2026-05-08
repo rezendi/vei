@@ -6,7 +6,7 @@ VEI can RL-train agents on process correctness and compliance — properties exp
 
 ## Objective
 
-This document describes a defensible, scoped path for using VEI as an RL environment. It is the result of an explicit narrowing exercise: we started from the maximalist framing — VEI as "a programmable replica of a company's operational stack" suitable for general agent training — and worked backward, removing claims that did not survive scrutiny, until we reached a version that does.
+This document describes a defensible, scoped path for using VEI as an RL environment. It is the result of an explicit narrowing exercise: we started from the maximalist framing — VEI as a general company-agent training substrate — and worked backward, removing claims that did not survive scrutiny, until we reached a version that does.
 
 The objective is to use VEI to RL-train agents on **process correctness and compliance**, where correctness is expressible as deterministic predicates over event-spine state. This is RL for *process*, not RL for *outcomes*. The agent learns to follow well-specified procedural and governance properties: cross-surface referential integrity, permission and scope adherence, audit-trail completeness, idempotency under retry, required-step coverage, schema validity on tool calls. The agent does not learn to make business judgments, and the trained policy makes no claims about real-world business performance. The narrower scope is what allows the rigor claims to hold.
 
