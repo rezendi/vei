@@ -9,6 +9,11 @@ import typer
 from vei.whatif.filenames import CONTEXT_SNAPSHOT_FILE, PUBLIC_CONTEXT_FILE
 
 app = typer.Typer(add_completion=False)
+pipeshub_app = typer.Typer(
+    add_completion=False,
+    help="Inspect and snapshot a PipesHub enterprise connector instance.",
+)
+app.add_typer(pipeshub_app, name="pipeshub")
 
 
 def _write_snapshot_bundle(output: str, snapshot) -> Path:
@@ -40,6 +45,158 @@ def _require_canonical_history(root: str) -> Path:
         f"{paths.snapshot_path}. Expected {paths.events_path.name} and "
         f"{paths.index_path.name}."
     )
+
+
+def _pipeshub_client(base_url: str, token_env: str, timeout_s: int):
+    from vei.context.pipeshub import PipesHubClient
+
+    return PipesHubClient.from_env(
+        base_url=base_url,
+        token_env=token_env,
+        timeout_s=timeout_s,
+    )
+
+
+@pipeshub_app.command()
+def inspect(
+    base_url: str = typer.Option(
+        "",
+        "--base-url",
+        help="PipesHub base URL. Defaults to PIPESHUB_BASE_URL or local launcher URL.",
+    ),
+    token_env: str = typer.Option(
+        "PIPESHUB_BEARER_AUTH",
+        "--token-env",
+        help="Environment variable containing a PipesHub bearer token.",
+    ),
+    timeout_s: int = typer.Option(30, "--timeout-s", min=1),
+    format: str = typer.Option("plain", "--format", help="plain | json"),
+) -> None:
+    """Report configured PipesHub connector status and VEI ingestion support."""
+    from vei.context.pipeshub import inspect_pipeshub
+
+    try:
+        report = inspect_pipeshub(_pipeshub_client(base_url, token_env, timeout_s))
+    except Exception as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if format == "json":
+        typer.echo(report.model_dump_json(indent=2))
+        return
+    if format != "plain":
+        raise typer.BadParameter("format must be plain or json")
+    typer.echo(f"PipesHub: {report.base_url}")
+    typer.echo(f"Supported by VEI: {', '.join(report.supported_connectors)}")
+    if report.configured_connectors:
+        typer.echo("Configured connectors:")
+        for connector in report.configured_connectors:
+            flags = []
+            if connector.is_configured is not None:
+                flags.append(f"configured={connector.is_configured}")
+            if connector.is_authenticated is not None:
+                flags.append(f"authenticated={connector.is_authenticated}")
+            if connector.is_active is not None:
+                flags.append(f"active={connector.is_active}")
+            if connector.record_count is not None:
+                flags.append(f"records={connector.record_count}")
+            support = "supported" if connector.supported_by_vei else "not-ingested"
+            typer.echo(
+                f"- {connector.name or connector.display_name}: {support}"
+                + (f" ({', '.join(flags)})" if flags else "")
+            )
+            if not connector.supported_by_vei:
+                typer.echo(f"  {connector.support_note}")
+    else:
+        typer.echo("Configured connectors: none reported")
+    for warning in report.warnings:
+        typer.echo(f"Warning: {warning}")
+
+
+@pipeshub_app.command("capture")
+def capture_pipeshub(
+    workspace: Path = typer.Option(
+        ..., "--workspace", help="VEI workspace/context bundle directory to write into."
+    ),
+    connector: List[str] = typer.Option(
+        [],
+        "--connector",
+        "-c",
+        help="PipesHub connector name to capture. Repeat for multiple connectors.",
+    ),
+    org: str = typer.Option(..., "--org", help="Organization name"),
+    domain: str = typer.Option("", "--domain", help="Organization domain"),
+    base_url: str = typer.Option(
+        "",
+        "--base-url",
+        help="PipesHub base URL. Defaults to PIPESHUB_BASE_URL or local launcher URL.",
+    ),
+    token_env: str = typer.Option(
+        "PIPESHUB_BEARER_AUTH",
+        "--token-env",
+        help="Environment variable containing a PipesHub bearer token.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output context_snapshot.json path. Defaults to <workspace>/context_snapshot.json.",
+    ),
+    since: str = typer.Option("", "--since", help="Optional lower date bound."),
+    until: str = typer.Option("", "--until", help="Optional upper date bound."),
+    include_content: bool = typer.Option(
+        False,
+        "--include-content",
+        help="Fetch converted text content for each record. Metadata/snippet only by default.",
+    ),
+    limit: int = typer.Option(1000, "--limit", min=1, help="Maximum records to pull."),
+    page_size: int = typer.Option(100, "--page-size", min=1, max=200),
+    timeout_s: int = typer.Option(30, "--timeout-s", min=1),
+    format: str = typer.Option("plain", "--format", help="plain | json"),
+) -> None:
+    """Pull a reviewed PipesHub snapshot into VEI canonical context artifacts."""
+    from vei.context.pipeshub import capture_pipeshub_context
+    from vei.context.pipeshub import write_pipeshub_capture
+
+    try:
+        capture_result = capture_pipeshub_context(
+            _pipeshub_client(base_url, token_env, timeout_s),
+            organization_name=org,
+            organization_domain=domain,
+            connectors=connector,
+            since=since,
+            until=until,
+            include_content=include_content,
+            limit=limit,
+            page_size=page_size,
+        )
+        report = write_pipeshub_capture(
+            capture_result,
+            workspace=workspace,
+            output=output,
+        )
+    except Exception as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if format == "json":
+        typer.echo(report.model_dump_json(indent=2))
+        return
+    if format != "plain":
+        raise typer.BadParameter("format must be plain or json")
+    typer.echo(f"Captured {report.raw_record_count} PipesHub records")
+    typer.echo(f"Snapshot: {report.snapshot_path}")
+    typer.echo(f"Canonical events: {report.canonical_events_path}")
+    typer.echo(f"Canonical index: {report.canonical_index_path}")
+    typer.echo(f"Raw evidence: {report.raw_records_path}")
+    if report.source_counts:
+        typer.echo(
+            "Sources: "
+            + ", ".join(
+                f"{provider}={count}"
+                for provider, count in sorted(report.source_counts.items())
+            )
+        )
+    if report.skipped_records:
+        typer.echo(f"Skipped unmapped records: {report.skipped_records}")
+    for warning in report.warnings:
+        typer.echo(f"Warning: {warning}")
 
 
 @app.command()

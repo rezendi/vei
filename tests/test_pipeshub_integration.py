@@ -1,0 +1,279 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+from typer.testing import CliRunner
+
+from vei.cli.vei import app
+
+
+class _Response:
+    def __init__(self, payload: Any = None, body: bytes | None = None) -> None:
+        self.payload = payload
+        self.body = body
+        self.headers = {}
+
+    def read(self) -> bytes:
+        if self.body is not None:
+            return self.body
+        return json.dumps(self.payload).encode("utf-8")
+
+    def __enter__(self) -> "_Response":
+        return self
+
+    def __exit__(self, *_args: object) -> bool:
+        return False
+
+
+def test_pipeshub_launcher_dry_run_writes_local_profile(tmp_path: Path) -> None:
+    runner = CliRunner()
+    runtime_dir = tmp_path / "pipeshub"
+
+    result = runner.invoke(
+        app,
+        [
+            "connectors",
+            "pipeshub",
+            "up",
+            "--runtime-dir",
+            str(runtime_dir),
+            "--dry-run",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is True
+    assert payload["image"] == "pipeshubai/pipeshub-ai:v0.4.0"
+    assert (runtime_dir / ".env").exists()
+    compose_text = (runtime_dir / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "MESSAGE_BROKER=${MESSAGE_BROKER:-redis}" in compose_text
+    assert "SANDBOX_MODE=${SANDBOX_MODE:-subprocess}" in compose_text
+    assert "kafka" not in compose_text.lower()
+
+
+def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
+    monkeypatch,
+) -> None:
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        assert request.full_url.endswith("/api/v1/connectors?page=1&limit=200")
+        return _Response(
+            {
+                "connectors": [
+                    {
+                        "connectorName": "onedrive",
+                        "connectorId": "conn-one",
+                        "isConfigured": True,
+                        "isAuthenticated": True,
+                        "isActive": True,
+                    },
+                    {
+                        "connectorName": "microsoftTeams",
+                        "connectorId": "conn-teams",
+                    },
+                    {"connectorName": "clickup", "connectorId": "conn-clickup"},
+                ]
+            }
+        )
+
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["context", "pipeshub", "inspect", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    connectors = {item["name"]: item for item in payload["configured_connectors"]}
+    assert connectors["onedrive"]["supported_by_vei"] is True
+    assert connectors["microsoftteams"]["supported_by_vei"] is False
+    assert connectors["clickup"]["supported_by_vei"] is False
+    assert "clickup" in payload["unsupported_ingestion_connectors"]
+
+
+def test_pipeshub_capture_maps_records_to_context_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    records = [
+        {
+            "recordId": "gmail-1",
+            "recordType": "MAIL",
+            "connectorName": "gmailworkspace",
+            "recordName": "Renewal thread",
+            "subject": "Renewal thread",
+            "threadId": "thread-1",
+            "fromEmail": "maya@yourco.example",
+            "toEmails": ["buyer@example.com"],
+            "sourceCreatedAtTimestamp": "2026-03-01T10:00:00Z",
+            "snippet": "Can legal review the renewal?",
+        },
+        {
+            "recordId": "drive-1",
+            "recordType": "FILE",
+            "connectorName": "driveworkspace",
+            "recordName": "Renewal plan",
+            "mimeType": "application/vnd.google-apps.document",
+            "sourceLastModifiedTimestamp": "2026-03-01T11:00:00Z",
+            "snippet": "Renewal plan requires approval.",
+            "permissions": [{"email": "legal@yourco.example", "type": "reader"}],
+        },
+        {
+            "recordId": "jira-1",
+            "recordType": "TICKET",
+            "connectorName": "jira",
+            "recordName": "LEGAL-7 review",
+            "status": "open",
+            "assigneeEmail": "maya@yourco.example",
+            "sourceLastModifiedTimestamp": "2026-03-01T12:00:00Z",
+            "description": "Legal approval blocks renewal.",
+        },
+        {
+            "recordId": "conf-1",
+            "recordType": "CONFLUENCE_PAGE",
+            "connectorName": "confluence",
+            "recordName": "Approval policy",
+            "sourceLastModifiedTimestamp": "2026-03-01T13:00:00Z",
+            "snippet": "Approvals require finance signoff.",
+        },
+        {
+            "recordId": "sf-1",
+            "recordType": "DEAL",
+            "connectorName": "salesforce",
+            "recordName": "Acme expansion",
+            "stage": "legal_review",
+            "owner": "maya@yourco.example",
+            "sourceLastModifiedTimestamp": "2026-03-01T14:00:00Z",
+        },
+        {
+            "recordId": "onedrive-1",
+            "recordType": "FILE",
+            "connectorName": "onedrive",
+            "recordName": "MS account notes",
+            "sourceLastModifiedTimestamp": "2026-03-01T15:00:00Z",
+        },
+        {
+            "recordId": "outlook-1",
+            "recordType": "MAIL",
+            "connectorName": "outlook",
+            "recordName": "Outlook renewal",
+            "subject": "Outlook renewal",
+            "threadId": "thread-2",
+            "fromEmail": "sales@yourco.example",
+            "toEmails": ["buyer@example.com"],
+            "sourceCreatedAtTimestamp": "2026-03-01T16:00:00Z",
+        },
+    ]
+
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        url = request.full_url
+        parsed = urlparse(url)
+        if parsed.path.endswith("/api/v1/knowledgeBase/records"):
+            return _Response({"records": records, "total": len(records)})
+        if "/api/v1/knowledgeBase/record/" in parsed.path:
+            record_id = parsed.path.rsplit("/", 1)[-1]
+            record = next(item for item in records if item["recordId"] == record_id)
+            return _Response(
+                {"record": record, "permissions": record.get("permissions", [])}
+            )
+        raise AssertionError(f"unexpected URL: {url}")
+
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    runner = CliRunner()
+    workspace = tmp_path / "yourco"
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "pipeshub",
+            "capture",
+            "--workspace",
+            str(workspace),
+            "--org",
+            "YourCo",
+            "--domain",
+            "yourco.example",
+            "--connector",
+            "gmailworkspace",
+            "--connector",
+            "driveworkspace",
+            "--connector",
+            "jira",
+            "--connector",
+            "confluence",
+            "--connector",
+            "salesforce",
+            "--connector",
+            "onedrive",
+            "--connector",
+            "outlook",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    snapshot_path = Path(payload["snapshot_path"])
+    assert snapshot_path.exists()
+    assert Path(payload["canonical_events_path"]).exists()
+    assert Path(payload["canonical_index_path"]).exists()
+    assert Path(payload["raw_records_path"]).exists()
+    assert payload["raw_record_count"] == 7
+
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    providers = {source["provider"] for source in snapshot["sources"]}
+    assert {"gmail", "google", "jira", "salesforce"} <= providers
+    assert snapshot["metadata"]["source_gateway"] == "pipeshub"
+
+    events = Path(payload["canonical_events_path"]).read_text(encoding="utf-8")
+    assert "gmail.message" in events
+    assert "google.document" in events
+    assert "jira.open" in events
+    assert "salesforce.deal" in events
+
+    verify_result = runner.invoke(
+        app,
+        [
+            "context",
+            "verify",
+            "--snapshot",
+            str(snapshot_path),
+        ],
+    )
+    assert verify_result.exit_code == 0, verify_result.output
+    verification = json.loads(verify_result.output)
+    assert verification["ok"] is True
+    assert not [
+        check
+        for check in verification["checks"]
+        if check["code"] == "source.timestamp_span"
+        and check["detail"] == "no parseable timestamps found"
+    ]
+
+
+def test_pipeshub_capture_rejects_teams_and_clickup() -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "pipeshub",
+            "capture",
+            "--workspace",
+            "unused",
+            "--org",
+            "YourCo",
+            "--connector",
+            "teams",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "unsupported PipesHub ingestion connector" in result.output

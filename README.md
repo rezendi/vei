@@ -136,6 +136,45 @@ vei workspace twin onboard \
   --base-url notion=/path/to/notion-export.zip
 ```
 
+### Experimental PipesHub Connector Pilot
+
+VEI can also launch a local PipesHub stack and snapshot its synced enterprise
+records into the same canonical company-history bundle. PipesHub remains a
+separate connector/search service; VEI pulls a point-in-time snapshot and writes
+reviewable local artifacts.
+
+```bash
+pip install -e ".[pipeshub]"
+
+# Generate a local Compose profile and start PipesHub.
+vei connectors pipeshub up
+
+# Configure connectors in the local PipesHub UI, then inspect what VEI can ingest.
+vei context pipeshub inspect
+
+# Pull a snapshot from PipesHub into VEI.
+vei context pipeshub capture \
+  --workspace _vei_out/yourco \
+  --org "YourCo" --domain "yourco.example" \
+  --connector gmailworkspace \
+  --connector driveworkspace \
+  --connector jira \
+  --connector confluence \
+  --connector salesforce \
+  --connector onedrive \
+  --connector outlook
+```
+
+The capture writes raw evidence under
+`imports/source_syncs/pipeshub/<run_id>/`, then writes
+`context_snapshot.json`, `canonical_events.jsonl`, and
+`canonical_event_index.json`. Good v1 PipesHub-backed sources include Google
+Drive/Gmail, Confluence/Jira, Salesforce, OneDrive/SharePoint, Outlook, Box,
+Dropbox, Notion, ServiceNow, Linear, GitHub, and GitLab. Microsoft Teams and
+ClickUp are reported as unsupported for PipesHub ingestion in this lane; use
+VEI's direct ClickUp provider and Slack/export paths until those connectors have
+mature normalized sync support.
+
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:
 

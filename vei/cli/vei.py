@@ -47,6 +47,10 @@ class VEILazyGroup(LazyTyperGroup):
             module_path="vei.cli.vei_workflow",
             help="Mine, label, promote, and package evidence-backed business task specs.",
         ),
+        "connectors": LazyCommandSpec(
+            module_path="vei.cli.vei_connectors",
+            help="Manage optional local connector services such as PipesHub.",
+        ),
         "rollout": LazyCommandSpec(
             module_path="vei.cli.vei_rollout",
             help="Generate scripted rollouts from the simulated company for RL training.",
