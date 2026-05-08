@@ -386,7 +386,7 @@ make enron-example
 make enron-screens
 ```
 
-## Enron business-outcome benchmark
+## Enron business-state benchmark
 
 The historical replay flow above is for one branch point and one saved comparison. The Enron benchmark is for repeated measurement across many branch points.
 
@@ -575,7 +575,7 @@ VEI_REFERENCE_BACKEND_CHECKPOINT=_vei_out/world_model_multitenant_jepa/enron_dis
     --counterfactual-prompt "Route the incident to an accountable owner, hold broad sends, and send one controlled status update."
 ```
 
-Treat this as an offline artifact-backed experiment, not a production-proven universal CEO recommender. The strongest evidence remains factual held-out forecasting. Counterfactual rankings are decision-support signals until they are backed by human audit, expert review, or natural-experiment evidence.
+Treat this as an offline artifact-backed decision-support experiment. The strongest evidence remains factual held-out forecasting. Counterfactual rankings are decision-support signals until they are backed by human audit, expert review, or natural-experiment evidence.
 
 ### Strategic state-point counterfactual runs
 

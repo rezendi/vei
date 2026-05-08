@@ -35,15 +35,15 @@ Workspace / CLI / UI / SDK / Agent
 
 The router is a transport and tool-dispatch adapter. The twin gateway is an HTTP adapter that exposes provider-shaped compatibility routes and manages governed agents. Mutable enterprise state belongs to the kernel, not to transport wrappers.
 
-## One Kernel, Five Surfaces
+## One Kernel, Five Infrastructure Surfaces
 
-VEI is one kernel with five product surfaces sharing the same world session, connector layer, event spine, replay model, and contract scoring:
+VEI is one kernel with five infrastructure surfaces sharing the same world session, connector layer, event spine, replay model, and contract scoring:
 
 - **Test / Eval** — run a fixed company world, score an agent, compare scripted vs LLM vs workflow runners
 - **Governor / Control** — place VEI between agents and enterprise systems; govern, record, and replay what happened
 - **Sandbox / What-if** — fork the same world, change policy or actions, compare alternate futures with snapshot comparisons
-- **Train / Data** — turn traces and trajectories into rollouts, demonstrations, and RL-friendly data
-- **Knowledge / Company Wiki / Skill Map** — hydrate company records into a knowledge graph; materialize cited wiki pages over canonical evidence; compile company-specific agent skills from the normalized bundle with replay checks and evidence backing
+- **Train / Data** — turn traces and trajectories into rollouts, demonstrations, and bounded process-training packages
+- **Knowledge / Wiki / Skill Map** — hydrate company records into a knowledge graph; materialize cited wiki pages over canonical evidence; compile company-specific agent skills from the normalized bundle with replay checks and evidence backing
 
 ## Product Glossary
 
@@ -451,7 +451,7 @@ VEI keeps the current router twins, but the public ontology now groups them as f
 
 ## What Is and Isn't Learned
 
-VEI today is a deterministic enterprise simulator, governed twin, replay platform, and learned forecasting workbench. It is not a finished universal CEO recommender.
+VEI today is a deterministic enterprise simulator, governed twin, replay platform, and learned forecasting workbench over canonical event spines. Its strongest claims are factual forecasting, decision support, governed control, and scoped process-training surfaces backed by event evidence.
 
 **What is learned (in-repo, under `vei.dynamics`):**
 
@@ -468,7 +468,7 @@ VEI today is a deterministic enterprise simulator, governed twin, replay platfor
   `operator_utility_heads` and `domain_risk_heads` feed the Pareto frontier,
   `telemetry_heads` remain diagnostic, and `success_observable` /
   `failure_observable` / `next_decision_trigger` make the branch checkable.
-- This is an offline benchmark/training path, not an always-on CEO recommender.
+- Use this path for offline benchmark and training runs; live agent governance stays in Governor / Control.
 
 **What is heuristic (not learned):**
 
