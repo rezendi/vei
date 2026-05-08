@@ -235,6 +235,14 @@ A matching local-only helper exists for the private Powr of You Gmail, ClickUp, 
 python scripts/build_powrofyou_private_bundle.py
 ```
 
+By default the helper reads the full Gmail MBOX; pass `--mail-limit <n>` only for bounded smoke runs. The generated files contain private source content. Keep them under `_vei_out/` or another ignored/out-of-repo local path; the helper refuses to write inside the repo to a non-ignored path unless `--unsafe-allow-tracked-output` is passed. The PoY `readiness.json` also separates exploratory world-model readiness from deployment readiness: `ready_for_learned_world_model` means the local history is usable for exploratory model work, while `daily_company_deployment.ready` remains `false` until a separate privacy review, freshness gate, and outcome logging loop exist.
+
+The repo-owned drift check is fixture-backed and does not require the private exports:
+
+```bash
+pytest -q tests/test_powrofyou_private_bundle.py tests/test_canonical_history_stitching.py
+```
+
 ### From a quickstart / playable workspace
 
 If you already have a quickstart or vertical workspace (e.g. `vei quickstart run --world service_ops --governor-demo`), the company graph is in the blueprint asset, not in a `context_snapshot.json`. Project it into the canonical shape with one command:

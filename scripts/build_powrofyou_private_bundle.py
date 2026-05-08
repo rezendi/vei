@@ -8,6 +8,7 @@ import io
 import json
 import mimetypes
 import re
+import subprocess
 import zipfile
 from datetime import UTC, datetime, timedelta, timezone
 from email import policy
@@ -15,7 +16,10 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Any, Iterable
 
-from check_tenant_world_model import build_report
+try:
+    from scripts.check_tenant_world_model import build_report
+except ModuleNotFoundError:  # pragma: no cover - direct script execution path
+    from check_tenant_world_model import build_report
 from vei.context.api import (
     ContextSnapshot,
     ContextSourceResult,
@@ -27,6 +31,12 @@ DEFAULT_RAW_ROOT = Path("~/Downloads/onedrive dload").expanduser()
 DEFAULT_OUTPUT_ROOT = Path("_vei_out/datasets/powrofyou")
 DEFAULT_MBOX_NAME = "All mail Including Spam and Trash-002.mbox"
 DEFAULT_ZIP_NAME = "OneDrive_2_06-05-2026.zip"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_LOCAL_ONLY_BLOCKERS = [
+    "This helper builds a private historical bundle only; it does not publish, schedule, or run a daily company-facing service.",
+    "Run a privacy/provenance review before sharing any generated context_snapshot.json or sidecars.",
+    "Add freshness gates and outcome logging before treating outputs as trusted daily operating guidance.",
+]
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -82,33 +92,77 @@ def main() -> int:
     )
     parser.add_argument("--raw-root", type=Path, default=DEFAULT_RAW_ROOT)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
-    parser.add_argument("--mail-limit", type=int, default=20_000)
+    parser.add_argument("--mailbox-name", default=DEFAULT_MBOX_NAME)
+    parser.add_argument("--source-zip-name", default=DEFAULT_ZIP_NAME)
+    parser.add_argument(
+        "--mail-limit",
+        type=int,
+        default=0,
+        help="Maximum accepted Gmail messages to parse; 0 means no limit.",
+    )
     parser.add_argument("--max-message-bytes", type=int, default=2_000_000)
     parser.add_argument("--max-text-bytes", type=int, default=32_768)
+    parser.add_argument(
+        "--unsafe-allow-tracked-output",
+        action="store_true",
+        help=(
+            "Allow writing private bundle artifacts to a non-gitignored path inside "
+            "the repo. Use only for one-off local debugging."
+        ),
+    )
     args = parser.parse_args()
 
-    raw_root = args.raw_root.expanduser().resolve()
-    output_root = args.output_root.expanduser().resolve()
-    mbox_path = raw_root / DEFAULT_MBOX_NAME
-    source_zip_path = raw_root / DEFAULT_ZIP_NAME
+    readiness = build_powrofyou_private_bundle(
+        raw_root=args.raw_root,
+        output_root=args.output_root,
+        mailbox_name=args.mailbox_name,
+        source_zip_name=args.source_zip_name,
+        mail_limit=args.mail_limit,
+        max_message_bytes=args.max_message_bytes,
+        max_text_bytes=args.max_text_bytes,
+        allow_tracked_output=args.unsafe_allow_tracked_output,
+    )
+    print(json.dumps(_printable_summary(readiness), indent=2))
+    return 0
+
+
+def build_powrofyou_private_bundle(
+    *,
+    raw_root: Path,
+    output_root: Path,
+    mailbox_name: str = DEFAULT_MBOX_NAME,
+    source_zip_name: str = DEFAULT_ZIP_NAME,
+    mail_limit: int = 0,
+    max_message_bytes: int = 2_000_000,
+    max_text_bytes: int = 32_768,
+    allow_tracked_output: bool = False,
+) -> dict[str, Any]:
+    raw_root = raw_root.expanduser().resolve()
+    output_root = output_root.expanduser().resolve()
+    mbox_path = raw_root / mailbox_name
+    source_zip_path = raw_root / source_zip_name
 
     if not mbox_path.exists():
         raise FileNotFoundError(f"Gmail MBOX not found: {mbox_path}")
     if not source_zip_path.exists():
         raise FileNotFoundError(f"PoY source zip not found: {source_zip_path}")
+    if not allow_tracked_output:
+        _assert_local_private_path(output_root, label="output root")
+        _assert_local_private_path(mbox_path, label="Gmail MBOX source")
+        _assert_local_private_path(source_zip_path, label="PoY zip source")
 
     captured_at = iso_now()
     gmail_source = _capture_gmail_stream(
         mbox_path,
         captured_at=captured_at,
-        message_limit=args.mail_limit,
-        max_message_bytes=args.max_message_bytes,
+        message_limit=mail_limit,
+        max_message_bytes=max_message_bytes,
     )
     clickup_source = _capture_clickup_csv(source_zip_path, captured_at=captured_at)
     google_source = _capture_drive_takeout(
         source_zip_path,
         captured_at=captured_at,
-        max_text_bytes=args.max_text_bytes,
+        max_text_bytes=max_text_bytes,
     )
 
     snapshot = ContextSnapshot(
@@ -123,9 +177,10 @@ def main() -> int:
                 "raw_root": str(raw_root),
                 "mail_source": str(mbox_path),
                 "zip_source": str(source_zip_path),
-                "mail_limit": args.mail_limit,
+                "mail_limit": mail_limit,
                 "generated_at": captured_at,
                 "privacy": "local_private_artifact",
+                "output_root": str(output_root),
             },
         },
     )
@@ -136,6 +191,13 @@ def main() -> int:
     write_canonical_history_sidecars(snapshot, snapshot_path)
 
     readiness = build_report(snapshot_path)
+    readiness = _augment_private_readiness(
+        readiness,
+        snapshot=snapshot,
+        output_root=output_root,
+        mbox_path=mbox_path,
+        source_zip_path=source_zip_path,
+    )
     (output_root / "readiness.json").write_text(
         json.dumps(readiness, indent=2) + "\n",
         encoding="utf-8",
@@ -153,14 +215,108 @@ def main() -> int:
             for source in snapshot.sources
         ],
         "readiness_label": readiness.get("readiness", {}).get("readiness_label"),
+        "source_capture_complete": readiness.get("source_capture_complete"),
         "ready_for_learned_world_model": readiness.get("ready_for_learned_world_model"),
+        "daily_company_deployment_ready": readiness.get(
+            "daily_company_deployment", {}
+        ).get("ready"),
     }
     (output_root / "bundle_build_report.json").write_text(
         json.dumps(build_summary, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(json.dumps(_printable_summary(readiness), indent=2))
-    return 0
+    return readiness
+
+
+def _assert_local_private_path(path: Path, *, label: str) -> None:
+    resolved = path.expanduser().resolve()
+    if not _is_inside_repo(resolved):
+        return
+    if _is_gitignored(resolved):
+        return
+    raise ValueError(
+        f"{label} is inside the repo but is not gitignored: {resolved}. "
+        "Write PoY private exports and generated bundles under _vei_out/ "
+        "or outside the repo."
+    )
+
+
+def _is_inside_repo(path: Path) -> bool:
+    try:
+        path.relative_to(REPO_ROOT)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_gitignored(path: Path) -> bool:
+    if not _is_inside_repo(path):
+        return False
+    rel_path = path.relative_to(REPO_ROOT)
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", "--", str(rel_path)],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _augment_private_readiness(
+    readiness: dict[str, Any],
+    *,
+    snapshot: ContextSnapshot,
+    output_root: Path,
+    mbox_path: Path,
+    source_zip_path: Path,
+) -> dict[str, Any]:
+    source_capture = [
+        {
+            "provider": source.provider,
+            "status": source.status,
+            "record_counts": source.record_counts,
+            "error": source.error,
+        }
+        for source in snapshot.sources
+    ]
+    source_capture_complete = all(source["status"] == "ok" for source in source_capture)
+    notes = [str(note) for note in readiness.get("notes", [])]
+    if not source_capture_complete:
+        notes.append(
+            "one or more PoY source captures were partial, empty, or errored; "
+            "rerun with complete exports before treating counts as final"
+        )
+
+    output_inside_repo = _is_inside_repo(output_root)
+    readiness = dict(readiness)
+    readiness["source_capture"] = source_capture
+    readiness["source_capture_complete"] = source_capture_complete
+    readiness["private_bundle"] = {
+        "local_only": True,
+        "contains_private_source_content": True,
+        "raw_sources": {
+            "gmail_mbox": str(mbox_path),
+            "source_zip": str(source_zip_path),
+        },
+        "output_root": str(output_root),
+        "output_inside_repo": output_inside_repo,
+        "output_gitignored": (
+            _is_gitignored(output_root) if output_inside_repo else None
+        ),
+        "output_files": {
+            "context_snapshot": str(output_root / "context_snapshot.json"),
+            "canonical_events": str(output_root / "canonical_events.jsonl"),
+            "canonical_event_index": str(output_root / "canonical_event_index.json"),
+            "readiness": str(output_root / "readiness.json"),
+            "bundle_build_report": str(output_root / "bundle_build_report.json"),
+        },
+    }
+    readiness["daily_company_deployment"] = {
+        "ready": False,
+        "recommended_mode": "local human-reviewed pilot",
+        "blockers": list(_LOCAL_ONLY_BLOCKERS),
+    }
+    readiness["notes"] = _unique_strings(notes)
+    return readiness
 
 
 def _capture_gmail_stream(
@@ -199,7 +355,7 @@ def _capture_gmail_stream(
         ).strip()
         thread_map.setdefault(thread_id, []).append(parsed)
         accepted += 1
-        if accepted >= message_limit:
+        if message_limit > 0 and accepted >= message_limit:
             break
 
     threads = []
@@ -220,7 +376,7 @@ def _capture_gmail_stream(
     return ContextSourceResult(
         provider="gmail",
         captured_at=captured_at,
-        status="partial" if accepted >= message_limit else "ok",
+        status="partial" if message_limit > 0 and accepted >= message_limit else "ok",
         record_counts={
             "threads": len(threads),
             "messages": accepted,
@@ -234,7 +390,7 @@ def _capture_gmail_stream(
         data={"threads": threads, "profile": {}},
         error=(
             f"stopped at configured mail limit {message_limit}"
-            if accepted >= message_limit
+            if message_limit > 0 and accepted >= message_limit
             else None
         ),
     )
@@ -739,6 +895,18 @@ def _stable_id(*parts: str) -> str:
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
 
 
+def _unique_strings(values: Iterable[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        unique.append(text)
+    return unique
+
+
 def _printable_summary(readiness: dict[str, Any]) -> dict[str, Any]:
     nested = readiness.get("readiness", {})
     return {
@@ -751,6 +919,10 @@ def _printable_summary(readiness: dict[str, Any]) -> dict[str, Any]:
         "readiness_label": nested.get("readiness_label"),
         "ready_for_world_modeling": nested.get("ready_for_world_modeling"),
         "ready_for_learned_world_model": readiness.get("ready_for_learned_world_model"),
+        "source_capture_complete": readiness.get("source_capture_complete"),
+        "daily_company_deployment_ready": readiness.get(
+            "daily_company_deployment", {}
+        ).get("ready"),
         "notes": readiness.get("notes"),
     }
 

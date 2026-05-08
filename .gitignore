@@ -73,6 +73,11 @@ evals/
 **/exercise_manifest.json
 archive_data/
 
+# Private local company exports
+onedrive dload/
+OneDrive_2_06-05-2026.zip
+All mail Including Spam and Trash-002.mbox
+
 # Environment files and logs
 .env
 .env.bak
