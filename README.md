@@ -2,13 +2,17 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Strange-Lab-AI/vei)
 
-**VEI** builds a runnable replica of any organisation or situation from real records. You use it to replay historical decisions and compare alternate moves, test agents before they touch production systems, turn agent traces into RL training data, and compile company-specific knowledge and skills from ongoing company state.
+**VEI is infrastructure for enterprise AI agents.** It turns a company's real operational history — email, Slack, tickets, docs, CRM, GitHub, identity, observability, and agent traces — into one canonical event spine, then exposes that spine as replayable enterprise environments where agents can be tested, governed, audited, and improved before they touch production systems.
 
 Try it now: [strangelab.ai/enron](https://strangelab.ai/enron) · [strangelab.ai/public-history](https://strangelab.ai/public-history)
 
-VEI keeps company activity in one evidence ledger. From that ledger it builds the
-company wiki, workflow specs, what-if replays, audit views, evals, and training
-packages.
+One deterministic kernel, one event spine, five infrastructure surfaces:
+
+1. **Test / Eval** — run agents against fixed company worlds before production.
+2. **Governor / Control** — gate writes, record agent activity, and export evidence packs.
+3. **Sandbox / What-if** — replay historical branch points and compare alternate actions as decision support.
+4. **Train / Data** — turn traces and reviewed workflow specs into bounded process-training packages.
+5. **Knowledge / Wiki / Skill Map** — compile company memory, recurring workflows, and draft agent skills from evidence.
 
 ```mermaid
 flowchart LR
@@ -22,38 +26,35 @@ flowchart LR
 
     INGEST --> SPINE["Canonical event spine<br/>one evidence ledger for company activity"]
 
-    SPINE --> WIKI["Company Wiki<br/>what is known"]
-    SPINE --> WORKFLOW["Workflow Intelligence<br/>what work repeats, where judgment happens"]
-    SPINE --> CONTROL["Control / Audit<br/>what happened, who touched what, what risk exists"]
-    SPINE --> WHATIF["What-if / World Model<br/>what could have happened, what may happen next"]
+    SPINE --> WIKI["Knowledge / Wiki / Skill Map<br/>what is known, what repeats, what skills emerge"]
+    SPINE --> CONTROL["Governor / Control<br/>what happened, who touched what, what risk exists"]
+    SPINE --> WHATIF["Sandbox / What-if<br/>decision support over alternate actions"]
+    SPINE --> EVALS["Test / Eval<br/>rubric or contract depending on evidence"]
+    SPINE --> PACKAGES["Train / Data<br/>only when contract-ready"]
 
-    WORKFLOW --> SPEC["Business Task Specs<br/>objective, context, evidence,<br/>constraints, labels, rubrics, escalation"]
-    WIKI --> SPEC
+    WIKI --> SPEC["Business Task Specs<br/>objective, context, evidence,<br/>constraints, labels, rubrics, escalation"]
     CONTROL --> SPEC
 
-    SPEC --> SKILLS["Skill Map<br/>draft reusable capabilities"]
-    SPEC --> EVALS["Evals<br/>rubric or contract depending on evidence"]
-    SPEC --> PACKAGES["RL / training packages<br/>only when contract-ready"]
+    SPEC --> EVALS
+    SPEC --> PACKAGES
 
-    SKILLS --> IMPROVE["Improvement loop<br/>frontier model, small model,<br/>deterministic tool, human escalation"]
+    WIKI --> IMPROVE["Improvement loop<br/>frontier model, small model,<br/>deterministic tool, human escalation"]
     EVALS --> IMPROVE
     WHATIF --> IMPROVE
     PACKAGES --> IMPROVE
 ```
 
-## The Five Surfaces
+## Product Surfaces
 
-**1. Test / Eval** — Run a fixed company world and score an agent. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
+**Test / Eval** — Run fixed company worlds and score agents against contracts. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
 
-**2. Governor / Control** — Place VEI between agents and enterprise systems. Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance. Export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
+**Governor / Control** — Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance; gate writes and export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
 
-**3. Sandbox / What-if** — Fork a world, change a policy or action, compare alternate futures. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
+**Sandbox / What-if** — Fork a world, change a policy or action, and compare alternate paths as decision support. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
 
-**4. Train / Data** — Turn traces into rollouts, demonstrations, and RL-friendly data. Train world models (JEPA / reference backend) on canonical event sequences to forecast future state and rank counterfactual actions. See [docs/RL_GYM.md](docs/RL_GYM.md).
+**Train / Data** — Turn traces into rollouts, demonstrations, and scoped training data. Mine repeated work from canonical company history, promote evidence-backed Business Task Specs, and package only reviewed contract-ready specs into process environments. See [docs/RL_GYM.md](docs/RL_GYM.md).
 
-**5. Knowledge / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; compose proposals or briefs with citations. Compile company-specific agent skills from the normalized bundle, with replay checks and evidence backing.
-
-Workflow intelligence now sits across these surfaces: `vei workflow` mines repeated work from canonical company history, promotes evidence-backed Business Task Specs, and packages only reviewed RL-ready specs into process environments.
+**Knowledge / Wiki / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; materialize a company wiki with citations; compile company-specific draft skills from the normalized bundle, with replay checks and evidence backing.
 
 ## Quick Start
 
@@ -256,7 +257,7 @@ Exit codes: `0` pass · `1` test/gate failure · `2` cost ceiling exceeded · `3
 ## Where to Go Next
 
 - [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) — fast repo briefing and 10-minute checklist for humans and agents
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, five surfaces, runtime shape, what is and isn't learned
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, five infrastructure surfaces, runtime shape, what is and isn't learned
 - [docs/GLOSSARY.md](docs/GLOSSARY.md) — every term of art used in this repo, defined in one place
 - [docs/WHATIF.md](docs/WHATIF.md) — world-model and what-if command reference
 - [docs/EXAMPLES.md](docs/EXAMPLES.md) — Enron, public history, and Clearwater worked examples

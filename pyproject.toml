@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyvei"
 version = "0.3.0"
-description = "VEI — programmable replica of an enterprise software stack for agent testing, RL training, and operational simulation"
+description = "VEI — infrastructure for enterprise AI agent testing, governance, replay, and scoped training data"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }

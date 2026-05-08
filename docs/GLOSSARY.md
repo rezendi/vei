@@ -94,7 +94,7 @@ Every term of art used across VEI docs, defined once. Entries are alphabetical.
 
 **Twin / twin gateway** — the HTTP gateway (default port 3012) that exposes provider-shaped compatibility routes (Slack Web API, Jira REST, MS Graph, Salesforce REST) and manages governed agents.
 
-**VEI** — the product name. VEI builds a runnable replica of any organisation or situation from real records. Package name on PyPI: `pyvei`.
+**VEI** — the product name. VEI is infrastructure for enterprise AI agents: it turns company or historical records and agent traces into one canonical event spine, then exposes that spine through replay, eval, governed control, what-if, training-data, wiki, and skill-map surfaces. Package name on PyPI: `pyvei`.
 
 **Workspace** — the file-backed project model. Contains blueprint assets, contracts, scenarios, compile records, run registries, and saved what-if bundles.
 
