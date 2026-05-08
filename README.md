@@ -94,7 +94,7 @@ vei ui serve \
 
 Studio exposes the what-if surface as two explicit modes when both are available: **Live archive** for full-history exploration and **Saved reference** for the committed branch replay. Live archive remains the default and warms its loaded world in the UI server after status loads, so whole-history exploration stays visible without hiding behind the saved reference path.
 
-![Decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-top.png)
+![Readable decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-readme.jpg)
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public history, Clearwater).
 

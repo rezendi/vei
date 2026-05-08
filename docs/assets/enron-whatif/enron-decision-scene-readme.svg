@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Readable Enron Master Agreement decision scene</title>
+  <desc id="desc">A condensed README-scale view of the Enron Master Agreement branch point, showing the branch email, recorded future, public context, business state, and move choices.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8f6ef; }
+      .card { fill: #ffffff; stroke: #d7d9df; stroke-width: 2; }
+      .soft { fill: #fbfaf7; stroke: #e4e1da; stroke-width: 2; }
+      .accent { fill: #2e5f9e; }
+      .text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #172033; }
+      .muted { fill: #617086; }
+      .kicker { fill: #2e5f9e; font-size: 19px; font-weight: 800; letter-spacing: 7px; }
+      .h1 { font-size: 46px; font-weight: 800; }
+      .sub { font-size: 26px; font-weight: 500; fill: #506077; }
+      .label { font-size: 18px; font-weight: 800; letter-spacing: 4px; fill: #40516a; }
+      .stat { font-size: 29px; font-weight: 800; }
+      .body { font-size: 25px; font-weight: 500; }
+      .body-strong { font-size: 26px; font-weight: 800; }
+      .small { font-size: 22px; font-weight: 500; fill: #617086; }
+      .pill-text { font-size: 21px; font-weight: 700; fill: #506077; }
+      .badge { fill: #eef4fb; stroke: #c8d8ef; stroke-width: 2; }
+      .risk { fill: #7a2f3b; }
+      .ok { fill: #27615a; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="980"/>
+  <rect x="24" y="24" width="1552" height="932" rx="10" class="soft"/>
+
+  <text x="58" y="74" class="text kicker">DECISION SCENE</text>
+  <text x="58" y="130" class="text h1">Master Agreement branch point</text>
+  <text x="58" y="174" class="text sub">Debra Perlingiere is about to send a draft purchase/sale agreement to Kathy Gerken at Cargill.</text>
+
+  <rect x="1090" y="54" width="226" height="42" rx="21" class="badge"/>
+  <text x="1120" y="82" class="text pill-text">Enron Corporation</text>
+  <rect x="1334" y="54" width="168" height="42" rx="21" class="badge"/>
+  <text x="1364" y="82" class="text pill-text">30 prior items</text>
+  <rect x="1090" y="112" width="412" height="42" rx="21" class="badge"/>
+  <text x="1120" y="140" class="text pill-text">84 recorded future events</text>
+
+  <rect x="58" y="216" width="476" height="116" rx="8" class="card"/>
+  <text x="86" y="252" class="text label">BRANCH DATE</text>
+  <text x="86" y="292" class="text stat">Sep 27, 2000 - 6:42 AM</text>
+
+  <rect x="562" y="216" width="476" height="116" rx="8" class="card"/>
+  <text x="590" y="252" class="text label">ACTOR TO RECIPIENT</text>
+  <text x="590" y="292" class="text stat">Enron legal -> Cargill</text>
+  <text x="590" y="318" class="text small">debra.perlingiere@enron.com</text>
+
+  <rect x="1066" y="216" width="476" height="116" rx="8" class="card"/>
+  <text x="1094" y="252" class="text label">CASE</text>
+  <text x="1094" y="292" class="text stat">thr_e565b47423d035c9</text>
+  <text x="1094" y="318" class="text small">mail thread: Master Agreement</text>
+
+  <rect x="58" y="364" width="476" height="300" rx="8" class="card"/>
+  <text x="86" y="404" class="text kicker">BRANCH MOMENT</text>
+  <text x="86" y="450" class="text body-strong">Draft agreement sent outside</text>
+  <text x="86" y="490" class="text body">
+    <tspan x="86" dy="0">"Attached for your review, is a draft</tspan>
+    <tspan x="86" dy="34">of a Master Firm Purchase/Sale</tspan>
+    <tspan x="86" dy="34">Agreement between Cargill and</tspan>
+    <tspan x="86" dy="34">Enron North America."</tspan>
+  </text>
+  <text x="86" y="636" class="text small">Attachment reference present; outside recipient.</text>
+
+  <rect x="562" y="364" width="476" height="300" rx="8" class="card"/>
+  <text x="590" y="404" class="text kicker">RECORDED FUTURE</text>
+  <text x="590" y="450" class="text body-strong">What actually happened</text>
+  <circle cx="610" cy="493" r="6" class="accent"/>
+  <text x="632" y="501" class="text body">84 follow-up events after this branch</text>
+  <circle cx="610" cy="544" r="6" class="accent"/>
+  <text x="632" y="552" class="text body">64 outside-addressed sends</text>
+  <circle cx="610" cy="595" r="6" class="accent"/>
+  <text x="632" y="603" class="text body">16 escalation events</text>
+  <text x="590" y="646" class="text small">Signal: the thread spreads outside Enron.</text>
+
+  <rect x="1066" y="364" width="476" height="300" rx="8" class="card"/>
+  <text x="1094" y="404" class="text kicker">PUBLIC CONTEXT</text>
+  <text x="1094" y="450" class="text body-strong">Only public facts known by then</text>
+  <text x="1094" y="496" class="text body">5 financial snapshots</text>
+  <text x="1094" y="538" class="text body">6 public-news items</text>
+  <text x="1094" y="580" class="text body">679 market closes</text>
+  <text x="1094" y="622" class="text body">0 credit / regulatory checkpoints</text>
+  <text x="1094" y="650" class="text small">Last market close before branch: $85.50.</text>
+
+  <rect x="58" y="696" width="728" height="220" rx="8" class="card"/>
+  <text x="86" y="736" class="text kicker">RECORDED BUSINESS STATE</text>
+  <text x="86" y="782" class="text body-strong">The risk shape is visible before the move</text>
+  <text x="86" y="828" class="text body"><tspan class="risk" font-weight="800">very high</tspan> outside spread risk</text>
+  <text x="86" y="868" class="text body"><tspan class="muted" font-weight="800">low</tspan> commercial position and relationship stability</text>
+  <text x="86" y="908" class="text body"><tspan class="muted" font-weight="800">medium</tspan> execution delay</text>
+
+  <rect x="814" y="696" width="728" height="220" rx="8" class="card"/>
+  <text x="842" y="736" class="text kicker">CHOOSE A MOVE</text>
+  <text x="842" y="782" class="text body-strong">Selected: Hold for internal review</text>
+  <text x="842" y="826" class="text body">Alternatives: send narrow status note; push for fast turnaround.</text>
+  <text x="842" y="870" class="text body">VEI scores the move against the same evidence bundle</text>
+  <text x="842" y="904" class="text body">and the historical anchor.</text>
+
+  <text x="58" y="948" class="text small">Condensed README view of docs/examples/enron-master-agreement-public-context/ and docs/assets/enron-whatif/.</text>
+</svg>
