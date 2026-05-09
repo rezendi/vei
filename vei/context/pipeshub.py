@@ -21,70 +21,49 @@ DEFAULT_PIPESHUB_BASE_URL = "http://127.0.0.1:3000"
 DEFAULT_PIPESHUB_TOKEN_ENV = "PIPESHUB_BEARER_AUTH"
 DEFAULT_PAGE_SIZE = 100
 
-PIPESHUB_SUPPORTED_CONNECTORS: dict[str, str] = {
-    "drive": "Google Drive personal file sync",
-    "driveworkspace": "Google Drive Workspace file sync",
-    "gmail": "Gmail personal mail sync",
-    "gmailworkspace": "Gmail Workspace mail sync",
-    "confluence": "Confluence pages/blogposts/comments/files",
-    "jira": "Jira projects/issues/comments/files",
-    "salesforce": "Salesforce CRM objects",
-    "onedrive": "Microsoft OneDrive files",
-    "sharepointonline": "Microsoft SharePoint Online files/pages",
-    "outlook": "Microsoft Outlook tenant mail",
-    "outlookpersonal": "Microsoft Outlook personal mail",
-    "box": "Box files",
-    "dropbox": "Dropbox files",
-    "dropboxpersonal": "Dropbox personal files",
-    "notion": "Notion pages/databases",
-    "servicenow": "ServiceNow work records",
-    "linear": "Linear issues/projects",
-    "github": "GitHub issues/pull requests",
-    "gitlab": "GitLab issues/merge requests",
+# Map a PipesHub connectorName to a VEI provider name only where the names
+# actually differ. Anything not listed passes through unchanged, so adding
+# a new PipesHub connector requires no VEI patch.
+_PIPESHUB_TO_VEI_PROVIDER: dict[str, str] = {
+    "drive": "google",
+    "driveworkspace": "google",
+    "gmailworkspace": "gmail",
+    "sharepointonline": "sharepoint",
+    "outlookpersonal": "outlook",
+    "dropboxpersonal": "dropbox",
 }
 
-PIPESHUB_UNSUPPORTED_INGESTION: dict[str, str] = {
-    "teams": "PipesHub exposes Microsoft Teams agent actions, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoftteams": "PipesHub exposes Microsoft Teams agent actions, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoft_teams": "PipesHub exposes Microsoft Teams agent actions, but not a mature normalized Teams sync connector in the inspected build.",
-    "clickup": "PipesHub exposes ClickUp agent/tool code, but not a mature normalized ClickUp ingestion connector in the inspected build; use VEI's direct ClickUp provider for now.",
+# PipesHub recordType → shape. Drives which converter runs and which
+# bucket the record lands in within its provider's source. Unknown types
+# go to "other" and are emitted under the source's `other` key.
+_SHAPE_BY_TYPE: dict[str, str] = {
+    "mail": "mail",
+    "email": "mail",
+    "group_mail": "mail",
+    "file": "document",
+    "webpage": "document",
+    "confluence_page": "document",
+    "confluence_blogpost": "document",
+    "sharepoint_page": "document",
+    "notion_page": "document",
+    "drive_file": "document",
+    "onedrive_file": "document",
+    "box_file": "document",
+    "dropbox_file": "document",
+    "ticket": "ticket",
+    "comment": "ticket",
+    "inline_comment": "ticket",
+    "issue": "issue",
+    "pull_request": "issue",
+    "merge_request": "issue",
+    "contact": "contact",
+    "account": "company",
+    "company": "company",
+    "organization": "company",
+    "deal": "deal",
+    "case": "deal",
+    "product": "deal",
 }
-
-_CONNECTOR_ALIASES = {
-    "google_drive": "driveworkspace",
-    "googledrive": "driveworkspace",
-    "google-drive": "driveworkspace",
-    "google_gmail": "gmailworkspace",
-    "googlegmail": "gmailworkspace",
-    "google_mail": "gmailworkspace",
-    "googlemail": "gmailworkspace",
-    "google-mail": "gmailworkspace",
-    "drive_workspace": "driveworkspace",
-    "gmail_workspace": "gmailworkspace",
-    "gmail-workspace": "gmailworkspace",
-    "sharepoint": "sharepointonline",
-    "sharepoint_online": "sharepointonline",
-    "outlook_personal": "outlookpersonal",
-    "microsoft_outlook": "outlook",
-    "microsoft_onedrive": "onedrive",
-    "microsoft_sharepoint": "sharepointonline",
-    "microsoft_teams": "microsoftteams",
-}
-
-_MAIL_CONNECTORS = {"gmail", "gmailworkspace", "outlook", "outlookpersonal"}
-_DOC_CONNECTORS = {
-    "drive",
-    "driveworkspace",
-    "onedrive",
-    "sharepointonline",
-    "box",
-    "dropbox",
-    "dropboxpersonal",
-    "confluence",
-    "notion",
-}
-_WORK_CONNECTORS = {"jira", "servicenow", "linear", "github", "gitlab"}
-_CRM_CONNECTORS = {"salesforce"}
 
 
 class PipesHubConnectorSummary(BaseModel):
@@ -96,16 +75,13 @@ class PipesHubConnectorSummary(BaseModel):
     is_authenticated: bool | None = None
     is_active: bool | None = None
     record_count: int | None = None
-    supported_by_vei: bool = False
-    support_note: str = ""
 
 
 class PipesHubInspectReport(BaseModel):
     base_url: str
     checked_at: str
+    reachable: bool = True
     configured_connectors: list[PipesHubConnectorSummary] = Field(default_factory=list)
-    supported_connectors: list[str] = Field(default_factory=list)
-    unsupported_ingestion_connectors: dict[str, str] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -240,20 +216,13 @@ class PipesHubClient:
 
 
 def inspect_pipeshub(client: PipesHubClient) -> PipesHubInspectReport:
-    warnings: list[str] = []
     raw_connectors = client.list_connector_instances()
     summaries = [_connector_summary(item) for item in raw_connectors]
-    names = {item.name for item in summaries if item.name}
-    for unsupported, reason in PIPESHUB_UNSUPPORTED_INGESTION.items():
-        if unsupported in names:
-            warnings.append(f"{unsupported}: {reason}")
     return PipesHubInspectReport(
         base_url=client.base_url,
         checked_at=iso_now(),
+        reachable=True,
         configured_connectors=summaries,
-        supported_connectors=sorted(PIPESHUB_SUPPORTED_CONNECTORS),
-        unsupported_ingestion_connectors=dict(PIPESHUB_UNSUPPORTED_INGESTION),
-        warnings=warnings,
     )
 
 
@@ -274,23 +243,6 @@ def capture_pipeshub_context(
     date_to = _date_bound_to_pipeshub_ms(until, "--until")
     if date_from and date_to and int(date_to) < int(date_from):
         raise ValueError("--until must be greater than or equal to --since")
-    unsupported = [
-        name for name in normalized_connectors if name in PIPESHUB_UNSUPPORTED_INGESTION
-    ]
-    if unsupported:
-        details = "; ".join(
-            f"{name}: {PIPESHUB_UNSUPPORTED_INGESTION[name]}" for name in unsupported
-        )
-        raise ValueError(f"unsupported PipesHub ingestion connector(s): {details}")
-    unknown = [
-        name
-        for name in normalized_connectors
-        if name and name not in PIPESHUB_SUPPORTED_CONNECTORS
-    ]
-    if unknown:
-        raise ValueError(
-            "unknown or unsupported PipesHub connector(s): " + ", ".join(unknown)
-        )
 
     records: list[dict[str, Any]] = []
     detail_count = 0
@@ -358,7 +310,10 @@ def capture_pipeshub_context(
         },
     )
     source_counts = {
-        source.provider: _source_capture_count(source) for source in sources
+        source.provider: sum(
+            count for count in source.record_counts.values() if count > 0
+        )
+        for source in sources
     }
     report = PipesHubCaptureReport(
         base_url=client.base_url,
@@ -477,141 +432,120 @@ def _write_source_registry(
 def _records_to_sources(
     records: list[dict[str, Any]],
 ) -> tuple[list[ContextSourceResult], int]:
-    mail_threads: dict[str, dict[str, Any]] = {}
-    documents: list[dict[str, Any]] = []
-    jira_issues: dict[str, dict[str, Any]] = {}
-    crm_companies: list[dict[str, Any]] = []
-    crm_contacts: list[dict[str, Any]] = []
-    crm_deals: list[dict[str, Any]] = []
-    linear_issues: list[dict[str, Any]] = []
-    github_issues: list[dict[str, Any]] = []
-    gitlab_issues: list[dict[str, Any]] = []
-    skipped = 0
+    """Bucket records by (upstream provider, shape).
+
+    Provider comes from the record's connectorName, normalized to whatever
+    VEI already calls that upstream system. Shape comes from recordType.
+    Records whose recordType isn't recognized still get emitted, under
+    their provider's `other` key.
+    """
+    from collections import defaultdict
+
+    buckets: dict[str, dict[str, Any]] = defaultdict(_empty_bucket)
+    unmapped = 0
 
     for index, record in enumerate(records):
-        connector = _connector_name(record)
-        record_type = _record_type(record)
-        if connector in _MAIL_CONNECTORS or record_type in {
-            "mail",
-            "group_mail",
-            "email",
-        }:
-            _add_mail_record(mail_threads, record, fallback=index)
-            continue
-        if connector in _DOC_CONNECTORS or record_type in {
-            "file",
-            "webpage",
-            "confluence_page",
-            "confluence_blogpost",
-            "sharepoint_page",
-        }:
-            documents.append(_document_record(record, fallback=index))
-            continue
-        if connector == "jira" or record_type in {"ticket"}:
-            _add_ticket_record(jira_issues, record, fallback=index)
-            continue
-        if connector == "linear":
-            linear_issues.append(_issue_record(record, fallback=index))
-            continue
-        if connector == "github":
-            github_issues.append(_issue_record(record, fallback=index))
-            continue
-        if connector == "gitlab":
-            gitlab_issues.append(_issue_record(record, fallback=index))
-            continue
-        if connector in _CRM_CONNECTORS or record_type in {"deal", "case", "product"}:
-            if record_type in {"contact"}:
-                crm_contacts.append(_contact_record(record, fallback=index))
-            elif record_type in {"account", "company", "organization"}:
-                crm_companies.append(_company_record(record, fallback=index))
-            else:
-                crm_deals.append(_deal_record(record, fallback=index))
-            continue
-        skipped += 1
+        provider = _vei_provider(_connector_name(record))
+        bucket = buckets[provider]
+        shape = _SHAPE_BY_TYPE.get(_record_type(record), "other")
 
-    sources: list[ContextSourceResult] = []
-    if mail_threads:
-        threads = list(mail_threads.values())
-        message_count = sum(len(thread.get("messages", [])) for thread in threads)
-        sources.append(
-            ContextSourceResult(
-                provider="gmail",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"threads": len(threads), "messages": message_count},
-                data={"threads": threads, "profile": {"source_gateway": "pipeshub"}},
+        if shape == "mail":
+            _add_mail_record(bucket["mail_threads"], record, fallback=index)
+        elif shape == "document":
+            bucket["documents"].append(_document_record(record, fallback=index))
+        elif shape == "ticket":
+            _add_ticket_record(bucket["tickets"], record, fallback=index)
+        elif shape == "issue":
+            bucket["issues"].append(_issue_record(record, fallback=index))
+        elif shape == "company":
+            bucket["companies"].append(_company_record(record, fallback=index))
+        elif shape == "contact":
+            bucket["contacts"].append(_contact_record(record, fallback=index))
+        elif shape == "deal":
+            bucket["deals"].append(_deal_record(record, fallback=index))
+        else:
+            bucket["other"].append(
+                {
+                    "record_type": _record_type(record) or "unknown",
+                    "payload": record,
+                    "metadata": _provenance(record),
+                }
             )
-        )
-    if documents:
-        sources.append(
-            ContextSourceResult(
-                provider="google",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"documents": len(documents)},
-                data={"documents": documents, "users": [], "drive_shares": []},
-            )
-        )
-    if jira_issues:
-        issues = list(jira_issues.values())
-        sources.append(
-            ContextSourceResult(
-                provider="jira",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"issues": len(issues), "projects": 0},
-                data={"issues": issues, "projects": []},
-            )
-        )
-    if linear_issues:
-        sources.append(
-            ContextSourceResult(
-                provider="linear",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"issues": len(linear_issues), "projects": 0},
-                data={"issues": linear_issues, "projects": [], "cycles": []},
-            )
-        )
-    if github_issues:
-        sources.append(
-            ContextSourceResult(
-                provider="github",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"issues": len(github_issues), "pull_requests": 0},
-                data={"issues": github_issues, "pull_requests": [], "repositories": []},
-            )
-        )
-    if gitlab_issues:
-        sources.append(
-            ContextSourceResult(
-                provider="gitlab",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={"issues": len(gitlab_issues), "merge_requests": 0},
-                data={"issues": gitlab_issues, "merge_requests": [], "projects": []},
-            )
-        )
-    if crm_companies or crm_contacts or crm_deals:
-        sources.append(
-            ContextSourceResult(
-                provider="salesforce",
-                captured_at=iso_now(),
-                status="ok",
-                record_counts={
-                    "companies": len(crm_companies),
-                    "contacts": len(crm_contacts),
-                    "deals": len(crm_deals),
-                },
-                data={
-                    "companies": crm_companies,
-                    "contacts": crm_contacts,
-                    "deals": crm_deals,
-                },
-            )
-        )
-    return sources, skipped
+            unmapped += 1
+
+    sources = [
+        _assemble_source(provider, bucket)
+        for provider, bucket in sorted(buckets.items())
+    ]
+    return sources, unmapped
+
+
+def _empty_bucket() -> dict[str, Any]:
+    return {
+        "mail_threads": {},
+        "documents": [],
+        "tickets": {},
+        "issues": [],
+        "companies": [],
+        "contacts": [],
+        "deals": [],
+        "other": [],
+    }
+
+
+def _assemble_source(provider: str, bucket: dict[str, Any]) -> ContextSourceResult:
+    """Pack a provider's buckets into the data shape its readers expect.
+
+    Each provider keeps the data keys VEI's existing capture pipelines
+    use (gmail → threads, jira/work providers → issues, salesforce →
+    companies/contacts/deals). Unknown-recordType records land under
+    `other` so they're still discoverable downstream.
+    """
+    threads = list(bucket["mail_threads"].values())
+    tickets = list(bucket["tickets"].values())
+
+    data: dict[str, Any] = {}
+    counts: dict[str, int] = {}
+
+    if threads:
+        data["threads"] = threads
+        data["profile"] = {"source_gateway": "pipeshub"}
+        counts["threads"] = len(threads)
+        counts["messages"] = sum(len(t.get("messages", [])) for t in threads)
+    if bucket["documents"]:
+        data["documents"] = bucket["documents"]
+        data.setdefault("users", [])
+        data.setdefault("drive_shares", [])
+        counts["documents"] = len(bucket["documents"])
+    # Tickets and issues both use the `issues` data key — provider name
+    # disambiguates jira tickets from github/linear/gitlab issues.
+    if tickets:
+        data.setdefault("issues", []).extend(tickets)
+        data.setdefault("projects", [])
+        counts["issues"] = counts.get("issues", 0) + len(tickets)
+    if bucket["issues"]:
+        data.setdefault("issues", []).extend(bucket["issues"])
+        data.setdefault("pull_requests", [])
+        data.setdefault("merge_requests", [])
+        counts["issues"] = counts.get("issues", 0) + len(bucket["issues"])
+    if bucket["companies"] or bucket["contacts"] or bucket["deals"]:
+        data["companies"] = bucket["companies"]
+        data["contacts"] = bucket["contacts"]
+        data["deals"] = bucket["deals"]
+        counts["companies"] = len(bucket["companies"])
+        counts["contacts"] = len(bucket["contacts"])
+        counts["deals"] = len(bucket["deals"])
+    if bucket["other"]:
+        data["other"] = bucket["other"]
+        counts["other"] = len(bucket["other"])
+
+    return ContextSourceResult(
+        provider=provider,
+        captured_at=iso_now(),
+        status="ok",
+        record_counts=counts,
+        data=data,
+    )
 
 
 def _add_mail_record(
@@ -794,7 +728,7 @@ def _deal_record(record: dict[str, Any], *, fallback: int) -> dict[str, Any]:
 
 
 def _connector_summary(item: dict[str, Any]) -> PipesHubConnectorSummary:
-    name = _normalize_connector(
+    name = _normalize_token(
         _text_field(
             item,
             "connectorName",
@@ -809,10 +743,6 @@ def _connector_summary(item: dict[str, Any]) -> PipesHubConnectorSummary:
         )
     )
     connector_id = _text_field(item, "connectorId", "connector_id", "id", "_key")
-    supported = name in PIPESHUB_SUPPORTED_CONNECTORS
-    support_note = PIPESHUB_SUPPORTED_CONNECTORS.get(
-        name, PIPESHUB_UNSUPPORTED_INGESTION.get(name, "Not mapped by VEI yet.")
-    )
     return PipesHubConnectorSummary(
         name=name,
         connector_id=connector_id,
@@ -826,29 +756,33 @@ def _connector_summary(item: dict[str, Any]) -> PipesHubConnectorSummary:
         ),
         is_active=_bool_or_none(item, "isActive", "is_active", "active"),
         record_count=_int_or_none(item, "recordCount", "record_count", "records"),
-        supported_by_vei=supported,
-        support_note=support_note,
     )
 
 
 def _normalize_connectors(connectors: list[str]) -> list[str]:
+    """Lowercase + dedupe CLI connector inputs. Pass-through to PipesHub."""
     normalized: list[str] = []
     for connector in connectors:
-        name = _normalize_connector(connector)
-        if not name:
-            continue
-        if name not in normalized:
+        name = _normalize_token(connector)
+        if name and name not in normalized:
             normalized.append(name)
     return normalized
 
 
-def _normalize_connector(value: Any) -> str:
+def _normalize_token(value: Any) -> str:
+    """Lowercase, strip whitespace, collapse non-alphanumerics to underscores."""
     raw = str(value or "").strip()
     if not raw:
         return ""
-    compact = re.sub(r"[^a-z0-9]+", "", raw.lower())
-    lowered = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
-    return _CONNECTOR_ALIASES.get(lowered) or _CONNECTOR_ALIASES.get(compact) or lowered
+    return re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+
+
+def _vei_provider(connector_name: str) -> str:
+    """Map a PipesHub connector name to the upstream system VEI calls it."""
+    name = (connector_name or "").strip().lower()
+    if not name:
+        return "pipeshub"
+    return _PIPESHUB_TO_VEI_PROVIDER.get(name, name)
 
 
 def _extract_items(payload: Any, *, keys: tuple[str, ...]) -> list[dict[str, Any]]:
@@ -896,13 +830,11 @@ def _record_id(record: dict[str, Any]) -> str:
 
 
 def _record_type(record: dict[str, Any]) -> str:
-    return _normalize_connector(
-        _text_field(record, "recordType", "record_type", "type")
-    )
+    return _normalize_token(_text_field(record, "recordType", "record_type", "type"))
 
 
 def _connector_name(record: dict[str, Any]) -> str:
-    return _normalize_connector(
+    return _normalize_token(
         _text_field(
             record,
             "connectorName",
@@ -1043,21 +975,6 @@ def _date_bound_to_pipeshub_ms(value: str, option_name: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return str(int(parsed.timestamp() * 1000))
-
-
-def _source_capture_count(source: ContextSourceResult) -> int:
-    counts = source.record_counts
-    if source.provider == "gmail":
-        return counts.get("messages") or counts.get("threads") or 0
-    if source.provider == "google":
-        return counts.get("documents") or 0
-    if source.provider in {"jira", "linear"}:
-        return counts.get("issues") or 0
-    if source.provider == "github":
-        return counts.get("issues", 0) + counts.get("pull_requests", 0)
-    if source.provider == "gitlab":
-        return counts.get("issues", 0) + counts.get("merge_requests", 0)
-    return sum(count for count in counts.values() if count > 0)
 
 
 def _http_error_message(exc: HTTPError) -> str:

@@ -85,7 +85,7 @@ def inspect(
     if format != "plain":
         raise typer.BadParameter("format must be plain or json")
     typer.echo(f"PipesHub: {report.base_url}")
-    typer.echo(f"Supported by VEI: {', '.join(report.supported_connectors)}")
+    typer.echo(f"Reachable: {report.reachable}")
     if report.configured_connectors:
         typer.echo("Configured connectors:")
         for connector in report.configured_connectors:
@@ -98,13 +98,10 @@ def inspect(
                 flags.append(f"active={connector.is_active}")
             if connector.record_count is not None:
                 flags.append(f"records={connector.record_count}")
-            support = "supported" if connector.supported_by_vei else "not-ingested"
             typer.echo(
-                f"- {connector.name or connector.display_name}: {support}"
+                f"- {connector.name or connector.display_name}"
                 + (f" ({', '.join(flags)})" if flags else "")
             )
-            if not connector.supported_by_vei:
-                typer.echo(f"  {connector.support_note}")
     else:
         typer.echo("Configured connectors: none reported")
     for warning in report.warnings:

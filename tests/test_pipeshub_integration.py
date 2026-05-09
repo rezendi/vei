@@ -6,7 +6,6 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
-import pytest
 from typer.testing import CliRunner
 
 from vei.cli.vei import app
@@ -123,7 +122,7 @@ def test_pipeshub_launcher_overwrite_preserves_local_secrets(tmp_path: Path) -> 
         assert second_env[key] == first_env[key]
 
 
-def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
+def test_pipeshub_inspect_reports_configured_connectors(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("PIPESHUB_BEARER_AUTH", "token-123")
@@ -166,14 +165,18 @@ def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
+    assert payload["reachable"] is True
+    assert "supported_connectors" not in payload
+    assert "unsupported_ingestion_connectors" not in payload
     connectors = {item["name"]: item for item in payload["configured_connectors"]}
-    assert connectors["gmailworkspace"]["supported_by_vei"] is True
-    assert connectors["gmailworkspace"]["display_name"] == "Company Gmail"
-    assert connectors["gmailworkspace"]["connector_id"] == "conn-gmail"
-    assert connectors["onedrive"]["supported_by_vei"] is True
-    assert connectors["microsoftteams"]["supported_by_vei"] is False
-    assert connectors["clickup"]["supported_by_vei"] is False
-    assert "clickup" in payload["unsupported_ingestion_connectors"]
+    assert connectors["google_gmail"]["display_name"] == "Company Gmail"
+    assert connectors["google_gmail"]["connector_id"] == "conn-gmail"
+    assert connectors["onedrive"]["is_active"] is True
+    assert connectors["microsoftteams"]["connector_id"] == "conn-teams"
+    assert connectors["clickup"]["connector_id"] == "conn-clickup"
+    for connector in payload["configured_connectors"]:
+        assert "supported_by_vei" not in connector
+        assert "support_note" not in connector
 
 
 def test_pipeshub_inspect_auth_error_names_token_env(monkeypatch) -> None:
@@ -334,11 +337,22 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert Path(payload["canonical_index_path"]).exists()
     assert Path(payload["raw_records_path"]).exists()
     assert payload["raw_record_count"] == 7
+    # gmail thread + 1 message ⇒ 2, outlook threads land under their own
+    # provider now that we stop pretending PipesHub is the origin.
     assert payload["source_counts"]["gmail"] == 2
+    assert payload["source_counts"]["outlook"] == 2
 
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     providers = {source["provider"] for source in snapshot["sources"]}
-    assert {"gmail", "google", "jira", "salesforce"} <= providers
+    assert {
+        "gmail",
+        "google",
+        "jira",
+        "salesforce",
+        "confluence",
+        "onedrive",
+        "outlook",
+    } <= providers
     assert snapshot["metadata"]["source_gateway"] == "pipeshub"
 
     events = Path(payload["canonical_events_path"]).read_text(encoding="utf-8")
@@ -365,28 +379,6 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
         if check["code"] == "source.timestamp_span"
         and check["detail"] == "no parseable timestamps found"
     ]
-
-
-@pytest.mark.parametrize("connector", ["teams", "microsoft_teams", "clickup"])
-def test_pipeshub_capture_rejects_teams_and_clickup(connector: str) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        [
-            "context",
-            "pipeshub",
-            "capture",
-            "--workspace",
-            "unused",
-            "--org",
-            "YourCo",
-            "--connector",
-            connector,
-        ],
-    )
-
-    assert result.exit_code != 0
-    assert "unsupported PipesHub ingestion connector" in result.output
 
 
 def _read_env(path: Path) -> dict[str, str]:

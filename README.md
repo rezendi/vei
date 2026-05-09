@@ -174,12 +174,14 @@ vei context pipeshub capture \
 The capture writes raw evidence under
 `imports/source_syncs/pipeshub/<run_id>/`, then writes
 `context_snapshot.json`, `canonical_events.jsonl`, and
-`canonical_event_index.json`. Good v1 PipesHub-backed sources include Google
-Drive/Gmail, Confluence/Jira, Salesforce, OneDrive/SharePoint, Outlook, Box,
-Dropbox, Notion, ServiceNow, Linear, GitHub, and GitLab. Microsoft Teams and
-ClickUp are reported as unsupported for PipesHub ingestion in this lane; use
-VEI's direct ClickUp provider and Slack/export paths until those connectors have
-mature normalized sync support.
+`canonical_event_index.json`. Records keep their upstream system identity
+— PipesHub is the transport, not the origin — so a Gmail message lands
+under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive
+file under `provider="google"`, and so on. VEI does not maintain its own
+allowlist of which PipesHub connectors are "supported"; whatever PipesHub
+serves is ingested under the source system it came from. Records whose
+record type VEI doesn't have a normalized shape for land in an `other`
+bucket on their provider so they remain discoverable downstream.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:
