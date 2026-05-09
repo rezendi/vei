@@ -51,12 +51,76 @@ def test_pipeshub_launcher_dry_run_writes_local_profile(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["dry_run"] is True
-    assert payload["image"] == "pipeshubai/pipeshub-ai:v0.4.0"
+    assert payload["base_image"] == "pipeshubai/pipeshub-ai:0.4.0"
+    assert payload["image"] == "vei-pipeshub-ai:0.4.0"
     assert (runtime_dir / ".env").exists()
+    assert (runtime_dir / "Dockerfile.pipeshub").exists()
+    assert (runtime_dir / "patch-pipeshub-deployment-config.js").exists()
     compose_text = (runtime_dir / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "\t" not in compose_text
+    assert "build:" in compose_text
+    assert (
+        "PIPESHUB_BASE_IMAGE: pipeshubai/pipeshub-ai:${IMAGE_TAG:-0.4.0}"
+        in compose_text
+    )
+    assert "arangosh --server.endpoint tcp://127.0.0.1:8529" in compose_text
+    assert "pipeshub-config-init:" in compose_text
+    assert '\\"dataStoreType\\":\\"$${DATA_STORE}\\"' in compose_text
+    assert "condition: service_completed_successfully" in compose_text
+    assert "KAFKA_BROKERS=${KAFKA_BROKERS:-kafka-1:9092}" in compose_text
+    assert "DATA_STORE=${DATA_STORE:-arangodb}" in compose_text
     assert "MESSAGE_BROKER=${MESSAGE_BROKER:-redis}" in compose_text
+    assert (
+        "REDISCLI_AUTH=$${REDIS_PASSWORD:-} redis-cli --raw incr ping" in compose_text
+    )
     assert "SANDBOX_MODE=${SANDBOX_MODE:-subprocess}" in compose_text
-    assert "kafka" not in compose_text.lower()
+    assert "zookeeper" not in compose_text.lower()
+    assert "confluentinc/cp-kafka" not in compose_text.lower()
+    patch_text = (runtime_dir / "patch-pipeshub-deployment-config.js").read_text(
+        encoding="utf-8"
+    )
+    assert "if (typeof parsed === 'string')" in patch_text
+    assert "getDeploymentConfig and readDeploymentConfig" in patch_text
+
+
+def test_pipeshub_launcher_overwrite_preserves_local_secrets(tmp_path: Path) -> None:
+    runner = CliRunner()
+    runtime_dir = tmp_path / "pipeshub"
+
+    first = runner.invoke(
+        app,
+        [
+            "connectors",
+            "pipeshub",
+            "up",
+            "--runtime-dir",
+            str(runtime_dir),
+            "--dry-run",
+        ],
+    )
+    assert first.exit_code == 0, first.output
+    first_env = _read_env(runtime_dir / ".env")
+
+    second = runner.invoke(
+        app,
+        [
+            "connectors",
+            "pipeshub",
+            "up",
+            "--runtime-dir",
+            str(runtime_dir),
+            "--image-tag",
+            "0.4.1",
+            "--dry-run",
+            "--overwrite",
+        ],
+    )
+    assert second.exit_code == 0, second.output
+    second_env = _read_env(runtime_dir / ".env")
+
+    assert second_env["IMAGE_TAG"] == "0.4.1"
+    for key in ("SECRET_KEY", "ARANGO_PASSWORD", "MONGO_PASSWORD", "QDRANT_API_KEY"):
+        assert second_env[key] == first_env[key]
 
 
 def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
@@ -323,3 +387,12 @@ def test_pipeshub_capture_rejects_teams_and_clickup(connector: str) -> None:
 
     assert result.exit_code != 0
     assert "unsupported PipesHub ingestion connector" in result.output
+
+
+def _read_env(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
