@@ -183,6 +183,13 @@ serves is ingested under the source system it came from. Records whose
 record type VEI doesn't have a normalized shape for land in an `other`
 bucket on their provider so they remain discoverable downstream.
 
+Canonical timeline events (`canonical_events.jsonl`) currently cover the
+original provider set: gmail, slack/teams, jira/linear/github/gitlab/
+clickup, google/notion/granola, salesforce/crm. PipesHub-sourced records
+under other providers (outlook, onedrive, sharepoint, confluence, box,
+dropbox, servicenow, ...) appear in the snapshot but do not yet generate
+timeline events. See `vei/context/canonical_history.py` to widen.
+
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:
 

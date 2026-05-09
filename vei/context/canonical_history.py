@@ -164,6 +164,11 @@ def canonical_history_sidecars_exist(path: str | Path) -> bool:
 
 
 def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistoryBundle:
+    # PipesHub-sourced records arrive under their upstream provider name
+    # (outlook, onedrive, sharepoint, confluence, box, dropbox, notion,
+    # servicenow, ...) using the same data shapes as gmail/google/jira.
+    # Widen the sets below to emit canonical events for them — the entry
+    # builders themselves are already provider-agnostic.
     entries: list[_NormalizedHistoryEvent] = []
     for source in snapshot.sources:
         if source.status == "error":
