@@ -70,6 +70,7 @@ def ensure_runtime_files(
             "PipesHub runs as a separate local service stack; VEI only launches and snapshots it.",
             "Docker Desktop should have at least 12 GB memory available for a comfortable local pilot.",
             "This launcher uses Redis Streams and SANDBOX_MODE=subprocess to avoid Kafka/Zookeeper and Docker-socket sandboxing in the pilot profile.",
+            "Set PIPESHUB_BEARER_AUTH in your shell before running `vei context pipeshub inspect` or `capture`.",
         ],
     }
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -53,14 +54,21 @@ _CONNECTOR_ALIASES = {
     "google_drive": "driveworkspace",
     "googledrive": "driveworkspace",
     "google-drive": "driveworkspace",
+    "google_gmail": "gmailworkspace",
+    "googlegmail": "gmailworkspace",
+    "google_mail": "gmailworkspace",
+    "googlemail": "gmailworkspace",
+    "google-mail": "gmailworkspace",
     "drive_workspace": "driveworkspace",
     "gmail_workspace": "gmailworkspace",
+    "gmail-workspace": "gmailworkspace",
     "sharepoint": "sharepointonline",
     "sharepoint_online": "sharepointonline",
     "outlook_personal": "outlookpersonal",
     "microsoft_outlook": "outlook",
     "microsoft_onedrive": "onedrive",
     "microsoft_sharepoint": "sharepointonline",
+    "microsoft_teams": "microsoftteams",
 }
 
 _MAIL_CONNECTORS = {"gmail", "gmailworkspace", "outlook", "outlookpersonal"}
@@ -196,15 +204,21 @@ class PipesHubClient:
             params={"convertTo": "txt"},
         )
         request = Request(url, headers=self.headers(), method="GET")
-        with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
-            return response.read().decode("utf-8", errors="replace")
+        try:
+            with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+                return response.read().decode("utf-8", errors="replace")
+        except HTTPError as exc:
+            raise RuntimeError(_http_error_message(exc)) from exc
 
     def get_json(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         request = Request(
             self.url(path, params=params), headers=self.headers(), method="GET"
         )
-        with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise RuntimeError(_http_error_message(exc)) from exc
 
     def url(self, path: str, *, params: dict[str, Any] | None = None) -> str:
         url = join_url(self.base_url, path)
@@ -256,6 +270,10 @@ def capture_pipeshub_context(
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> PipesHubCapture:
     normalized_connectors = _normalize_connectors(connectors or [])
+    date_from = _date_bound_to_pipeshub_ms(since, "--since")
+    date_to = _date_bound_to_pipeshub_ms(until, "--until")
+    if date_from and date_to and int(date_to) < int(date_from):
+        raise ValueError("--until must be greater than or equal to --since")
     unsupported = [
         name for name in normalized_connectors if name in PIPESHUB_UNSUPPORTED_INGESTION
     ]
@@ -286,8 +304,8 @@ def capture_pipeshub_context(
             connectors=normalized_connectors,
             page=page,
             limit=min(page_size, limit - len(records)),
-            date_from=since,
-            date_to=until,
+            date_from=date_from,
+            date_to=date_to,
         )
         if not page_records:
             break
@@ -334,11 +352,13 @@ def capture_pipeshub_context(
                 "include_content": include_content,
                 "since": since,
                 "until": until,
+                "date_from_ms": date_from,
+                "date_to_ms": date_to,
             },
         },
     )
     source_counts = {
-        source.provider: sum(source.record_counts.values()) for source in sources
+        source.provider: _source_capture_count(source) for source in sources
     }
     report = PipesHubCaptureReport(
         base_url=client.base_url,
@@ -775,7 +795,18 @@ def _deal_record(record: dict[str, Any], *, fallback: int) -> dict[str, Any]:
 
 def _connector_summary(item: dict[str, Any]) -> PipesHubConnectorSummary:
     name = _normalize_connector(
-        _text_field(item, "connectorName", "connector_name", "name", "app")
+        _text_field(
+            item,
+            "connectorName",
+            "connector_name",
+            "connectorType",
+            "connector_type",
+            "type",
+            "app",
+            "origin",
+            "source",
+            "name",
+        )
     )
     connector_id = _text_field(item, "connectorId", "connector_id", "id", "_key")
     supported = name in PIPESHUB_SUPPORTED_CONNECTORS
@@ -872,7 +903,17 @@ def _record_type(record: dict[str, Any]) -> str:
 
 def _connector_name(record: dict[str, Any]) -> str:
     return _normalize_connector(
-        _text_field(record, "connectorName", "connector_name", "origin", "source")
+        _text_field(
+            record,
+            "connectorName",
+            "connector_name",
+            "connectorType",
+            "connector_type",
+            "connector",
+            "app",
+            "origin",
+            "source",
+        )
     )
 
 
@@ -982,6 +1023,51 @@ def _text_field(record: dict[str, Any], *keys: str) -> str:
             continue
         return str(value).strip()
     return ""
+
+
+def _date_bound_to_pipeshub_ms(value: str, option_name: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.isdigit():
+        return text
+    parseable = text
+    if parseable.endswith("Z"):
+        parseable = parseable[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(parseable)
+    except ValueError as exc:
+        raise ValueError(
+            f"{option_name} must be an ISO-8601 date/datetime or a millisecond timestamp"
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return str(int(parsed.timestamp() * 1000))
+
+
+def _source_capture_count(source: ContextSourceResult) -> int:
+    counts = source.record_counts
+    if source.provider == "gmail":
+        return counts.get("messages") or counts.get("threads") or 0
+    if source.provider == "google":
+        return counts.get("documents") or 0
+    if source.provider in {"jira", "linear"}:
+        return counts.get("issues") or 0
+    if source.provider == "github":
+        return counts.get("issues", 0) + counts.get("pull_requests", 0)
+    if source.provider == "gitlab":
+        return counts.get("issues", 0) + counts.get("merge_requests", 0)
+    return sum(count for count in counts.values() if count > 0)
+
+
+def _http_error_message(exc: HTTPError) -> str:
+    if exc.code == 401:
+        return (
+            "PipesHub returned 401 Unauthorized. Set PIPESHUB_BEARER_AUTH to a "
+            "PipesHub bearer token, or pass --token-env with the environment variable "
+            "that contains it."
+        )
+    return f"PipesHub returned HTTP {exc.code}: {exc.reason}"
 
 
 def _list_field(record: dict[str, Any], *keys: str) -> list[str]:

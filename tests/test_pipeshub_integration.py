@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlparse
 
+import pytest
 from typer.testing import CliRunner
 
 from vei.cli.vei import app
@@ -60,11 +62,21 @@ def test_pipeshub_launcher_dry_run_writes_local_profile(tmp_path: Path) -> None:
 def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
     monkeypatch,
 ) -> None:
+    monkeypatch.setenv("PIPESHUB_BEARER_AUTH", "token-123")
+
     def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
         assert request.full_url.endswith("/api/v1/connectors?page=1&limit=200")
+        assert request.get_header("Authorization") == "Bearer token-123"
         return _Response(
             {
                 "connectors": [
+                    {
+                        "name": "Company Gmail",
+                        "type": "google_gmail",
+                        "_key": "conn-gmail",
+                        "isConfigured": True,
+                        "isAuthenticated": True,
+                    },
                     {
                         "connectorName": "onedrive",
                         "connectorId": "conn-one",
@@ -91,10 +103,34 @@ def test_pipeshub_inspect_reports_supported_and_unsupported_connectors(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     connectors = {item["name"]: item for item in payload["configured_connectors"]}
+    assert connectors["gmailworkspace"]["supported_by_vei"] is True
+    assert connectors["gmailworkspace"]["display_name"] == "Company Gmail"
+    assert connectors["gmailworkspace"]["connector_id"] == "conn-gmail"
     assert connectors["onedrive"]["supported_by_vei"] is True
     assert connectors["microsoftteams"]["supported_by_vei"] is False
     assert connectors["clickup"]["supported_by_vei"] is False
     assert "clickup" in payload["unsupported_ingestion_connectors"]
+
+
+def test_pipeshub_inspect_auth_error_names_token_env(monkeypatch) -> None:
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        raise HTTPError(
+            request.full_url,
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["context", "pipeshub", "inspect"],
+    )
+
+    assert result.exit_code != 0
+    assert "PIPESHUB_BEARER_AUTH" in result.output
 
 
 def test_pipeshub_capture_maps_records_to_context_bundle(
@@ -175,6 +211,10 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
         url = request.full_url
         parsed = urlparse(url)
         if parsed.path.endswith("/api/v1/knowledgeBase/records"):
+            query = parse_qs(parsed.query)
+            assert query["dateFrom"][0].isdigit()
+            assert query["dateTo"][0].isdigit()
+            assert query["dateFrom"][0] != "2026-03-01T00:00:00Z"
             return _Response({"records": records, "total": len(records)})
         if "/api/v1/knowledgeBase/record/" in parsed.path:
             record_id = parsed.path.rsplit("/", 1)[-1]
@@ -213,6 +253,10 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "onedrive",
             "--connector",
             "outlook",
+            "--since",
+            "2026-03-01T00:00:00Z",
+            "--until",
+            "2026-03-02",
             "--format",
             "json",
         ],
@@ -226,6 +270,7 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert Path(payload["canonical_index_path"]).exists()
     assert Path(payload["raw_records_path"]).exists()
     assert payload["raw_record_count"] == 7
+    assert payload["source_counts"]["gmail"] == 2
 
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     providers = {source["provider"] for source in snapshot["sources"]}
@@ -258,7 +303,8 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     ]
 
 
-def test_pipeshub_capture_rejects_teams_and_clickup() -> None:
+@pytest.mark.parametrize("connector", ["teams", "microsoft_teams", "clickup"])
+def test_pipeshub_capture_rejects_teams_and_clickup(connector: str) -> None:
     runner = CliRunner()
     result = runner.invoke(
         app,
@@ -271,7 +317,7 @@ def test_pipeshub_capture_rejects_teams_and_clickup() -> None:
             "--org",
             "YourCo",
             "--connector",
-            "teams",
+            connector,
         ],
     )
 

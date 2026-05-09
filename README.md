@@ -150,7 +150,11 @@ pip install -e ".[pipeshub]"
 # Generate a local Compose profile and start PipesHub.
 vei connectors pipeshub up
 
-# Configure connectors in the local PipesHub UI, then inspect what VEI can ingest.
+# Configure connectors in the local PipesHub UI, then export a PipesHub API token.
+# The inspect/capture commands also accept --token-env if you store it elsewhere.
+export PIPESHUB_BEARER_AUTH="<pipeshub bearer token>"
+
+# Inspect what VEI can ingest.
 vei context pipeshub inspect
 
 # Pull a snapshot from PipesHub into VEI.
@@ -163,7 +167,8 @@ vei context pipeshub capture \
   --connector confluence \
   --connector salesforce \
   --connector onedrive \
-  --connector outlook
+  --connector outlook \
+  --since 2026-03-01T00:00:00Z
 ```
 
 The capture writes raw evidence under

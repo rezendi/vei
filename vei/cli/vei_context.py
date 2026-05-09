@@ -140,8 +140,16 @@ def capture_pipeshub(
         "-o",
         help="Output context_snapshot.json path. Defaults to <workspace>/context_snapshot.json.",
     ),
-    since: str = typer.Option("", "--since", help="Optional lower date bound."),
-    until: str = typer.Option("", "--until", help="Optional upper date bound."),
+    since: str = typer.Option(
+        "",
+        "--since",
+        help="Optional lower bound as ISO-8601 date/datetime or PipesHub millisecond timestamp.",
+    ),
+    until: str = typer.Option(
+        "",
+        "--until",
+        help="Optional upper bound as ISO-8601 date/datetime or PipesHub millisecond timestamp.",
+    ),
     include_content: bool = typer.Option(
         False,
         "--include-content",
