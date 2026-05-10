@@ -22,9 +22,11 @@ flowchart LR
         C["Systems of record<br/>email, Slack, docs, tickets,<br/>CRM, GitHub, admin, observability"]
     end
 
-    ORG --> INGEST["Evidence ingest<br/>archives, exports, traces, connectors"]
+    ORG --> SYNC["Source sync<br/>PipesHub, direct connectors,<br/>archives, exports, agent traces"]
 
-    INGEST --> SPINE["Canonical event spine<br/>one evidence ledger for company activity"]
+    SYNC --> PACKAGE["Reviewable import bundle<br/>raw evidence + context_snapshot.json"]
+
+    PACKAGE --> SPINE["Canonical event spine<br/>one evidence ledger for company activity"]
 
     SPINE --> WIKI["Knowledge / Wiki / Skill Map<br/>what is known, what repeats, what skills emerge"]
     SPINE --> CONTROL["Governor / Control<br/>what happened, who touched what, what risk exists"]
