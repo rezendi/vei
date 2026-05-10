@@ -212,12 +212,11 @@ Gmail OAuth scopes read-only, and expose connector-owned records through the
 PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
 `--base-url` to `inspect`/`capture` and skip the local launcher.
 
-Canonical timeline events (`canonical_events.jsonl`) currently cover the
-original provider set: gmail, slack/teams, jira/linear/github/gitlab/
-clickup, google/notion/granola, salesforce/crm. PipesHub-sourced records
-under other providers (outlook, onedrive, sharepoint, confluence, box,
-dropbox, servicenow, ...) appear in the snapshot but do not yet generate
-timeline events. See `vei/context/canonical_history.py` to widen.
+Canonical timeline events (`canonical_events.jsonl`) cover the original
+provider set plus the main PipesHub-backed enterprise surfaces: Outlook mail,
+OneDrive/SharePoint/Confluence/Box/Dropbox documents, and ServiceNow tickets.
+Unknown provider/record-type combinations still remain in the snapshot under
+their provider's `other` bucket until VEI learns a typed event shape for them.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:

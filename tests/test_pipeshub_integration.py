@@ -316,6 +316,28 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "sourceLastModifiedTimestamp": "2026-03-01T15:00:00Z",
         },
         {
+            "recordId": "sharepoint-1",
+            "recordType": "SHAREPOINT_PAGE",
+            "connectorName": "sharepoint",
+            "recordName": "SharePoint policy",
+            "sourceLastModifiedTimestamp": "2026-03-01T15:30:00Z",
+            "snippet": "SharePoint policy requires finance review.",
+        },
+        {
+            "recordId": "box-1",
+            "recordType": "FILE",
+            "connectorName": "box",
+            "recordName": "Box security checklist",
+            "sourceLastModifiedTimestamp": "2026-03-01T15:40:00Z",
+        },
+        {
+            "recordId": "dropbox-1",
+            "recordType": "FILE",
+            "connectorName": "dropbox",
+            "recordName": "Dropbox renewal notes",
+            "sourceLastModifiedTimestamp": "2026-03-01T15:50:00Z",
+        },
+        {
             "recordId": "outlook-1",
             "recordType": "MAIL",
             "connectorName": "outlook",
@@ -325,6 +347,16 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "fromEmail": "sales@yourco.example",
             "toEmails": ["buyer@example.com"],
             "sourceCreatedAtTimestamp": "2026-03-01T16:00:00Z",
+        },
+        {
+            "recordId": "sn-1",
+            "recordType": "TICKET",
+            "connectorName": "servicenow",
+            "recordName": "INC001 renewal access",
+            "status": "in_progress",
+            "assigneeEmail": "it@yourco.example",
+            "sourceLastModifiedTimestamp": "2026-03-01T17:00:00Z",
+            "description": "Provision renewal workspace access.",
         },
     ]
 
@@ -349,7 +381,11 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
                         {"_key": "conn-confluence", "type": "Confluence"},
                         {"_key": "conn-salesforce", "type": "Salesforce"},
                         {"_key": "conn-onedrive", "type": "OneDrive"},
+                        {"_key": "conn-sharepoint", "type": "SharePoint Online"},
+                        {"_key": "conn-box", "type": "Box"},
+                        {"_key": "conn-dropbox", "type": "Dropbox"},
                         {"_key": "conn-outlook", "type": "Outlook"},
+                        {"_key": "conn-servicenow", "type": "ServiceNow"},
                     ]
                 }
             )
@@ -374,8 +410,16 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
                 "SALESFORCE",
                 "conn-onedrive",
                 "ONEDRIVE",
+                "conn-sharepoint",
+                "SHAREPOINT ONLINE",
+                "conn-box",
+                "BOX",
+                "conn-dropbox",
+                "DROPBOX",
                 "conn-outlook",
                 "OUTLOOK",
+                "conn-servicenow",
+                "SERVICENOW",
             ):
                 assert expected in connector_filter
             return _Response({"records": records, "total": len(records)})
@@ -415,7 +459,15 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "--connector",
             "onedrive",
             "--connector",
+            "sharepoint",
+            "--connector",
+            "box",
+            "--connector",
+            "dropbox",
+            "--connector",
             "outlook",
+            "--connector",
+            "servicenow",
             "--since",
             "2026-03-01T00:00:00Z",
             "--until",
@@ -432,10 +484,13 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert Path(payload["canonical_events_path"]).exists()
     assert Path(payload["canonical_index_path"]).exists()
     assert Path(payload["raw_records_path"]).exists()
-    assert payload["raw_record_count"] == 9
+    assert payload["raw_record_count"] == 13
     assert payload["source_counts"]["gmail"] == 2
     assert payload["source_counts"]["google"] == 2
     assert payload["source_counts"]["outlook"] == 1
+    assert payload["source_counts"]["box"] == 1
+    assert payload["source_counts"]["dropbox"] == 1
+    assert payload["source_counts"]["servicenow"] == 1
 
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
     providers = {source["provider"] for source in snapshot["sources"]}
@@ -446,7 +501,11 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
         "salesforce",
         "confluence",
         "onedrive",
+        "sharepoint",
+        "box",
+        "dropbox",
         "outlook",
+        "servicenow",
     } <= providers
     assert snapshot["metadata"]["source_gateway"] == "pipeshub"
 
@@ -455,6 +514,13 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert "google.document" in events
     assert "jira.open" in events
     assert "salesforce.deal" in events
+    assert "confluence.document" in events
+    assert "onedrive.document" in events
+    assert "sharepoint.document" in events
+    assert "box.document" in events
+    assert "dropbox.document" in events
+    assert "outlook.message" in events
+    assert "servicenow.in_progress" in events
 
     verify_result = runner.invoke(
         app,

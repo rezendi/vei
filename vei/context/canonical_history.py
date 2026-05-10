@@ -41,6 +41,27 @@ _IGNORED_ANCHOR_TOKENS = {
     "UTF-32",
 }
 _NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9]+")
+_MAIL_HISTORY_PROVIDERS = {"gmail", "mail_archive", "outlook"}
+_CHAT_HISTORY_PROVIDERS = {"slack", "teams"}
+_WORK_HISTORY_PROVIDERS = {
+    "jira",
+    "linear",
+    "github",
+    "gitlab",
+    "clickup",
+    "servicenow",
+}
+_DOC_HISTORY_PROVIDERS = {
+    "google",
+    "notion",
+    "granola",
+    "onedrive",
+    "sharepoint",
+    "confluence",
+    "box",
+    "dropbox",
+}
+_CRM_HISTORY_PROVIDERS = {"crm", "salesforce"}
 
 
 class CanonicalHistoryIndexRow(BaseModel):
@@ -175,7 +196,7 @@ def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistor
             continue
         provider = str(source.provider or "").strip().lower()
         payload = source.typed_data().model_dump(mode="python")
-        if provider in {"gmail", "mail_archive"}:
+        if provider in _MAIL_HISTORY_PROVIDERS:
             entries.extend(
                 _mail_entries(
                     provider=provider,
@@ -184,7 +205,7 @@ def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistor
                 )
             )
             continue
-        if provider in {"slack", "teams"}:
+        if provider in _CHAT_HISTORY_PROVIDERS:
             entries.extend(
                 _chat_entries(
                     provider=provider,
@@ -193,7 +214,7 @@ def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistor
                 )
             )
             continue
-        if provider in {"jira", "linear", "github", "gitlab", "clickup"}:
+        if provider in _WORK_HISTORY_PROVIDERS:
             entries.extend(
                 _work_entries(
                     provider=provider,
@@ -202,7 +223,7 @@ def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistor
                 )
             )
             continue
-        if provider in {"google", "notion", "granola"}:
+        if provider in _DOC_HISTORY_PROVIDERS:
             entries.extend(
                 _doc_entries(
                     provider=provider,
@@ -211,7 +232,7 @@ def build_canonical_history_bundle(snapshot: ContextSnapshot) -> CanonicalHistor
                 )
             )
             continue
-        if provider in {"crm", "salesforce"}:
+        if provider in _CRM_HISTORY_PROVIDERS:
             entries.extend(
                 _crm_entries(
                     provider=provider,
@@ -678,6 +699,12 @@ def _work_entries(
         return _clickup_entries(
             payload=payload, organization_domain=organization_domain
         )
+    if provider == "servicenow":
+        return _generic_ticket_entries(
+            provider=provider,
+            payload=payload,
+            organization_domain=organization_domain,
+        )
     return []
 
 
@@ -1024,6 +1051,111 @@ def _issue_like_entries(
                     ),
                     internal_external=InternalExternal.INTERNAL,
                     candidate_texts=[issue_id, title, body_text],
+                    metadata={"comment_id": str(comment.get("id") or "")},
+                )
+            )
+    return entries
+
+
+def _generic_ticket_entries(
+    *,
+    provider: str,
+    payload: dict[str, Any],
+    organization_domain: str,
+) -> list[_NormalizedHistoryEvent]:
+    del organization_domain
+    issues = payload.get("issues") or []
+    if not isinstance(issues, list):
+        return []
+    entries: list[_NormalizedHistoryEvent] = []
+    for issue_index, issue in enumerate(issues):
+        if not isinstance(issue, dict):
+            continue
+        ticket_id = str(
+            issue.get("ticket_id")
+            or issue.get("key")
+            or issue.get("number")
+            or issue.get("id")
+            or f"{provider}-{issue_index + 1}"
+        ).strip()
+        title = str(issue.get("title") or issue.get("summary") or ticket_id).strip()
+        timestamp_ms, timestamp_text, quality = _timestamp_ms(
+            issue.get("updated")
+            or issue.get("updated_at")
+            or issue.get("created")
+            or issue.get("created_at")
+            or "",
+            fallback=(issue_index + 1) * 1000,
+        )
+        actor_id = _normalized_actor_id(
+            issue.get("assignee")
+            or issue.get("owner")
+            or issue.get("creator")
+            or issue.get("requester")
+        )
+        status = str(issue.get("status") or issue.get("state") or "").strip()
+        description = str(
+            issue.get("description") or issue.get("body") or issue.get("summary") or ""
+        ).strip()
+        entries.append(
+            _NormalizedHistoryEvent(
+                provider=provider,
+                surface="tickets",
+                kind=status.lower() or "ticket",
+                timestamp=timestamp_text,
+                ts_ms=timestamp_ms,
+                timestamp_quality=quality,
+                thread_ref=f"tickets:{provider}:{ticket_id}",
+                conversation_anchor=ticket_id,
+                actor_id=actor_id,
+                target_id=ticket_id,
+                participant_ids=[ticket_id],
+                subject=title,
+                snippet=description or title,
+                provider_object_refs=[ticket_id],
+                internal_external=InternalExternal.INTERNAL,
+                candidate_texts=[ticket_id, title, description],
+                metadata={"status": status},
+            )
+        )
+        comments = issue.get("comments") or []
+        if not isinstance(comments, list):
+            continue
+        for comment_index, comment in enumerate(comments):
+            if not isinstance(comment, dict):
+                continue
+            comment_ts, comment_text, comment_quality = _timestamp_ms(
+                comment.get("created")
+                or comment.get("created_at")
+                or comment.get("updated_at")
+                or "",
+                fallback=(issue_index + 1) * 1000 + comment_index + 1,
+            )
+            body_text = str(comment.get("body") or comment.get("text") or "").strip()
+            author = (
+                _normalized_actor_id(comment.get("author") or comment.get("user"))
+                or actor_id
+            )
+            entries.append(
+                _NormalizedHistoryEvent(
+                    provider=provider,
+                    surface="tickets",
+                    kind="comment",
+                    timestamp=comment_text,
+                    ts_ms=comment_ts,
+                    timestamp_quality=comment_quality,
+                    thread_ref=f"tickets:{provider}:{ticket_id}",
+                    conversation_anchor=ticket_id,
+                    actor_id=author,
+                    target_id=ticket_id,
+                    participant_ids=[ticket_id],
+                    subject=title,
+                    snippet=body_text or title,
+                    provider_object_refs=_dedupe(
+                        [ticket_id, str(comment.get("id") or "")]
+                    ),
+                    internal_external=InternalExternal.INTERNAL,
+                    candidate_texts=[ticket_id, title, body_text],
                     metadata={"comment_id": str(comment.get("id") or "")},
                 )
             )
