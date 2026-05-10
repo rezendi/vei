@@ -403,7 +403,7 @@ def _source_timestamps(source: ContextSourceResult) -> list[int]:
     data = source.data.model_dump(mode="python")
     provider = source.provider
     timestamps: list[int] = []
-    if provider in {"mail_archive", "gmail"}:
+    if provider in {"mail_archive", "gmail", "outlook"}:
         for thread in data.get("threads", []):
             if not isinstance(thread, dict):
                 continue
@@ -411,7 +411,11 @@ def _source_timestamps(source: ContextSourceResult) -> list[int]:
                 if not isinstance(message, dict):
                     continue
                 timestamps.append(
-                    timestamp_ms(message.get("date") or message.get("time_ms"))
+                    timestamp_ms(
+                        message.get("date")
+                        or message.get("time_ms")
+                        or message.get("timestamp")
+                    )
                 )
         return timestamps
 
@@ -425,17 +429,27 @@ def _source_timestamps(source: ContextSourceResult) -> list[int]:
                 timestamps.append(timestamp_ms(message.get("ts")))
         return timestamps
 
-    if provider == "jira":
+    if provider in {"jira", "linear", "github", "gitlab", "servicenow"}:
         for issue in data.get("issues", []):
             if not isinstance(issue, dict):
                 continue
-            timestamps.append(timestamp_ms(issue.get("updated")))
+            timestamps.append(
+                timestamp_ms(issue.get("updated") or issue.get("updated_at"))
+            )
             for comment in issue.get("comments", []):
                 if isinstance(comment, dict):
                     timestamps.append(timestamp_ms(comment.get("created")))
         return timestamps
 
-    if provider == "google":
+    if provider in {
+        "google",
+        "confluence",
+        "notion",
+        "onedrive",
+        "sharepoint",
+        "box",
+        "dropbox",
+    }:
         for document in data.get("documents", []):
             if not isinstance(document, dict):
                 continue
@@ -477,7 +491,7 @@ def _source_timestamps(source: ContextSourceResult) -> list[int]:
 def _source_ids(source: ContextSourceResult) -> dict[str, list[str]]:
     data = source.data.model_dump(mode="python")
     provider = source.provider
-    if provider in {"mail_archive", "gmail"}:
+    if provider in {"mail_archive", "gmail", "outlook"}:
         return {
             "thread_id": [
                 str(thread.get("thread_id") or "").strip()
@@ -493,15 +507,23 @@ def _source_ids(source: ContextSourceResult) -> dict[str, list[str]]:
                 if isinstance(channel, dict)
             ]
         }
-    if provider == "jira":
+    if provider in {"jira", "linear", "github", "gitlab", "servicenow"}:
         return {
             "ticket_id": [
-                str(issue.get("ticket_id") or "").strip()
+                str(issue.get("ticket_id") or issue.get("id") or "").strip()
                 for issue in data.get("issues", [])
                 if isinstance(issue, dict)
             ]
         }
-    if provider == "google":
+    if provider in {
+        "google",
+        "confluence",
+        "notion",
+        "onedrive",
+        "sharepoint",
+        "box",
+        "dropbox",
+    }:
         return {
             "doc_id": [
                 str(document.get("doc_id") or "").strip()

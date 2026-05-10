@@ -137,6 +137,88 @@ vei workspace twin onboard \
   --base-url notion=/path/to/notion-export.zip
 ```
 
+### Experimental PipesHub Connector Pilot
+
+VEI can also launch a local PipesHub stack and snapshot its synced enterprise
+records into the same canonical company-history bundle. PipesHub remains a
+separate connector/search service; VEI pulls a point-in-time snapshot and writes
+reviewable local artifacts.
+
+```bash
+pip install -e ".[pipeshub]"
+
+# Generate a local Compose profile and start PipesHub.
+vei connectors pipeshub up
+
+# Open http://127.0.0.1:3000, create the local PipesHub admin account, and
+# configure connectors in the PipesHub UI. Personal Google accounts are fine
+# for the Drive/Gmail pilot if you provide a Google OAuth desktop/web client
+# ID + secret. Google Workspace Drive/Gmail connectors use the workspace
+# service-account/domain-delegation path instead.
+#
+# Then export a PipesHub API token. The inspect/capture commands also accept
+# --token-env if you store it elsewhere.
+export PIPESHUB_BEARER_AUTH="<pipeshub bearer token>"
+
+# Inspect what VEI can ingest.
+vei context pipeshub inspect
+
+# Pull a snapshot from PipesHub into VEI. Use gmail/drive for personal Google
+# connectors, or gmailworkspace/driveworkspace for Workspace connectors.
+vei context pipeshub capture \
+  --workspace _vei_out/yourco \
+  --org "YourCo" --domain "yourco.example" \
+  --connector gmail \
+  --connector drive \
+  --connector jira \
+  --connector confluence \
+  --connector salesforce \
+  --connector onedrive \
+  --connector outlook \
+  --since 2026-03-01T00:00:00Z
+
+# Smoke the captured bundle through VEI's downstream read models.
+vei context verify --snapshot _vei_out/yourco/context_snapshot.json
+vei wiki build --source-dir _vei_out/yourco --output _vei_out/yourco/wiki
+vei workflow mine --source-dir _vei_out/yourco --output _vei_out/yourco/workflows
+vei context readiness --root _vei_out/yourco --format json
+
+# Stop the local PipesHub stack when the pilot sync is finished.
+vei connectors pipeshub down
+```
+
+The capture writes raw evidence under
+`imports/source_syncs/pipeshub/<run_id>/`, then writes
+`context_snapshot.json`, `canonical_events.jsonl`, and
+`canonical_event_index.json`. Records keep their upstream system identity
+— PipesHub is the transport, not the origin — so a Gmail message lands
+under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive
+file under `provider="google"`, and so on. VEI does not maintain its own
+provider allowlist at the command boundary; connector filters are resolved
+against the configured PipesHub connectors when possible, then whatever
+PipesHub serves is ingested under the source system it came from. The known
+exceptions are Teams and ClickUp, which VEI reports as not yet supported by
+mature PipesHub ingestion so they are not accidentally treated as normal
+capture candidates. Records whose record type does not have a VEI-normalized
+shape land in an `other` bucket on their provider so they remain discoverable
+downstream.
+
+The local launcher keeps the service boundary explicit. Generated Compose/env
+files live under the VEI-managed runtime directory, PipesHub stores synced data
+inside its own databases and indexes, and VEI only reads a reviewed snapshot.
+For the local pilot, the launcher pins the PipesHub image and builds a small
+local image layer to normalize deployment config parsing, keep Google Drive and
+Gmail OAuth scopes read-only, and expose connector-owned records through the
+PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
+`--base-url` to `inspect`/`capture` and skip the local launcher.
+
+Canonical timeline events (`canonical_events.jsonl`) currently cover the
+original provider set: gmail, slack/teams, jira/linear/github/gitlab/
+clickup, google/notion/granola, salesforce/crm. PipesHub-sourced records
+under other providers (outlook, onedrive, sharepoint, confluence, box,
+dropbox, servicenow, ...) appear in the snapshot but do not yet generate
+timeline events. See `vei/context/canonical_history.py` to widen.
+
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:
 
