@@ -179,6 +179,7 @@ vei context pipeshub capture \
   --connector salesforce \
   --connector onedrive \
   --connector outlook \
+  --connector teams \
   --since 2026-03-01T00:00:00Z
 
 # If a long capture is interrupted, rerun with the same run id.
@@ -194,6 +195,7 @@ vei context pipeshub capture \
   --connector salesforce \
   --connector onedrive \
   --connector outlook \
+  --connector teams \
   --since 2026-03-01T00:00:00Z
 
 # Smoke the captured bundle through VEI's downstream read models.
@@ -216,14 +218,18 @@ text; pass `--include-content` only for a bounded materialization window where
 you intentionally want the extra local copy. Records keep their upstream system
 identity — PipesHub is the transport, not the origin — so a Gmail message lands
 under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive file
-under `provider="google"`, and so on. VEI does not maintain its own provider
-allowlist at the command boundary; connector filters are resolved against the
-configured PipesHub connectors when possible, then whatever PipesHub serves is
-ingested under the source system it came from. The known exceptions are Teams
-and ClickUp, which VEI reports as not yet supported by mature PipesHub ingestion
-so they are not accidentally treated as normal capture candidates. Records whose
-record type does not have a VEI-normalized shape land in an `other` bucket on
-their provider so they remain discoverable downstream.
+under `provider="google"`, a Teams chat message under `provider="teams"`, and so
+on. VEI does not maintain its own provider allowlist at the command boundary;
+connector filters are resolved against the configured PipesHub connectors when
+possible, then whatever PipesHub serves is ingested under the source system it
+came from. ClickUp is the current known exception: PipesHub exposes ClickUp
+agent/tool code in the inspected build, but not a mature normalized ingestion
+connector, so use VEI's direct ClickUp provider for now. Teams is VEI-ready when
+PipesHub, a managed bridge, or a future PipesHub release exposes chat/message
+records, but the inspected local PipesHub image does not ship a mature Teams
+sync connector like Outlook or OneDrive. Records whose record type does not have
+a VEI-normalized shape land in an `other` bucket on their provider so they
+remain discoverable downstream.
 
 The local launcher keeps the service boundary explicit. Generated Compose/env
 files live under the VEI-managed runtime directory, PipesHub stores synced data
@@ -236,8 +242,9 @@ PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
 
 Canonical timeline events (`canonical_events.jsonl`) cover the original
 provider set plus the main PipesHub-backed enterprise surfaces: Outlook mail,
-OneDrive/SharePoint/Confluence/Box/Dropbox documents, and ServiceNow tickets.
-Unknown provider/record-type combinations still remain in the snapshot under
+Teams chat, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
+ServiceNow tickets. Unknown provider/record-type combinations still remain in
+the snapshot under
 their provider's `other` bucket until VEI learns a typed event shape for them.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile

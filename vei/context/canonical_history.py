@@ -643,7 +643,8 @@ def _chat_entries(
                 or message.get("ts")
                 or f"{channel_name}:{message_index + 1}"
             ).strip()
-            thread_ref = f"slack:{channel_name}:{raw_thread}"
+            chat_surface = "teams" if provider == "teams" else "slack"
+            thread_ref = f"{chat_surface}:{channel_name}:{raw_thread}"
             actor_id = _normalized_actor_id(
                 user_lookup.get(str(message.get("user") or "").lower())
                 or message.get("user")
@@ -654,7 +655,7 @@ def _chat_entries(
             entries.append(
                 _NormalizedHistoryEvent(
                     provider=provider,
-                    surface="slack",
+                    surface=chat_surface,
                     kind=(
                         "reply"
                         if str(message.get("thread_ts") or "").strip()

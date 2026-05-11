@@ -211,10 +211,10 @@ def test_pipeshub_inspect_reports_configured_connectors(
     assert connectors["google_gmail"]["supported_by_vei"] is True
     assert connectors["onedrive"]["is_active"] is True
     assert connectors["microsoftteams"]["connector_id"] == "conn-teams"
-    assert connectors["microsoftteams"]["supported_by_vei"] is False
+    assert connectors["microsoftteams"]["supported_by_vei"] is True
     assert connectors["clickup"]["connector_id"] == "conn-clickup"
     assert connectors["clickup"]["supported_by_vei"] is False
-    assert any("microsoftteams" in warning for warning in payload["warnings"])
+    assert not any("microsoftteams" in warning for warning in payload["warnings"])
     assert any("clickup" in warning for warning in payload["warnings"])
 
 
@@ -374,6 +374,39 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "description": "Provision renewal workspace access.",
         },
         {
+            "recordId": "teams-1",
+            "recordType": "CHAT_MESSAGE",
+            "connectorName": "microsoftTeams",
+            "recordName": "Teams renewal standup",
+            "sourceCreatedAtTimestamp": "2026-03-01T18:00:00Z",
+            "chatRecord": {
+                "teamName": "Sales",
+                "channelName": "Renewals",
+                "channelId": "teams-channel-1",
+                "threadId": "teams-thread-1",
+                "from": "maya@yourco.example",
+                "body": {
+                    "contentType": "html",
+                    "content": "<p>Renewal owner confirmed.</p>",
+                },
+            },
+        },
+        {
+            "recordId": "teams-2",
+            "recordType": "CHANNEL_MESSAGE",
+            "connectorName": "MICROSOFT_TEAMS",
+            "recordName": "Teams renewal reply",
+            "sourceCreatedAtTimestamp": "2026-03-01T18:05:00Z",
+            "channelMessageRecord": {
+                "teamName": "Sales",
+                "channelName": "Renewals",
+                "channelId": "teams-channel-1",
+                "replyToId": "teams-thread-1",
+                "from": "legal@yourco.example",
+                "content": "Legal is unblocked.",
+            },
+        },
+        {
             "recordId": "outlook-old",
             "recordType": "MAIL",
             "connectorName": "outlook",
@@ -410,6 +443,7 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
                         {"_key": "conn-dropbox", "type": "Dropbox"},
                         {"_key": "conn-outlook", "type": "Outlook"},
                         {"_key": "conn-servicenow", "type": "ServiceNow"},
+                        {"_key": "conn-teams", "type": "Microsoft Teams"},
                     ]
                 }
             )
@@ -443,6 +477,9 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
                 "OUTLOOK",
                 "conn-servicenow",
                 "SERVICENOW",
+                "conn-teams",
+                "MICROSOFT TEAMS",
+                "microsoftTeams",
             ):
                 assert expected in connector_filter
             return _Response({"records": records, "total": len(records)})
@@ -491,6 +528,8 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "outlook",
             "--connector",
             "servicenow",
+            "--connector",
+            "teams",
             "--since",
             "2026-03-01T00:00:00Z",
             "--until",
@@ -508,11 +547,12 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert Path(payload["canonical_index_path"]).exists()
     assert Path(payload["raw_records_path"]).exists()
     assert Path(payload["capture_manifest_path"]).exists()
-    assert payload["raw_record_count"] == 13
+    assert payload["raw_record_count"] == 15
     assert payload["pages_completed"] == 1
     assert payload["source_counts"]["gmail"] == 2
     assert payload["source_counts"]["google"] == 2
     assert payload["source_counts"]["outlook"] == 1
+    assert payload["source_counts"]["teams"] == 2
     assert payload["source_counts"]["box"] == 1
     assert payload["source_counts"]["dropbox"] == 1
     assert payload["source_counts"]["servicenow"] == 1
@@ -530,6 +570,7 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
         "box",
         "dropbox",
         "outlook",
+        "teams",
         "servicenow",
     } <= providers
     assert snapshot["metadata"]["source_gateway"] == "pipeshub"
@@ -548,9 +589,15 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert "box.document" in events
     assert "dropbox.document" in events
     assert "outlook.message" in events
+    assert "teams.message" in events
+    assert "teams.reply" in events
     assert "servicenow.in_progress" in events
     assert "onedrive.share" not in event_kinds
     assert min(event["ts_ms"] for event in event_payloads) > 1_700_000_000_000
+    index_payload = json.loads(
+        Path(payload["canonical_index_path"]).read_text(encoding="utf-8")
+    )
+    assert index_payload["surface_counts"]["teams"] == 2
 
     verify_result = runner.invoke(
         app,
@@ -858,7 +905,7 @@ def test_pipeshub_capture_resumes_large_snapshot_without_content_backfill(
     assert events == clean_events
 
 
-@pytest.mark.parametrize("connector", ["teams", "microsoftTeams", "clickup"])
+@pytest.mark.parametrize("connector", ["clickup"])
 def test_pipeshub_capture_rejects_known_non_ingestion_connectors(
     connector: str,
 ) -> None:

@@ -142,6 +142,19 @@ _PIPESHUB_CONNECTOR_FILTER_VALUES: dict[str, tuple[str, ...]] = {
         "outlookpersonal",
         "outlook_personal",
     ),
+    "teams": ("MICROSOFT TEAMS", "MICROSOFT_TEAMS", "microsoftTeams", "teams"),
+    "microsoftteams": (
+        "MICROSOFT TEAMS",
+        "MICROSOFT_TEAMS",
+        "microsoftTeams",
+        "microsoft_teams",
+    ),
+    "microsoft_teams": (
+        "MICROSOFT TEAMS",
+        "MICROSOFT_TEAMS",
+        "microsoftTeams",
+        "microsoft_teams",
+    ),
     "box": ("BOX", "box"),
     "dropbox": ("DROPBOX", "dropbox"),
     "dropboxpersonal": ("DROPBOX PERSONAL", "dropboxpersonal", "dropbox_personal"),
@@ -154,9 +167,6 @@ _PIPESHUB_CONNECTOR_FILTER_VALUES: dict[str, tuple[str, ...]] = {
 }
 
 PIPESHUB_UNSUPPORTED_INGESTION: dict[str, str] = {
-    "teams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoftteams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoft_teams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
     "clickup": "PipesHub exposes ClickUp agent/tool code, but not a mature normalized ClickUp ingestion connector in the inspected build; use VEI's direct ClickUp provider for now.",
 }
 
@@ -167,6 +177,10 @@ _SHAPE_BY_TYPE: dict[str, str] = {
     "mail": "mail",
     "email": "mail",
     "group_mail": "mail",
+    "chat": "chat",
+    "chat_message": "chat",
+    "channel_message": "chat",
+    "teams_message": "chat",
     "file": "document",
     "webpage": "document",
     "confluence_page": "document",
@@ -869,10 +883,16 @@ def _records_to_sources(
     for index, record in enumerate(records):
         provider = _vei_provider(_connector_name(record))
         bucket = buckets[provider]
-        shape = _SHAPE_BY_TYPE.get(_record_type(record), "other")
+        record_type = _record_type(record)
+        shape = _SHAPE_BY_TYPE.get(record_type, "other")
+        if shape == "other" and provider in {"slack", "teams"}:
+            if record_type in {"message"}:
+                shape = "chat"
 
         if shape == "mail":
             _add_mail_record(bucket["mail_threads"], record, fallback=index)
+        elif shape == "chat":
+            _add_chat_record(bucket["chat_channels"], record, fallback=index)
         elif shape == "document":
             bucket["documents"].append(_document_record(record, fallback=index))
         elif shape == "ticket":
@@ -905,6 +925,7 @@ def _records_to_sources(
 def _empty_bucket() -> dict[str, Any]:
     return {
         "mail_threads": {},
+        "chat_channels": {},
         "documents": [],
         "tickets": {},
         "issues": [],
@@ -924,6 +945,7 @@ def _assemble_source(provider: str, bucket: dict[str, Any]) -> ContextSourceResu
     `other` so they're still discoverable downstream.
     """
     threads = list(bucket["mail_threads"].values())
+    channels = list(bucket["chat_channels"].values())
     tickets = list(bucket["tickets"].values())
 
     data: dict[str, Any] = {}
@@ -934,6 +956,11 @@ def _assemble_source(provider: str, bucket: dict[str, Any]) -> ContextSourceResu
         data["profile"] = {"source_gateway": "pipeshub"}
         counts["threads"] = len(threads)
         counts["messages"] = sum(len(t.get("messages", [])) for t in threads)
+    if channels:
+        data["channels"] = channels
+        data.setdefault("profile", {"source_gateway": "pipeshub"})
+        counts["channels"] = len(channels)
+        counts["messages"] = sum(len(c.get("messages", [])) for c in channels)
     if bucket["documents"]:
         data["documents"] = bucket["documents"]
         data.setdefault("users", [])
@@ -1002,6 +1029,102 @@ def _add_mail_record(
         "metadata": _provenance(record),
     }
     thread["messages"].append(message)
+
+
+def _add_chat_record(
+    channels: dict[str, dict[str, Any]], record: dict[str, Any], *, fallback: int
+) -> None:
+    channel_id = (
+        _text_field(
+            record,
+            "channelId",
+            "channel_id",
+            "chatId",
+            "chat_id",
+            "conversationId",
+            "conversation_id",
+            "teamId",
+            "team_id",
+        )
+        or f"pipeshub-chat-{fallback + 1}"
+    )
+    team_name = _text_field(record, "teamName", "team_name", "team")
+    channel_name = (
+        _text_field(
+            record,
+            "channelName",
+            "channel_name",
+            "channel",
+            "displayName",
+            "display_name",
+            "chatName",
+            "chat_name",
+            "topic",
+        )
+        or channel_id
+    )
+    if team_name and not channel_name.startswith("#"):
+        display_channel = f"#{team_name}/{channel_name}"
+    elif channel_name.startswith("#"):
+        display_channel = channel_name
+    else:
+        display_channel = f"#{channel_name}"
+
+    channel = channels.setdefault(
+        channel_id,
+        {
+            "channel": display_channel,
+            "channel_id": channel_id,
+            "team_id": _text_field(record, "teamId", "team_id"),
+            "team_name": team_name,
+            "unread": 0,
+            "messages": [],
+        },
+    )
+    timestamp = _timestamp(record)
+    message_id = _record_id(record) or f"{channel_id}-{len(channel['messages']) + 1}"
+    conversation_id = (
+        _text_field(
+            record,
+            "threadId",
+            "thread_id",
+            "conversationId",
+            "conversation_id",
+        )
+        or timestamp
+        or message_id
+    )
+    reply_to_id = _text_field(
+        record,
+        "replyToId",
+        "reply_to_id",
+        "parentMessageId",
+        "parent_message_id",
+    )
+    message = {
+        "id": message_id,
+        "message_id": message_id,
+        "ts": timestamp,
+        "timestamp": timestamp,
+        "thread_ts": reply_to_id,
+        "thread_id": reply_to_id or conversation_id,
+        "user": _text_field(
+            record,
+            "fromEmail",
+            "from_email",
+            "senderEmail",
+            "sender_email",
+            "from",
+            "sender",
+            "author",
+            "user",
+            "creatorEmail",
+            "createdBy",
+        ),
+        "text": _body(record),
+        "metadata": _provenance(record),
+    }
+    channel["messages"].append(message)
 
 
 def _document_record(record: dict[str, Any], *, fallback: int) -> dict[str, Any]:
@@ -1356,6 +1479,8 @@ def _timestamp(record: dict[str, Any]) -> str:
         "sourceLastModifiedTimestamp",
         "source_updated_at",
         "sourceUpdatedAtTimestamp",
+        "lastModifiedDateTime",
+        "last_modified_date_time",
         "updatedAt",
         "updated_at",
         "updated",
@@ -1363,6 +1488,8 @@ def _timestamp(record: dict[str, Any]) -> str:
         "modified_time",
         "sourceCreatedAtTimestamp",
         "source_created_at",
+        "createdDateTime",
+        "created_date_time",
         "createdAt",
         "created_at",
         "created",
@@ -1383,6 +1510,11 @@ def _created_timestamp(record: dict[str, Any]) -> str:
 
 
 def _body(record: dict[str, Any]) -> str:
+    body_value = _field(record, "body")
+    if isinstance(body_value, dict):
+        body_text = _text_field(body_value, "content", "text", "body")
+        if body_text:
+            return _strip_html(body_text)
     direct = _text_field(
         record,
         "vei_content_text",
@@ -1407,6 +1539,15 @@ def _body(record: dict[str, Any]) -> str:
                     parts.append(text)
         return "\n".join(parts)
     return ""
+
+
+def _strip_html(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "<" in text and ">" in text:
+        return re.sub(r"<[^>]+>", "", text).strip()
+    return text
 
 
 def _permissions(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1817,6 +1958,18 @@ def _field(record: dict[str, Any], key: str) -> Any:
         "file_record",
         "ticketRecord",
         "ticket_record",
+        "chatRecord",
+        "chat_record",
+        "messageRecord",
+        "message_record",
+        "channelMessageRecord",
+        "channel_message_record",
+        "chatMessage",
+        "chat_message",
+        "channelMessage",
+        "channel_message",
+        "teamsRecord",
+        "teams_record",
     ):
         nested = record.get(nested_key)
         if isinstance(nested, dict):
