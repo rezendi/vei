@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from vei.llm.providers import plan_once_with_usage
@@ -54,6 +55,7 @@ def build_company_skill_map_from_context_path(
     previous_map_path: str | Path | None = None,
     timeout_s: int = 240,
     catalog_shard_size: int = 80,
+    progress: Callable[[str], None] | None = None,
 ) -> CompanySkillMap:
     _sync_test_hook_globals()
     return _skill_pipeline.build_company_skill_map_from_context_path(
@@ -65,6 +67,7 @@ def build_company_skill_map_from_context_path(
         previous_map_path=previous_map_path,
         timeout_s=timeout_s,
         catalog_shard_size=catalog_shard_size,
+        progress=progress,
     )
 
 
@@ -79,6 +82,7 @@ def build_company_skill_map_from_workspace(
     previous_map_path: str | Path | None = None,
     timeout_s: int = 240,
     catalog_shard_size: int = 80,
+    progress: Callable[[str], None] | None = None,
 ) -> CompanySkillMap:
     _sync_test_hook_globals()
     return _skill_pipeline.build_company_skill_map_from_workspace(
@@ -91,6 +95,7 @@ def build_company_skill_map_from_workspace(
         previous_map_path=previous_map_path,
         timeout_s=timeout_s,
         catalog_shard_size=catalog_shard_size,
+        progress=progress,
     )
 
 

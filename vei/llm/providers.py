@@ -176,6 +176,7 @@ async def _openai_plan(
     timeout_s: int = 240,
     base_url: Optional[str] = None,
     api_key: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> PlanResult:
     """OpenAI provider. Uses Responses API for gpt-5, Chat Completions for others."""
     if _is_codex_session_model(model):
@@ -199,6 +200,7 @@ async def _openai_plan(
             user=user,
             plan_schema=plan_schema,
             timeout_s=timeout_s,
+            reasoning_effort=reasoning_effort,
         )
     finally:
         await client.close()
@@ -212,6 +214,7 @@ async def _openai_plan_impl(
     user: str,
     plan_schema: Optional[dict] = None,
     timeout_s: int = 240,
+    reasoning_effort: Optional[str] = None,
 ) -> PlanResult:
     # Per user feedback, gpt-5 requires the Responses API and specific params.
     if model.startswith("gpt-5"):
@@ -222,7 +225,13 @@ async def _openai_plan_impl(
         kwargs: dict[str, Any] = {
             "model": model,
             "input": prompt,
-            "reasoning": {"effort": "high"},
+            "reasoning": {
+                "effort": (
+                    reasoning_effort
+                    or os.environ.get("VEI_OPENAI_REASONING_EFFORT")
+                    or "high"
+                )
+            },
         }
         try:
             resp = await asyncio.wait_for(
@@ -717,6 +726,7 @@ async def plan_once_with_usage(
     openrouter_api_key: Optional[str] = None,
     tool_schemas: Optional[list[Dict[str, Any]]] = None,
     alias_map: Optional[Dict[str, str]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> PlanResult:
     p = (provider or "openai").strip().lower()
     if p == "auto":
@@ -731,6 +741,7 @@ async def plan_once_with_usage(
             timeout_s=timeout_s,
             base_url=openai_base_url,
             api_key=openai_api_key,
+            reasoning_effort=reasoning_effort,
         )
     if p == "anthropic":
         return await _anthropic_plan(

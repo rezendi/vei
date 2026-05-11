@@ -79,6 +79,11 @@ def build(
         help="Evidence items per LLM call. All shards are processed; use 0 to send one full catalog.",
         min=0,
     ),
+    progress: bool = typer.Option(
+        True,
+        "--progress/--no-progress",
+        help="Print live LLM extraction progress to stderr.",
+    ),
 ) -> None:
     """Build an evidence-backed company skill map from a context bundle."""
     load_dotenv(override=False)
@@ -92,6 +97,7 @@ def build(
             previous_map_path=previous_map,
             timeout_s=timeout_s,
             catalog_shard_size=catalog_shard_size,
+            progress=_progress_reporter if progress else None,
         )
     except Exception as exc:  # noqa: BLE001
         _exit_skillmap_failure("build", exc)
@@ -164,6 +170,11 @@ def refresh(
         help="Evidence items per LLM call. All shards are processed; use 0 to send one full catalog.",
         min=0,
     ),
+    progress: bool = typer.Option(
+        True,
+        "--progress/--no-progress",
+        help="Print live LLM extraction progress to stderr.",
+    ),
 ) -> None:
     """Refresh a living skill map from context plus imported Control evidence."""
     load_dotenv(override=False)
@@ -183,6 +194,7 @@ def refresh(
             previous_map_path=previous_map_path,
             timeout_s=timeout_s,
             catalog_shard_size=catalog_shard_size,
+            progress=_progress_reporter if progress else None,
         )
     except Exception as exc:  # noqa: BLE001
         _exit_skillmap_failure("refresh", exc)
@@ -240,6 +252,10 @@ def validate(
 def _default_previous_map(output_dir: Path) -> str | None:
     candidate = output_dir / "company_skill_map.json"
     return str(candidate) if candidate.exists() else None
+
+
+def _progress_reporter(message: str) -> None:
+    typer.echo(message, err=True)
 
 
 def _exit_skillmap_failure(action: str, exc: Exception) -> None:

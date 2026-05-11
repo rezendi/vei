@@ -8,14 +8,20 @@ import pytest
 import typer.testing
 
 from vei.cli.vei_llm_test import (
+    _build_base_prompt,
+    _build_common_hints,
+    _build_stdio_server_parameters,
     _episode_failure_exit_code,
     _full_flow_progress,
     _is_infrastructure_failure_message,
     _normalize_result,
     _select_progress_action,
+    _select_visible_tools,
+    _should_use_strict_procurement_flow,
     _should_bypass_strict_planning,
     _strict_full_flow_action,
     _strict_full_flow_complete,
+    _tool_progress_text,
     EpisodeFailure,
     app as llm_app,
     run_episode,
@@ -47,6 +53,101 @@ def test_select_progress_action_prefers_non_observe_with_args() -> None:
     tool, args = _select_progress_action(action_menu) or ("", {})
     assert tool == "browser.click"
     assert args == {"node_id": "CLICK:open_pdp#0"}
+
+
+def test_task_prompt_uses_generic_system_prompt() -> None:
+    prompt = _build_base_prompt("Contain the malicious OAuth app.")
+
+    assert "Contain the malicious OAuth app" in prompt
+    assert "MacroBook" not in prompt
+    assert "Preserve evidence before destructive" in prompt
+
+
+def test_common_hints_are_task_specific() -> None:
+    security_hints = _build_common_hints(
+        8,
+        task=(
+            "Contain the malicious OAuth app with evidence preservation and "
+            "notification decision."
+        ),
+    )
+    procurement_hints = _build_common_hints(8)
+
+    assert security_hints["google_admin.get_oauth_app"] == {"app_id": "OAUTH-9001"}
+    assert security_hints["slack.send_message"]["channel"] == "#security-incident"
+    assert "google_admin.get_oauth_app" not in procurement_hints
+    assert procurement_hints["slack.send_message"]["channel"] == "#procurement"
+
+
+def test_visible_tools_keep_hinted_tools_when_top_k_is_small() -> None:
+    visible = _select_visible_tools(
+        available=[
+            "vei.observe",
+            "google_admin.preserve_oauth_evidence",
+            "docs.update",
+            "browser.read",
+        ],
+        action_menu=[],
+        search_matches=[],
+        baseline=[
+            "vei.observe",
+            "google_admin.preserve_oauth_evidence",
+            "docs.update",
+        ],
+        top_k=1,
+    )
+
+    assert "google_admin.preserve_oauth_evidence" in visible
+    assert "docs.update" in visible
+
+
+def test_tool_progress_text_lists_remaining_hinted_tools() -> None:
+    progress = _tool_progress_text(
+        [
+            (
+                'action 1: {"tool": "google_admin.preserve_oauth_evidence", '
+                '"args": {"app_id": "OAUTH-9001"}}'
+            )
+        ],
+        {
+            "google_admin.preserve_oauth_evidence": {},
+            "docs.update": {},
+            "jira.add_comment": {},
+        },
+    )
+
+    assert "google_admin.preserve_oauth_evidence x1" in progress
+    assert "docs.update" in progress
+    assert "jira.add_comment" in progress
+
+
+def test_stdio_server_parameters_put_state_under_artifacts(tmp_path: Path) -> None:
+    artifacts = tmp_path / "llm"
+    params = _build_stdio_server_parameters(
+        dataset_path=None, artifacts_dir=str(artifacts)
+    )
+
+    assert params.env is not None
+    assert params.env["VEI_ARTIFACTS_DIR"] == str(artifacts)
+    assert params.env["VEI_STATE_DIR"] == str(artifacts)
+
+
+def test_strict_full_flow_only_applies_to_procurement_scenarios() -> None:
+    assert _should_use_strict_procurement_flow(
+        score_success_mode="full",
+        task=None,
+        scenario_name="multi_channel",
+    )
+    assert not _should_use_strict_procurement_flow(
+        score_success_mode="full",
+        task="Contain a malicious OAuth app.",
+        scenario_name="oauth_app_containment",
+    )
+    assert not _should_use_strict_procurement_flow(
+        score_success_mode="email",
+        task=None,
+        scenario_name="multi_channel",
+    )
 
 
 def test_strict_full_flow_action_advances_missing_enterprise_steps() -> None:

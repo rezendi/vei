@@ -392,6 +392,7 @@ def _run_workflow_case(spec: BenchmarkCaseSpec) -> BenchmarkCaseResult:
 def _run_llm_case(spec: BenchmarkCaseSpec) -> BenchmarkCaseResult:
     if not spec.model:
         raise ValueError("llm runner requires model")
+    spec = _with_default_llm_task(spec)
     env = dict(os.environ)
     env["VEI_SCENARIO"] = spec.scenario_name
     env["VEI_SEED"] = str(spec.seed)
@@ -486,6 +487,78 @@ def _run_llm_case(spec: BenchmarkCaseSpec) -> BenchmarkCaseResult:
         diagnostics=diagnostics,
         error=error,
     )
+
+
+def _with_default_llm_task(spec: BenchmarkCaseSpec) -> BenchmarkCaseSpec:
+    if spec.task:
+        return spec
+    task = _default_llm_task_for_case(spec)
+    if not task:
+        return spec
+    return spec.model_copy(update={"task": task})
+
+
+def _default_llm_task_for_case(spec: BenchmarkCaseSpec) -> str | None:
+    workflow_name = spec.workflow_name or resolve_benchmark_workflow_name(
+        family_name=spec.family_name,
+        scenario_name=spec.scenario_name,
+    )
+    if workflow_name is None:
+        return None
+    try:
+        workflow = get_benchmark_family_workflow_spec(
+            workflow_name,
+            variant_name=spec.workflow_variant,
+        )
+    except KeyError:
+        return None
+
+    objective = workflow.objective.statement.strip()
+    success = "; ".join(item.strip() for item in workflow.objective.success if item)
+    constraints = "; ".join(
+        item.description.strip()
+        for item in workflow.constraints
+        if item.description.strip()
+    )
+    tools = sorted(
+        {
+            step.tool
+            for step in workflow.steps
+            if isinstance(step.tool, str) and step.tool.strip()
+        }
+    )
+    tool_text = ", ".join(tools)
+    anchors = _workflow_anchor_text(workflow.metadata.get("workflow_parameters", {}))
+
+    parts = [objective]
+    if success:
+        parts.append(f"Required outcomes: {success}.")
+    if constraints:
+        parts.append(f"Constraints: {constraints}.")
+    if anchors:
+        parts.append(f"Known incident anchors: {anchors}.")
+    if tool_text:
+        parts.append(f"Likely relevant tool surfaces: {tool_text}.")
+    parts.append(
+        "Use the current observation and tool results to decide each next action. "
+        "Preserve evidence before destructive containment actions and record the "
+        "final decision in the appropriate incident artifacts."
+    )
+    return "\n".join(parts)
+
+
+def _workflow_anchor_text(parameters: object) -> str:
+    if not isinstance(parameters, dict):
+        return ""
+    anchors: list[str] = []
+    for key, value in parameters.items():
+        if len(anchors) >= 12:
+            break
+        if value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            anchors.append(f"{key}={value}")
+    return "; ".join(anchors)
 
 
 def _apply_replay(session: Any, spec: BenchmarkCaseSpec) -> None:
@@ -879,9 +952,7 @@ def _collect_world_diagnostics(
             if severity == "error":
                 policy_error_count += 1
     connector_receipts = state_obj.connector_runtime.get("receipts", [])
-    snapshot_count = (
-        len(list(snapshots_path.glob("*.json"))) if snapshots_path.exists() else 0
-    )
+    snapshot_count = len(_snapshot_candidates(snapshots_path))
     if snapshot_count == 0 and (initial_snapshot or final_snapshot):
         snapshot_count = 2 if initial_snapshot and final_snapshot else 1
     return BenchmarkDiagnostics(
@@ -1058,9 +1129,7 @@ def _load_llm_metrics(artifacts_dir: Path) -> Dict[str, Any]:
 
 
 def _load_latest_snapshot(snapshots_dir: Path) -> WorldSnapshot | None:
-    if not snapshots_dir.exists():
-        return None
-    candidates = sorted(snapshots_dir.glob("*.json"))
+    candidates = _snapshot_candidates(snapshots_dir)
     if not candidates:
         return None
     raw = json.loads(candidates[-1].read_text(encoding="utf-8"))
@@ -1071,6 +1140,16 @@ def _load_latest_snapshot(snapshots_dir: Path) -> WorldSnapshot | None:
         data=WorldState.model_validate(raw.get("data", {})),
         label=raw.get("label"),
     )
+
+
+def _snapshot_candidates(snapshots_dir: Path) -> List[Path]:
+    candidates = sorted(snapshots_dir.glob("*.json")) if snapshots_dir.exists() else []
+    if candidates:
+        return candidates
+    parent = snapshots_dir.parent
+    if not parent.exists():
+        return []
+    return sorted(parent.glob("*/snapshots/*.json"))
 
 
 def _optional_int(value: Any) -> int | None:

@@ -31,15 +31,22 @@ def test_skill_map_builds_shadow_skills_from_context_bundle(
 ) -> None:
     _patch_skillmap_llm(monkeypatch)
     snapshot_path = _write_skillmap_snapshot(tmp_path)
+    progress_messages: list[str] = []
 
-    skill_map = build_company_skill_map_from_context_path(snapshot_path, limit=8)
+    skill_map = build_company_skill_map_from_context_path(
+        snapshot_path,
+        limit=8,
+        progress=progress_messages.append,
+    )
 
     assert skill_map.schema_version == "company_skill_map_v1"
     assert skill_map.organization_name == "Acme Ops"
     assert skill_map.canonical_event_count >= 3
     assert skill_map.metadata["skill_extractor"] == "llm"
     assert skill_map.metadata["llm_provider"] == "codex"
+    assert skill_map.metadata["llm_reasoning_effort"] == "low"
     assert skill_map.metadata["llm_accepted_skill_count"] == 1
+    assert any("Skill map LLM shard" in message for message in progress_messages)
     assert skill_map.validation.ok is True
     assert all(skill.status == "draft" for skill in skill_map.skills)
     assert all(skill.evidence_refs for skill in skill_map.skills)

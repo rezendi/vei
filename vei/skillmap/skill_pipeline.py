@@ -6,10 +6,10 @@ import json
 import os
 import re
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
-
 
 from vei.context.api import (
     CanonicalHistoryBundle,
@@ -51,6 +51,8 @@ from vei.skillmap.models import (
     SkillValidationIssue,
 )
 
+ProgressReporter = Callable[[str], None]
+
 
 def build_company_skill_map_from_context_path(
     path: str | Path,
@@ -62,6 +64,7 @@ def build_company_skill_map_from_context_path(
     previous_map_path: str | Path | None = None,
     timeout_s: int = 240,
     catalog_shard_size: int = 80,
+    progress: ProgressReporter | None = None,
 ) -> CompanySkillMap:
     """Build a deployable shadow-mode skill map from a context bundle."""
     snapshot_path = _resolve_snapshot_path(path)
@@ -88,6 +91,7 @@ def build_company_skill_map_from_context_path(
         model=model,
         timeout_s=timeout_s,
         catalog_shard_size=catalog_shard_size,
+        progress=progress,
     )
     if include_replay:
         replay_world, replay_error = _load_replay_world(snapshot_path)
@@ -123,6 +127,7 @@ def build_company_skill_map_from_workspace(
     previous_map_path: str | Path | None = None,
     timeout_s: int = 240,
     catalog_shard_size: int = 80,
+    progress: ProgressReporter | None = None,
 ) -> CompanySkillMap:
     """Build or refresh a company skill map from workspace context plus Control evidence."""
     workspace_path = Path(workspace).expanduser().resolve()
@@ -170,6 +175,7 @@ def build_company_skill_map_from_workspace(
         model=model,
         timeout_s=timeout_s,
         catalog_shard_size=catalog_shard_size,
+        progress=progress,
     )
     if include_replay:
         replay_world, replay_error = _load_replay_world(snapshot_path)
@@ -206,6 +212,7 @@ def _build_company_skill_map_from_bundle(
     model: str | None,
     timeout_s: int,
     catalog_shard_size: int,
+    progress: ProgressReporter | None,
 ) -> CompanySkillMap:
     structure_view = build_structure_view_from_canonical_events(
         bundle.events,
@@ -228,6 +235,14 @@ def _build_company_skill_map_from_bundle(
         limit=None,
     )
     llm_evidence_catalog = _compact_evidence_catalog_for_llm(evidence_catalog)
+    _report_progress(
+        progress,
+        (
+            "Skill map evidence: "
+            f"{len(evidence_catalog)} raw item(s), "
+            f"{len(llm_evidence_catalog)} compact LLM item(s)"
+        ),
+    )
     skills, extraction_metadata, extraction_gaps = _extract_context_skills_with_llm(
         organization_name=snapshot.organization_name,
         organization_domain=snapshot.organization_domain,
@@ -239,6 +254,7 @@ def _build_company_skill_map_from_bundle(
         model=model,
         timeout_s=timeout_s,
         catalog_shard_size=catalog_shard_size,
+        progress=progress,
     )
     compacted_processed_count = int(
         extraction_metadata.get("evidence_catalog_processed_count") or 0
@@ -1301,6 +1317,7 @@ def _extract_context_skills_with_llm(
     model: str | None,
     timeout_s: int,
     catalog_shard_size: int,
+    progress: ProgressReporter | None = None,
 ) -> tuple[list[CompanySkill], dict[str, Any], list[SkillMapGap]]:
     resolved_provider, resolved_model = resolve_interactive_llm_defaults(
         provider=provider,
@@ -1314,6 +1331,7 @@ def _extract_context_skills_with_llm(
         "evidence_catalog_shard_size": max(catalog_shard_size, 0),
         "llm_skill_limit": limit,
         "llm_pipeline": "evidence_clusters_then_global_skills",
+        "llm_reasoning_effort": "low",
     }
     if not evidence_catalog:
         return (
@@ -1365,6 +1383,14 @@ def _extract_context_skills_with_llm(
     cluster_schema = _cluster_plan_schema()
     final_schema = _skill_plan_schema()
     shards = _catalog_shards(evidence_catalog, catalog_shard_size)
+    _report_progress(
+        progress,
+        (
+            "Skill map LLM extraction: "
+            f"{resolved_provider}/{resolved_model}, "
+            f"{len(shards)} shard(s), timeout {timeout_s}s per call"
+        ),
+    )
     all_clusters: list[dict[str, Any]] = []
     all_skills: list[CompanySkill] = []
     rejected: list[str] = []
@@ -1377,6 +1403,13 @@ def _extract_context_skills_with_llm(
     cost_available = True
 
     for shard_index, shard in enumerate(shards, start=1):
+        _report_progress(
+            progress,
+            (
+                "Skill map LLM shard "
+                f"{shard_index}/{len(shards)}: {len(shard)} evidence item(s)"
+            ),
+        )
         user_payload = _skillmap_cluster_payload(
             organization_name=organization_name,
             organization_domain=organization_domain,
@@ -1395,6 +1428,7 @@ def _extract_context_skills_with_llm(
                 user=json.dumps(user_payload, indent=2),
                 plan_schema=cluster_schema,
                 timeout_s=timeout_s,
+                reasoning_effort="low",
             )
         )
         prompt_tokens, completion_tokens, total_tokens, cost_total, cost_available = (
@@ -1418,6 +1452,14 @@ def _extract_context_skills_with_llm(
             cluster["catalog_shard_index"] = shard_index
             cluster["catalog_shard_count"] = len(shards)
         all_clusters.extend(shard_clusters)
+        _report_progress(
+            progress,
+            (
+                "Skill map LLM shard "
+                f"{shard_index}/{len(shards)} accepted "
+                f"{len(shard_clusters)} cluster(s)"
+            ),
+        )
         rejected.extend(
             [
                 f"cluster shard {shard_index}/{len(shards)}: {reason}"
@@ -1427,6 +1469,13 @@ def _extract_context_skills_with_llm(
 
     selected_clusters = _select_final_clusters(all_clusters, limit=limit)
     if selected_clusters:
+        _report_progress(
+            progress,
+            (
+                "Skill map final synthesis: "
+                f"{len(selected_clusters)} selected cluster(s)"
+            ),
+        )
         final_payload = _skillmap_final_payload(
             organization_name=organization_name,
             organization_domain=organization_domain,
@@ -1443,6 +1492,7 @@ def _extract_context_skills_with_llm(
                 user=json.dumps(final_payload, indent=2),
                 plan_schema=final_schema,
                 timeout_s=timeout_s,
+                reasoning_effort="low",
             )
         )
         prompt_tokens, completion_tokens, total_tokens, cost_total, cost_available = (
@@ -1466,6 +1516,7 @@ def _extract_context_skills_with_llm(
         rejected.extend([f"final skill pass: {reason}" for reason in skill_rejected])
 
     skills = _select_final_skills(all_skills, limit=limit)
+    _report_progress(progress, f"Skill map accepted {len(skills)} skill(s)")
     metadata.update(
         {
             "evidence_catalog_processed_count": sum(len(shard) for shard in shards),
@@ -1504,6 +1555,11 @@ def _extract_context_skills_with_llm(
             )
         )
     return skills, metadata, gaps
+
+
+def _report_progress(progress: ProgressReporter | None, message: str) -> None:
+    if progress is not None:
+        progress(message)
 
 
 def _accumulate_usage(

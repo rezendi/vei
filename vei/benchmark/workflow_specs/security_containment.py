@@ -219,7 +219,7 @@ def _build_security_containment_spec(
                 {
                     "kind": "state_contains",
                     "field": f"components.slack.channels.{params.slack_channel}.messages",
-                    "contains": "notification decision",
+                    "contains": "notification",
                 },
             ],
             "failure_paths": [

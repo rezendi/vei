@@ -287,6 +287,21 @@ def register_vei_tools(
         )
 
     @srv.tool(
+        name="vei.snapshot",
+        description="Persist a world snapshot for benchmark diagnostics",
+    )
+    def vei_snapshot(label: str = "manual") -> dict[str, Any]:
+        from vei.world.api import ensure_world_session
+
+        snapshot = ensure_world_session(get_router()).snapshot(label=label)
+        return {
+            "snapshot_id": snapshot.snapshot_id,
+            "branch": snapshot.branch,
+            "time_ms": snapshot.time_ms,
+            "label": snapshot.label,
+        }
+
+    @srv.tool(
         name="vei.help",
         description="Usage help: how to interact via MCP and example actions",
     )
