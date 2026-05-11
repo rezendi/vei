@@ -119,7 +119,7 @@ def _run_async_in_thread(awaitable: Awaitable[_RunResultT]) -> _RunResultT:
 
 def _history_prompt_line(event: WhatIfEventReference) -> str:
     target = ", ".join(event.to_recipients) or event.target_id or event.thread_id
-    if event.surface == "slack":
+    if event.surface in {"slack", "teams"}:
         return (
             f"- Actor: {event.actor_id}\n"
             f"  Channel: {target}\n"
@@ -145,10 +145,11 @@ def _history_prompt_line(event: WhatIfEventReference) -> str:
 
 
 def _llm_surface_instructions(manifest: WhatIfEpisodeManifest) -> str:
-    if manifest.surface == "slack":
+    if manifest.surface in {"slack", "teams"}:
         channel_name = _chat_channel_name_from_reference(manifest.branch_event)
+        surface = "teams" if manifest.surface == "teams" else "slack"
         return (
-            "Use surface='slack'. Set 'to' to the channel name, keep body_text as the chat text, "
+            f"Use surface='{surface}'. Set 'to' to the channel name, keep body_text as the chat text, "
             f"and keep conversation_anchor as '{manifest.branch_event.conversation_anchor or ''}' "
             f"for replies in {channel_name}."
         )
@@ -168,7 +169,7 @@ def _llm_replay_event(
     *,
     manifest: WhatIfEpisodeManifest,
 ) -> BaseEvent:
-    if message.surface == "slack":
+    if message.surface in {"slack", "teams"}:
         return BaseEvent(
             time_ms=message.delay_ms,
             actor_id=message.actor_id,
@@ -254,7 +255,7 @@ def _allowed_thread_participants(
         for recipient in event.to_recipients:
             if recipient:
                 recipients.add(recipient)
-    if manifest.surface == "slack":
+    if manifest.surface in {"slack", "teams"}:
         recipients.add(_chat_channel_name_from_reference(manifest.branch_event))
     if manifest.surface == "tickets":
         recipients.add(manifest.thread_id.split(":", 1)[-1])
@@ -390,7 +391,9 @@ def _normalize_llm_messages(
                 ),
                 body_text=body_text,
                 delay_ms=delay_ms,
-                conversation_anchor=conversation_anchor if surface == "slack" else "",
+                conversation_anchor=(
+                    conversation_anchor if surface in {"slack", "teams"} else ""
+                ),
                 rationale=str(raw.get("rationale", "")).strip(),
             )
         )

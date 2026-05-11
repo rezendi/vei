@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from vei.context.api import ContextSnapshot, SlackSourceData, source_payload
+from vei.context.api import (
+    ContextSnapshot,
+    SlackSourceData,
+    TeamsSourceData,
+    source_payload,
+)
 
 from ..corpus import (
     _channel_message_timestamp_ms,
@@ -24,7 +29,8 @@ def build_chat_events(
     include_content: bool,
 ) -> list[WhatIfEvent]:
     source = snapshot.source_for(provider)
-    data = source_payload(source, SlackSourceData)
+    payload_type = TeamsSourceData if provider == "teams" else SlackSourceData
+    data = source_payload(source, payload_type)
     if data is None:
         return []
     channels = data.channels
@@ -145,9 +151,10 @@ def build_chat_events(
     return events
 
 
-def _chat_user_lookup(payload: SlackSourceData) -> dict[str, str]:
+def _chat_user_lookup(payload: SlackSourceData | TeamsSourceData) -> dict[str, str]:
     lookup: dict[str, str] = {}
-    for user in payload.users:
+    users = getattr(payload, "users", [])
+    for user in users:
         if not isinstance(user, dict):
             continue
         canonical = str(user.get("email", "") or user.get("name", "") or "").strip()

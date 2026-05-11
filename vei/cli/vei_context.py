@@ -353,7 +353,16 @@ def capture_teams(
         help="Capture 1:1 and group chat messages by scanning users.",
     ),
     limit: int = typer.Option(5000, "--limit", min=1, help="Maximum messages to keep."),
-    page_size: int = typer.Option(250, "--page-size", min=1, max=250),
+    page_size: int = typer.Option(
+        250,
+        "--page-size",
+        min=1,
+        max=250,
+        help=(
+            "Reserved for Graph collections that accept page sizing. Teams export "
+            "endpoints reject $top, so VEI enforces --limit locally there."
+        ),
+    ),
     team_limit: int = typer.Option(
         250,
         "--team-limit",

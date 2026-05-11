@@ -5,7 +5,7 @@ import logging
 import zipfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -832,10 +832,14 @@ def test_teams_graph_capture_writes_canonical_bundle(
                 }
             )
         if parsed.path == "/v1.0/teams/team-1/channels":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
             return _mock_urlopen(
                 {"value": [{"id": "channel-1", "displayName": "General"}]}
             )
         if parsed.path == "/v1.0/teams/team-1/channels/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
             if "page=2" in parsed.query:
                 return _mock_urlopen(
                     {
@@ -916,6 +920,8 @@ def test_teams_graph_capture_writes_canonical_bundle(
                 }
             )
         if parsed.path == "/v1.0/users/user-1/chats/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
             return _mock_urlopen(
                 {
                     "value": [
@@ -941,6 +947,8 @@ def test_teams_graph_capture_writes_canonical_bundle(
                 }
             )
         if parsed.path == "/v1.0/users/user-2/chats/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
             return _mock_urlopen(
                 {
                     "value": [

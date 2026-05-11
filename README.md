@@ -299,7 +299,9 @@ and `--user` to restrict chat scanning to specific users. Re-run with
 `--resume --run-id <same-id>` if a long capture is interrupted. The raw audit
 bundle lands under
 `imports/source_syncs/microsoft_teams/<run_id>/records.jsonl`, with a
-`capture_manifest.json` beside it.
+`capture_manifest.json` beside it. Microsoft Teams export endpoints reject
+Graph `$top`, so `--limit` is enforced locally while VEI follows Graph
+pagination.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:

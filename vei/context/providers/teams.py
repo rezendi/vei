@@ -386,7 +386,6 @@ def capture_teams_graph_context(
     completed_scopes = set(manifest.completed_scopes)
     duplicates = manifest.duplicate_record_count
     warnings = list(manifest.warnings)
-    page_size = max(1, min(page_size, DEFAULT_PAGE_SIZE))
     remaining = max(0, limit - len(raw_records))
     teams_scanned = 0
     users_scanned = 0
@@ -433,7 +432,6 @@ def capture_teams_graph_context(
                     params=_message_query_params(
                         since=since_dt,
                         until=until_dt,
-                        page_size=page_size,
                     ),
                     limit=remaining,
                 ):
@@ -496,7 +494,6 @@ def capture_teams_graph_context(
                     params=_message_query_params(
                         since=since_dt,
                         until=until_dt,
-                        page_size=page_size,
                     ),
                     limit=remaining,
                 ):
@@ -823,7 +820,6 @@ def _discover_channels(
     return list(
         client.iter_collection(
             f"/teams/{quote(team_id, safe='')}/channels",
-            params={"$top": "100"},
         )
     )
 
@@ -1068,9 +1064,10 @@ def _message_query_params(
     *,
     since: str,
     until: str,
-    page_size: int,
 ) -> dict[str, str]:
-    params = {"$top": str(max(1, min(page_size, DEFAULT_PAGE_SIZE)))}
+    # Teams export endpoints reject $top even though regular Graph collections
+    # allow it. Keep page limiting local via iter_collection(limit=...).
+    params: dict[str, str] = {}
     filters: list[str] = []
     if since:
         filters.append(f"lastModifiedDateTime gt {since}")
