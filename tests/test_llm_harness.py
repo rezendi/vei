@@ -112,6 +112,31 @@ def test_visible_tools_keep_hinted_tools_when_top_k_is_small() -> None:
     assert "docs.update" in visible
 
 
+def test_visible_tools_preserve_baseline_order_for_stable_prompts() -> None:
+    visible = _select_visible_tools(
+        available=[
+            "docs.update",
+            "vei.observe",
+            "google_admin.preserve_oauth_evidence",
+            "browser.read",
+        ],
+        action_menu=[],
+        search_matches=[],
+        baseline=[
+            "vei.observe",
+            "google_admin.preserve_oauth_evidence",
+            "docs.update",
+        ],
+        top_k=3,
+    )
+
+    assert visible == [
+        "vei.observe",
+        "google_admin.preserve_oauth_evidence",
+        "docs.update",
+    ]
+
+
 def test_tool_progress_text_lists_remaining_hinted_tools() -> None:
     progress = _tool_progress_text(
         [

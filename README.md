@@ -110,7 +110,7 @@ grouped by product workflow:
 | Surface | Key commands |
 |---|---|
 | **Quickstart** | `vei admin quickstart run`, `vei admin doctor`, `vei eval smoke run` |
-| **Test / Eval** | `vei eval benchmark`, `vei eval demo`, `vei eval showcase`, `vei eval llm-test run`, `vei run start`, `vei admin report` |
+| **Test / Eval** | `vei eval benchmark`, `vei eval demo`, `vei eval showcase`, `vei eval llm-test run`, `vei eval agent-demo run`, `vei run start`, `vei admin report` |
 | **Governor / Control** | `vei workspace twin serve`, `vei workspace twin onboard`, `vei workspace ingest agent-activity`, `vei provenance access-review`, `vei provenance verify`, `vei provenance export` |
 | **Sandbox / What-if** | `vei whatif candidates`, `vei whatif events`, `vei whatif open`, `vei whatif experiment` (`--mode e_jepa` for the trained backend), `vei whatif rank`, `vei whatif pack run` |
 | **Train / Data** | `vei rollout procurement`, `vei train bc`, `vei workflow package-env` |

@@ -153,6 +153,7 @@ def run_benchmark_demo(spec: BenchmarkDemoSpec) -> BenchmarkDemoResult:
         BenchmarkCaseSpec(
             runner="workflow",
             scenario_name=scenario_name,
+            family_name=manifest.name,
             workflow_name=workflow_name,
             workflow_variant=workflow_variant,
             seed=spec.seed,
@@ -163,6 +164,9 @@ def run_benchmark_demo(spec: BenchmarkDemoSpec) -> BenchmarkDemoResult:
         BenchmarkCaseSpec(
             runner=spec.compare_runner,
             scenario_name=scenario_name,
+            family_name=manifest.name,
+            workflow_name=workflow_name,
+            workflow_variant=workflow_variant,
             seed=spec.seed,
             artifacts_dir=comparison_artifacts_dir,
             branch=f"{spec.family_name}.{spec.compare_runner}",
