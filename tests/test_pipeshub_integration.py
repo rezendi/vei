@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -636,7 +637,8 @@ def test_pipeshub_capture_resume_cli_requires_run_id(tmp_path: Path) -> None:
     )
 
     assert result.exit_code != 0
-    assert "--resume requires --run-id" in result.output
+    output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", result.output)
+    assert "--resume requires --run-id" in output
 
 
 def test_pipeshub_capture_reads_nested_record_payloads(monkeypatch) -> None:
