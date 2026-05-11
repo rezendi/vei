@@ -10,7 +10,13 @@ import pytest
 from typer.testing import CliRunner
 
 from vei.cli.vei import app
-from vei.context.pipeshub import _extract_total, _pipeshub_connector_filter_values
+from vei.context.pipeshub import (
+    PipesHubClient,
+    _extract_total,
+    _pipeshub_connector_filter_values,
+    capture_pipeshub_context,
+    write_pipeshub_capture,
+)
 
 
 class _Response:
@@ -501,7 +507,9 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert Path(payload["canonical_events_path"]).exists()
     assert Path(payload["canonical_index_path"]).exists()
     assert Path(payload["raw_records_path"]).exists()
+    assert Path(payload["capture_manifest_path"]).exists()
     assert payload["raw_record_count"] == 13
+    assert payload["pages_completed"] == 1
     assert payload["source_counts"]["gmail"] == 2
     assert payload["source_counts"]["google"] == 2
     assert payload["source_counts"]["outlook"] == 1
@@ -564,6 +572,224 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     ]
 
 
+def test_pipeshub_capture_resume_cli_requires_run_id(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "pipeshub",
+            "capture",
+            "--workspace",
+            str(tmp_path / "workspace"),
+            "--org",
+            "YourCo",
+            "--resume",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--resume requires --run-id" in result.output
+
+
+def test_pipeshub_capture_resumes_large_snapshot_without_content_backfill(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    records = _large_pipeshub_records()
+    content_requests: list[str] = []
+
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        parsed = urlparse(request.full_url)
+        if parsed.path.endswith("/api/v1/connectors"):
+            return _Response(
+                {
+                    "connectors": [
+                        {"_key": "conn-outlook", "type": "Outlook"},
+                        {"_key": "conn-onedrive", "type": "OneDrive"},
+                        {"_key": "conn-jira", "type": "Jira"},
+                    ]
+                }
+            )
+        if parsed.path.endswith("/api/v1/knowledgeBase/records"):
+            query = parse_qs(parsed.query)
+            assert "dateFrom" not in query
+            assert "dateTo" not in query
+            assert set(query["connectors"][0].split(",")) >= {
+                "conn-outlook",
+                "conn-onedrive",
+                "conn-jira",
+                "OUTLOOK",
+                "ONEDRIVE",
+                "JIRA",
+            }
+            page = int(query["page"][0])
+            limit = int(query["limit"][0])
+            start = (page - 1) * limit
+            return _Response(
+                {
+                    "records": records[start : start + limit],
+                    "pagination": {"totalCount": len(records)},
+                }
+            )
+        if "/api/v1/knowledgeBase/stream/record/" in parsed.path:
+            content_requests.append(parsed.path.rsplit("/", 1)[-1])
+            return _Response(body=b"streamed content")
+        if "/api/v1/knowledgeBase/record/" in parsed.path:
+            record_id = parsed.path.rsplit("/", 1)[-1]
+            record = next(item for item in records if item["recordId"] == record_id)
+            return _Response({"record": record, "permissions": []})
+        raise AssertionError(f"unexpected URL: {request.full_url}")
+
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    client = PipesHubClient(base_url="http://pipeshub.test", bearer_token="token")
+    workspace = tmp_path / "py-insights"
+    run_id = "pipeshub_scale_rehearsal"
+    manifest_path = (
+        workspace
+        / "imports"
+        / "source_syncs"
+        / "pipeshub"
+        / run_id
+        / "capture_manifest.json"
+    )
+    raw_records_path = manifest_path.with_name("records.jsonl")
+    common_kwargs = {
+        "organization_name": "Py Insights",
+        "organization_domain": "py-insights.com",
+        "connectors": ["outlook", "onedrive", "jira"],
+        "since": "2026-03-01T00:00:00Z",
+        "until": "2026-03-31T23:59:59Z",
+        "include_content": False,
+        "limit": 1000,
+        "page_size": 75,
+        "run_id": run_id,
+        "manifest_path": manifest_path,
+        "raw_records_path": raw_records_path,
+    }
+
+    with pytest.raises(RuntimeError, match="simulated PipesHub capture interruption"):
+        capture_pipeshub_context(
+            client,
+            **common_kwargs,
+            _interrupt_after_pages=3,
+        )
+
+    interrupted_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert interrupted_manifest["status"] == "interrupted"
+    assert interrupted_manifest["pages_completed"] == 3
+    assert interrupted_manifest["next_page"] == 4
+    assert interrupted_manifest["raw_record_count"] == 225
+    assert len(raw_records_path.read_text(encoding="utf-8").splitlines()) == 225
+
+    resumed_capture = capture_pipeshub_context(
+        client,
+        **common_kwargs,
+        resume=True,
+    )
+    report = write_pipeshub_capture(resumed_capture, workspace=workspace)
+
+    clean_workspace = tmp_path / "clean"
+    clean_capture = capture_pipeshub_context(
+        client,
+        **{
+            **common_kwargs,
+            "run_id": "pipeshub_scale_clean",
+            "manifest_path": clean_workspace
+            / "imports"
+            / "source_syncs"
+            / "pipeshub"
+            / "pipeshub_scale_clean"
+            / "capture_manifest.json",
+            "raw_records_path": clean_workspace
+            / "imports"
+            / "source_syncs"
+            / "pipeshub"
+            / "pipeshub_scale_clean"
+            / "records.jsonl",
+        },
+    )
+    clean_report = write_pipeshub_capture(clean_capture, workspace=clean_workspace)
+
+    assert report.resumed is True
+    assert report.raw_record_count == 630
+    assert report.duplicate_record_count == 1
+    assert report.skipped_source_window_count == 25
+    assert report.pages_completed == 9
+    assert report.total_available == len(records)
+    assert report.content_record_count == 0
+    assert content_requests == []
+
+    complete_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert complete_manifest["status"] == "complete"
+    assert complete_manifest["raw_record_count"] == 630
+    assert complete_manifest["skipped_source_window_count"] == 25
+
+    resumed_ids = {record["recordId"] for record in resumed_capture.records}
+    clean_ids = {record["recordId"] for record in clean_capture.records}
+    assert resumed_ids == clean_ids
+    assert all("vei_content_text" not in record for record in resumed_capture.records)
+
+    runner = CliRunner()
+    readiness_result = runner.invoke(
+        app,
+        ["context", "readiness", "--root", str(workspace), "--format", "json"],
+    )
+    assert readiness_result.exit_code == 0, readiness_result.output
+    readiness = json.loads(readiness_result.output)
+    assert readiness["ready_for_world_modeling"] is True
+    assert readiness["event_count"] == 630
+    assert readiness["surface_count"] >= 3
+    assert readiness["readiness_label"] in {"ready", "rich"}
+
+    workflow_dir = workspace / ".artifacts" / "workflow_mining"
+    workflow_result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "mine",
+            "--source-dir",
+            str(workspace),
+            "--output",
+            str(workflow_dir),
+            "--limit",
+            "10",
+        ],
+    )
+    assert workflow_result.exit_code == 0, workflow_result.output
+    workflow_payload = json.loads(
+        (workflow_dir / "workflow_candidates.json").read_text()
+    )
+    assert workflow_payload["event_count"] == 630
+    assert workflow_payload["candidate_count"] > 0
+
+    wiki_result = runner.invoke(
+        app,
+        [
+            "wiki",
+            "build",
+            "--source-dir",
+            str(workspace),
+            "--output",
+            str(workspace / ".artifacts" / "wiki"),
+        ],
+    )
+    assert wiki_result.exit_code == 0, wiki_result.output
+    assert (workspace / ".artifacts" / "wiki" / "company_wiki.json").exists()
+
+    events_path = Path(report.canonical_events_path)
+    clean_events_path = Path(clean_report.canonical_events_path)
+    events = {
+        json.loads(line)["event_id"]
+        for line in events_path.read_text(encoding="utf-8").splitlines()
+    }
+    clean_events = {
+        json.loads(line)["event_id"]
+        for line in clean_events_path.read_text(encoding="utf-8").splitlines()
+    }
+    assert events == clean_events
+
+
 @pytest.mark.parametrize("connector", ["teams", "microsoftTeams", "clickup"])
 def test_pipeshub_capture_rejects_known_non_ingestion_connectors(
     connector: str,
@@ -616,6 +842,85 @@ def test_pipeshub_filter_prefers_configured_connector_ids() -> None:
 
 def test_pipeshub_extract_total_reads_pagination_total_count() -> None:
     assert _extract_total({"pagination": {"totalCount": 655}}) == 655
+
+
+def _large_pipeshub_records() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for thread_index in range(60):
+        day = (thread_index % 28) + 1
+        for message_index in range(8):
+            records.append(
+                {
+                    "recordId": f"outlook-{thread_index:03d}-{message_index}",
+                    "recordType": "MAIL",
+                    "connectorName": "microsoft_outlook",
+                    "recordName": f"Customer expansion thread {thread_index}",
+                    "subject": f"Customer expansion thread {thread_index}",
+                    "threadId": f"thread-{thread_index:03d}",
+                    "fromEmail": "shruti@py-insights.com",
+                    "toEmails": [f"customer-{thread_index}@example.com"],
+                    "sourceCreatedAtTimestamp": (
+                        f"2026-03-{day:02d}T10:{message_index:02d}:00Z"
+                    ),
+                    "snippet": (
+                        "Expansion discussion with onboarding, pricing, "
+                        "and implementation follow-up."
+                    ),
+                }
+            )
+    for document_index in range(80):
+        day = (document_index % 28) + 1
+        records.append(
+            {
+                "recordId": f"onedrive-{document_index:03d}",
+                "recordType": "FILE",
+                "connectorName": "microsoft_onedrive",
+                "recordName": f"Implementation plan {document_index}",
+                "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "sourceLastModifiedTimestamp": f"2026-03-{day:02d}T12:00:00Z",
+                "snippet": "Customer implementation plan and action owners.",
+                "webUrl": f"https://py-insights.example/drive/{document_index}",
+            }
+        )
+    for ticket_index in range(70):
+        day = (ticket_index % 28) + 1
+        records.append(
+            {
+                "recordId": f"jira-{ticket_index:03d}",
+                "recordType": "TICKET",
+                "connectorName": "jira",
+                "recordName": f"PYI-{ticket_index} customer request",
+                "ticketId": f"PYI-{ticket_index}",
+                "status": "open",
+                "assigneeEmail": "ops@py-insights.com",
+                "sourceLastModifiedTimestamp": f"2026-03-{day:02d}T14:00:00Z",
+                "description": "Customer implementation blocker requiring follow-up.",
+            }
+        )
+    for old_index in range(20):
+        records.append(
+            {
+                "recordId": f"outlook-old-{old_index:03d}",
+                "recordType": "MAIL",
+                "connectorName": "microsoft_outlook",
+                "recordName": f"February thread {old_index}",
+                "subject": f"February thread {old_index}",
+                "threadId": f"old-thread-{old_index:03d}",
+                "sourceCreatedAtTimestamp": f"2026-02-{old_index + 1:02d}T10:00:00Z",
+            }
+        )
+    for missing_index in range(5):
+        records.append(
+            {
+                "recordId": f"missing-time-{missing_index}",
+                "recordType": "FILE",
+                "connectorName": "microsoft_onedrive",
+                "recordName": f"Undated import {missing_index}",
+                "snippet": "Undated records are not eligible for bounded capture.",
+            }
+        )
+    records.append(dict(records[0]))
+    return records
 
 
 def _read_env(path: Path) -> dict[str, str]:
