@@ -223,7 +223,9 @@ def _included_surfaces_for_thread(
     included: list[str] = ["identity"]
     if "mail" in surfaces:
         included.insert(0, "mail")
-    if "slack" in surfaces:
+    # Teams is represented as Teams evidence, but the deterministic replay
+    # runtime currently uses the Slack-compatible communication facade.
+    if "slack" in surfaces or "teams" in surfaces:
         included.insert(0, "slack")
     if "tickets" in surfaces:
         included.insert(0, "tickets")

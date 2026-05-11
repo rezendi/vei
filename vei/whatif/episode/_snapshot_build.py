@@ -73,7 +73,7 @@ def _episode_context_snapshot(
             situation_context=situation_context,
             source_snapshot=source_snapshot,
         )
-    if surface == "slack":
+    if surface in {"slack", "teams"}:
         snapshot = _chat_episode_snapshot(
             historical_events=historical_events,
             branch_event=branch_event,

@@ -59,7 +59,7 @@ def _baseline_event_payload(
     organization_domain: str,
 ) -> BaseEvent:
     delay_ms = max(1, event.timestamp_ms - branch_event.timestamp_ms)
-    if event.surface == "slack":
+    if event.surface in {"slack", "teams"}:
         return BaseEvent(
             time_ms=delay_ms,
             actor_id=event.actor_id,

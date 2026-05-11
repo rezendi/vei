@@ -77,7 +77,7 @@ def replay_episode_baseline(
         ]
         visible_item_count = inbox_count
         top_items = list(top_subjects)
-    elif manifest.surface == "slack":
+    elif manifest.surface in {"slack", "teams"}:
         channel_name = _chat_channel_name_from_reference(manifest.branch_event)
         channel_payload = session.call_tool(
             "slack.open_channel",

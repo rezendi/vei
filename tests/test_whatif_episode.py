@@ -337,6 +337,61 @@ def _write_company_history_fixture(root: Path) -> Path:
     return snapshot_path
 
 
+def _write_teams_company_history_fixture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    snapshot_path = root / "context_snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "organization_name": "Py Corp",
+                "organization_domain": "pycorp.example.com",
+                "captured_at": "2026-03-01T10:15:00Z",
+                "sources": [
+                    {
+                        "provider": "teams",
+                        "captured_at": "2026-03-01T10:15:00Z",
+                        "status": "ok",
+                        "record_counts": {"channels": 1, "messages": 3},
+                        "data": {
+                            "channels": [
+                                {
+                                    "channel": "chat/team-leadership",
+                                    "channel_id": "chat/team-leadership",
+                                    "unread": 0,
+                                    "messages": [
+                                        {
+                                            "ts": "2026-03-01T09:00:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "Need one owner for the customer readiness follow-up.",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:05:00Z",
+                                            "user": "legal@pycorp.example.com",
+                                            "text": "Agree. Keep this in one thread until the owner is named.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                        {
+                                            "ts": "2026-03-01T09:10:00Z",
+                                            "user": "emma@pycorp.example.com",
+                                            "text": "I will summarize ownership and next steps before we widen the loop.",
+                                            "thread_ts": "2026-03-01T09:00:00Z",
+                                        },
+                                    ],
+                                }
+                            ],
+                            "profile": {"source": "test"},
+                        },
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return snapshot_path
+
+
 def test_materialize_episode_builds_mail_only_workspace_and_replay(
     tmp_path: Path,
 ) -> None:
@@ -438,6 +493,41 @@ def test_load_company_history_world_materialize_slack_branch_and_replay(
     assert replay.surface == "slack"
     assert replay.visible_item_count >= 2
     assert dataset.events[0].channel == "slack"
+
+
+def test_load_company_history_world_materialize_teams_branch_and_replay(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = _write_teams_company_history_fixture(
+        tmp_path / "company_history_teams"
+    )
+    world = load_world(source="company_history", source_dir=snapshot_path)
+
+    teams_thread = next(thread for thread in world.threads if thread.surface == "teams")
+    workspace_root = tmp_path / "company_history_teams_episode"
+    materialization = materialize_episode(
+        world,
+        root=workspace_root,
+        thread_id=teams_thread.thread_id,
+    )
+    manifest = load_episode_manifest(workspace_root)
+    replay = replay_episode_baseline(workspace_root, tick_ms=400_000)
+    dataset = VEIDataset.model_validate_json(
+        materialization.baseline_dataset_path.read_text(encoding="utf-8")
+    )
+    snapshot = json.loads(
+        materialization.context_snapshot_path.read_text(encoding="utf-8")
+    )
+
+    assert materialization.surface == "teams"
+    assert manifest.surface == "teams"
+    assert manifest.branch_event.surface == "teams"
+    assert manifest.baseline_future_preview[0].surface == "teams"
+    assert snapshot["sources"][0]["provider"] == "teams"
+    assert replay.surface == "teams"
+    assert replay.visible_item_count >= 2
+    assert dataset.events[0].channel == "slack"
+    assert dataset.events[0].payload["channel"] == "chat/team-leadership"
 
 
 def test_load_company_history_world_materialize_ticket_branch_and_replay(

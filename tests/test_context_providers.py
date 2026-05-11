@@ -5,6 +5,7 @@ import logging
 import zipfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -798,6 +799,276 @@ def test_teams_provider_captures_channels(monkeypatch: pytest.MonkeyPatch) -> No
     assert ch["channel"] == "#Engineering/General"
     assert ch["messages"][0]["user"] == "Alice"
     assert ch["messages"][0]["text"] == "Hello team!"
+
+
+def test_teams_graph_capture_writes_canonical_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from typer.testing import CliRunner
+
+    from vei.cli.vei_context import app
+
+    monkeypatch.setenv("VEI_MSFT_TENANT_ID", "tenant-1")
+    monkeypatch.setenv("VEI_MSFT_CLIENT_ID", "client-1")
+    monkeypatch.setenv("VEI_MSFT_CLIENT_SECRET", "secret-1")
+
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        url = request.full_url
+        parsed = urlparse(url)
+        if parsed.netloc == "login.microsoftonline.com":
+            assert parsed.path.endswith("/tenant-1/oauth2/v2.0/token")
+            return _mock_urlopen({"access_token": "graph-token"})
+        if parsed.path == "/v1.0/teams":
+            return _mock_urlopen(
+                {
+                    "value": [
+                        {
+                            "id": "team-1",
+                            "displayName": "Engineering",
+                            "description": "Build team",
+                        }
+                    ]
+                }
+            )
+        if parsed.path == "/v1.0/teams/team-1/channels":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
+            return _mock_urlopen(
+                {"value": [{"id": "channel-1", "displayName": "General"}]}
+            )
+        if parsed.path == "/v1.0/teams/team-1/channels/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
+            if "page=2" in parsed.query:
+                return _mock_urlopen(
+                    {
+                        "value": [
+                            {
+                                "id": "chan-reply-1",
+                                "messageType": "message",
+                                "replyToId": "chan-root-1",
+                                "createdDateTime": "2026-05-05T10:05:00Z",
+                                "lastModifiedDateTime": "2026-05-05T10:05:00Z",
+                                "channelIdentity": {
+                                    "teamId": "team-1",
+                                    "channelId": "channel-1",
+                                },
+                                "from": {
+                                    "user": {
+                                        "id": "user-2",
+                                        "displayName": "Bob",
+                                        "userIdentityType": "aadUser",
+                                    }
+                                },
+                                "body": {
+                                    "contentType": "html",
+                                    "content": "<p>Follow-up is ready.</p>",
+                                },
+                            }
+                        ]
+                    }
+                )
+            return _mock_urlopen(
+                {
+                    "value": [
+                        {
+                            "id": "chan-root-1",
+                            "messageType": "message",
+                            "createdDateTime": "2026-05-05T10:00:00Z",
+                            "lastModifiedDateTime": "2026-05-05T10:00:00Z",
+                            "channelIdentity": {
+                                "teamId": "team-1",
+                                "channelId": "channel-1",
+                            },
+                            "from": {
+                                "user": {
+                                    "id": "user-1",
+                                    "displayName": "Alice",
+                                    "userIdentityType": "aadUser",
+                                }
+                            },
+                            "body": {
+                                "contentType": "text",
+                                "content": "Planning has started.",
+                            },
+                        }
+                    ],
+                    "@odata.nextLink": (
+                        "https://graph.microsoft.com/v1.0/teams/team-1/"
+                        "channels/getAllMessages?page=2"
+                    ),
+                }
+            )
+        if parsed.path == "/v1.0/users":
+            return _mock_urlopen(
+                {
+                    "value": [
+                        {
+                            "id": "user-1",
+                            "displayName": "Alice",
+                            "userPrincipalName": "alice@example.com",
+                            "mail": "alice@example.com",
+                        },
+                        {
+                            "id": "user-2",
+                            "displayName": "Bob",
+                            "userPrincipalName": "bob@example.com",
+                            "mail": "bob@example.com",
+                        },
+                    ]
+                }
+            )
+        if parsed.path == "/v1.0/users/user-1/chats/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
+            return _mock_urlopen(
+                {
+                    "value": [
+                        {
+                            "id": "chat-msg-1",
+                            "messageType": "message",
+                            "chatId": "chat-1",
+                            "createdDateTime": "2026-05-05T11:00:00Z",
+                            "lastModifiedDateTime": "2026-05-05T11:00:00Z",
+                            "from": {
+                                "user": {
+                                    "id": "user-1",
+                                    "displayName": "Alice",
+                                    "userIdentityType": "aadUser",
+                                }
+                            },
+                            "body": {
+                                "contentType": "text",
+                                "content": "Direct chat signal.",
+                            },
+                        }
+                    ]
+                }
+            )
+        if parsed.path == "/v1.0/users/user-2/chats/getAllMessages":
+            query = parse_qs(parsed.query)
+            assert "$top" not in query
+            return _mock_urlopen(
+                {
+                    "value": [
+                        {
+                            "id": "chat-msg-1",
+                            "messageType": "message",
+                            "chatId": "chat-1",
+                            "createdDateTime": "2026-05-05T11:00:00Z",
+                            "lastModifiedDateTime": "2026-05-05T11:00:00Z",
+                            "from": {
+                                "user": {
+                                    "id": "user-1",
+                                    "displayName": "Alice",
+                                    "userIdentityType": "aadUser",
+                                }
+                            },
+                            "body": {
+                                "contentType": "text",
+                                "content": "Direct chat signal.",
+                            },
+                        }
+                    ]
+                }
+            )
+        raise AssertionError(f"unexpected Graph URL: {url}")
+
+    monkeypatch.setattr("vei.context.providers.teams.urlopen", fake_urlopen)
+
+    workspace = tmp_path / "teams-workspace"
+    result = CliRunner().invoke(
+        app,
+        [
+            "teams",
+            "capture",
+            "--workspace",
+            str(workspace),
+            "--run-id",
+            "teams-test",
+            "--org",
+            "ExampleCo",
+            "--domain",
+            "example.com",
+            "--since",
+            "2026-05-04",
+            "--until",
+            "2026-05-11",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["raw_record_count"] == 3
+    assert payload["duplicate_record_count"] == 1
+    assert payload["source_counts"]["channels"] == 1
+    assert payload["source_counts"]["chats"] == 1
+    assert payload["source_counts"]["messages"] == 3
+    snapshot_path = Path(payload["snapshot_path"])
+    assert snapshot_path.exists()
+    assert Path(payload["raw_records_path"]).exists()
+    assert Path(payload["capture_manifest_path"]).exists()
+
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert snapshot["metadata"]["source_gateway"] == "microsoft_graph"
+    source = snapshot["sources"][0]
+    assert source["provider"] == "teams"
+    channel_labels = {channel["channel"] for channel in source["data"]["channels"]}
+    assert "#Engineering/General" in channel_labels
+    assert "chat/chat-1" in channel_labels
+
+    events_path = Path(payload["canonical_events_path"])
+    events = [
+        json.loads(line)
+        for line in events_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    kinds = {event["kind"] for event in events}
+    assert "teams.message" in kinds
+    assert "teams.reply" in kinds
+
+    verify_result = CliRunner().invoke(
+        app,
+        ["verify", "--snapshot", str(snapshot_path)],
+    )
+    assert verify_result.exit_code == 0, verify_result.output
+    verification = json.loads(verify_result.output)
+    assert verification["ok"] is True
+
+    resumed = CliRunner().invoke(
+        app,
+        [
+            "teams",
+            "capture",
+            "--workspace",
+            str(workspace),
+            "--run-id",
+            "teams-test",
+            "--resume",
+            "--org",
+            "ExampleCo",
+            "--domain",
+            "example.com",
+            "--since",
+            "2026-05-04",
+            "--until",
+            "2026-05-11",
+            "--format",
+            "json",
+        ],
+    )
+    assert resumed.exit_code == 0, resumed.output
+    resumed_payload = json.loads(resumed.output)
+    assert resumed_payload["raw_record_count"] == 3
+    assert (
+        Path(resumed_payload["raw_records_path"])
+        .read_text(encoding="utf-8")
+        .count("\n")
+        == 3
+    )
 
 
 # ---------------------------------------------------------------------------

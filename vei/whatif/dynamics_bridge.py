@@ -267,9 +267,9 @@ def _canonical_event_from_reference(
 ) -> CanonicalEvent:
     surface = str(reference.surface or "mail").strip().lower() or "mail"
     payload: dict[str, object]
-    if surface == "slack":
+    if surface in {"slack", "teams"}:
         payload = {
-            "target": "slack",
+            "target": surface,
             "channel": reference.target_id or "#procurement",
             "text": reference.snippet or reference.subject,
             "thread_ts": reference.conversation_anchor or None,
@@ -437,7 +437,7 @@ def _timestamp_ms(value: str) -> int:
 
 
 def _domain_for_surface(surface: str) -> EventDomain:
-    if surface in {"mail", "slack", "calendar"}:
+    if surface in {"mail", "slack", "teams", "calendar"}:
         return EventDomain.COMM_GRAPH
     if surface == "tickets":
         return EventDomain.WORK_GRAPH

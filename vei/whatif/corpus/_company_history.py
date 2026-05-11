@@ -437,6 +437,7 @@ def _company_history_chat_events(
                 message_id=str(message.get("id", "") or ""),
                 source=provider,
             )
+            chat_surface = "teams" if provider == "teams" else "slack"
             events.append(
                 WhatIfEvent(
                     event_id=_company_history_event_id(
@@ -453,7 +454,7 @@ def _company_history_chat_events(
                     actor_id=actor_id,
                     event_type=event_type,
                     thread_id=thread_id,
-                    surface="slack",
+                    surface=chat_surface,
                     conversation_anchor=conversation_anchor,
                     subject=subject,
                     snippet=snippet,

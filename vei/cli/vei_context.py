@@ -13,7 +13,12 @@ pipeshub_app = typer.Typer(
     add_completion=False,
     help="Inspect and snapshot a PipesHub enterprise connector instance.",
 )
+teams_app = typer.Typer(
+    add_completion=False,
+    help="Inspect and snapshot Microsoft Teams through Microsoft Graph.",
+)
 app.add_typer(pipeshub_app, name="pipeshub")
+app.add_typer(teams_app, name="teams")
 
 
 def _write_snapshot_bundle(output: str, snapshot) -> Path:
@@ -227,6 +232,233 @@ def capture_pipeshub(
         )
     if report.skipped_records:
         typer.echo(f"Skipped unmapped records: {report.skipped_records}")
+    for warning in report.warnings:
+        typer.echo(f"Warning: {warning}")
+
+
+@teams_app.command("inspect")
+def inspect_teams(
+    tenant_env: str = typer.Option(
+        "VEI_MSFT_TENANT_ID",
+        "--tenant-env",
+        help="Environment variable containing the Microsoft Entra tenant id.",
+    ),
+    client_id_env: str = typer.Option(
+        "VEI_MSFT_CLIENT_ID",
+        "--client-id-env",
+        help="Environment variable containing the Microsoft Graph app client id.",
+    ),
+    client_secret_env: str = typer.Option(
+        "VEI_MSFT_CLIENT_SECRET",
+        "--client-secret-env",
+        help="Environment variable containing the Microsoft Graph app client secret.",
+    ),
+    team_limit: int = typer.Option(10, "--team-limit", min=1),
+    user_limit: int = typer.Option(10, "--user-limit", min=1),
+    timeout_s: int = typer.Option(30, "--timeout-s", min=1),
+    format: str = typer.Option("plain", "--format", help="plain | json"),
+) -> None:
+    """Check Microsoft Graph Teams access without writing a snapshot."""
+    from vei.context.providers.teams import TeamsGraphClient
+    from vei.context.providers.teams import inspect_teams_graph
+
+    try:
+        client = TeamsGraphClient.from_env(
+            tenant_env=tenant_env,
+            client_id_env=client_id_env,
+            client_secret_env=client_secret_env,
+            timeout_s=timeout_s,
+        )
+        report = inspect_teams_graph(
+            client,
+            team_limit=team_limit,
+            user_limit=user_limit,
+        )
+    except Exception as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if format == "json":
+        typer.echo(report.model_dump_json(indent=2))
+        return
+    if format != "plain":
+        raise typer.BadParameter("format must be plain or json")
+    typer.echo(f"Microsoft Graph tenant: {report.tenant_id}")
+    typer.echo(f"Reachable: {report.reachable}")
+    typer.echo(f"Teams sample: {len(report.teams_sample)}")
+    for team in report.teams_sample:
+        typer.echo(f"- {team.get('display_name') or team.get('id')}")
+    typer.echo(f"Users sample: {len(report.users_sample)}")
+    for user in report.users_sample:
+        label = user.get("user_principal_name") or user.get("mail") or user.get("id")
+        typer.echo(f"- {label}")
+    for warning in report.warnings:
+        typer.echo(f"Warning: {warning}")
+
+
+@teams_app.command("capture")
+def capture_teams(
+    workspace: Path = typer.Option(
+        ..., "--workspace", help="VEI workspace/context bundle directory to write into."
+    ),
+    org: str = typer.Option(..., "--org", help="Organization name"),
+    domain: str = typer.Option("", "--domain", help="Organization domain"),
+    tenant_env: str = typer.Option(
+        "VEI_MSFT_TENANT_ID",
+        "--tenant-env",
+        help="Environment variable containing the Microsoft Entra tenant id.",
+    ),
+    client_id_env: str = typer.Option(
+        "VEI_MSFT_CLIENT_ID",
+        "--client-id-env",
+        help="Environment variable containing the Microsoft Graph app client id.",
+    ),
+    client_secret_env: str = typer.Option(
+        "VEI_MSFT_CLIENT_SECRET",
+        "--client-secret-env",
+        help="Environment variable containing the Microsoft Graph app client secret.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output context_snapshot.json path. Defaults to <workspace>/context_snapshot.json.",
+    ),
+    since: str = typer.Option(
+        "",
+        "--since",
+        help="Optional lower bound as ISO-8601 date/datetime.",
+    ),
+    until: str = typer.Option(
+        "",
+        "--until",
+        help="Optional upper bound as ISO-8601 date/datetime. Date-only values are exclusive at next midnight.",
+    ),
+    team: List[str] = typer.Option(
+        [],
+        "--team",
+        help="Team id or display name to capture. Repeat for multiple teams.",
+    ),
+    user: List[str] = typer.Option(
+        [],
+        "--user",
+        help="User id, UPN, email, or display name whose chats should be scanned. Repeat for multiple users.",
+    ),
+    include_channels: bool = typer.Option(
+        True,
+        "--include-channels/--skip-channels",
+        help="Capture Teams channel messages.",
+    ),
+    include_chats: bool = typer.Option(
+        True,
+        "--include-chats/--skip-chats",
+        help="Capture 1:1 and group chat messages by scanning users.",
+    ),
+    limit: int = typer.Option(5000, "--limit", min=1, help="Maximum messages to keep."),
+    page_size: int = typer.Option(
+        250,
+        "--page-size",
+        min=1,
+        max=250,
+        help=(
+            "Reserved for Graph collections that accept page sizing. Teams export "
+            "endpoints reject $top, so VEI enforces --limit locally there."
+        ),
+    ),
+    team_limit: int = typer.Option(
+        250,
+        "--team-limit",
+        min=1,
+        help="Maximum teams to discover before applying filters.",
+    ),
+    user_limit: int = typer.Option(
+        250,
+        "--user-limit",
+        min=1,
+        help="Maximum users to discover before applying filters.",
+    ),
+    run_id: str = typer.Option(
+        "",
+        "--run-id",
+        help="Stable Teams Graph capture run id. Use with --resume to continue a previous capture.",
+    ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume from <workspace>/imports/source_syncs/microsoft_teams/<run-id>/capture_manifest.json.",
+    ),
+    timeout_s: int = typer.Option(30, "--timeout-s", min=1),
+    format: str = typer.Option("plain", "--format", help="plain | json"),
+) -> None:
+    """Pull a Microsoft Teams snapshot into VEI canonical context artifacts."""
+    from vei.context.providers.teams import TeamsGraphClient
+    from vei.context.providers.teams import capture_teams_graph_context
+    from vei.context.providers.teams import new_teams_graph_run_id
+    from vei.context.providers.teams import write_teams_graph_capture
+
+    try:
+        if resume and not run_id:
+            raise ValueError("--resume requires --run-id")
+        workspace_path = workspace.expanduser().resolve()
+        resolved_run_id = run_id or new_teams_graph_run_id()
+        sync_root = (
+            workspace_path
+            / "imports"
+            / "source_syncs"
+            / "microsoft_teams"
+            / resolved_run_id
+        )
+        client = TeamsGraphClient.from_env(
+            tenant_env=tenant_env,
+            client_id_env=client_id_env,
+            client_secret_env=client_secret_env,
+            timeout_s=timeout_s,
+        )
+        capture_result = capture_teams_graph_context(
+            client,
+            organization_name=org,
+            organization_domain=domain,
+            since=since,
+            until=until,
+            team_filters=team,
+            user_filters=user,
+            include_channels=include_channels,
+            include_chats=include_chats,
+            limit=limit,
+            page_size=page_size,
+            team_limit=team_limit,
+            user_limit=user_limit,
+            run_id=resolved_run_id,
+            manifest_path=sync_root / "capture_manifest.json",
+            raw_records_path=sync_root / "records.jsonl",
+            resume=resume,
+        )
+        report = write_teams_graph_capture(
+            capture_result,
+            workspace=workspace_path,
+            output=output,
+        )
+    except Exception as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if format == "json":
+        typer.echo(report.model_dump_json(indent=2))
+        return
+    if format != "plain":
+        raise typer.BadParameter("format must be plain or json")
+    typer.echo(f"Captured {report.raw_record_count} Microsoft Teams messages")
+    typer.echo(f"Snapshot: {report.snapshot_path}")
+    typer.echo(f"Canonical events: {report.canonical_events_path}")
+    typer.echo(f"Canonical index: {report.canonical_index_path}")
+    typer.echo(f"Raw evidence: {report.raw_records_path}")
+    typer.echo(f"Capture manifest: {report.capture_manifest_path}")
+    typer.echo(
+        "Sources: "
+        + ", ".join(
+            f"{name}={count}" for name, count in sorted(report.source_counts.items())
+        )
+    )
+    if report.duplicate_record_count:
+        typer.echo(f"Duplicate messages skipped: {report.duplicate_record_count}")
+    if not report.complete:
+        typer.echo("Warning: capture stopped at --limit before all scopes completed")
     for warning in report.warnings:
         typer.echo(f"Warning: {warning}")
 

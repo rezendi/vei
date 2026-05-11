@@ -190,7 +190,7 @@ def _decision_branch_summary(
         branch_event,
         organization_domain=organization_domain,
     )
-    if branch_event.surface == "slack":
+    if branch_event.surface in {"slack", "teams"}:
         return f'{actor} is about to {verb} in {recipient} on "{subject}".'
     if branch_event.surface == "tickets":
         return f'{actor} is about to {verb} ticket "{subject}".'
@@ -228,7 +228,7 @@ def _historical_action_summary(
         or branch_event.thread_id
         or "this thread"
     )
-    if branch_event.surface == "slack":
+    if branch_event.surface in {"slack", "teams"}:
         return f'Historically, {actor} {verb} in {recipient} on "{subject}"{suffix}.'
     if branch_event.surface == "tickets":
         return f'Historically, {actor} {verb} ticket "{subject}"{suffix}.'
@@ -263,7 +263,7 @@ def _decision_stakes_summary(
         notes.append(
             "The recorded future stayed active long enough to create coordination load."
         )
-    if branch_event.surface == "slack" and not notes:
+    if branch_event.surface in {"slack", "teams"} and not notes:
         notes.append(
             "This moment changes who stays in the channel thread and how much internal coordination follows."
         )
@@ -439,7 +439,7 @@ def _historical_action_verb(
 ) -> str:
     if branch_event.is_escalation or branch_event.event_type == "escalation":
         return "escalated" if tense == "past" else "escalate"
-    if branch_event.surface == "slack":
+    if branch_event.surface in {"slack", "teams"}:
         return "replied" if tense == "past" else "reply"
     if branch_event.surface == "tickets":
         return "updated" if tense == "past" else "update"
@@ -476,7 +476,7 @@ def _branch_recipient_label(
     if not recipients and branch_event.target_id:
         recipients = [branch_event.target_id]
     if not recipients:
-        if branch_event.surface == "slack":
+        if branch_event.surface in {"slack", "teams"}:
             return "the current channel"
         if branch_event.surface == "tickets":
             return branch_event.thread_id

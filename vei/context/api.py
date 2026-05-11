@@ -25,6 +25,7 @@ from .models import (
     JiraSourceData,
     MailArchiveSourceData,
     SlackSourceData,
+    TeamsSourceData,
     source_payload,
 )
 from . import public_context as _public_context
@@ -65,6 +66,7 @@ _BOUNDARY_EXPORTS = (
     JiraSourceData,
     MailArchiveSourceData,
     SlackSourceData,
+    TeamsSourceData,
     source_payload,
 )
 
