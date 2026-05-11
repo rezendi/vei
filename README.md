@@ -179,7 +179,6 @@ vei context pipeshub capture \
   --connector salesforce \
   --connector onedrive \
   --connector outlook \
-  --connector teams \
   --since 2026-03-01T00:00:00Z
 
 # If a long capture is interrupted, rerun with the same run id.
@@ -195,7 +194,6 @@ vei context pipeshub capture \
   --connector salesforce \
   --connector onedrive \
   --connector outlook \
-  --connector teams \
   --since 2026-03-01T00:00:00Z
 
 # Smoke the captured bundle through VEI's downstream read models.
@@ -218,8 +216,9 @@ text; pass `--include-content` only for a bounded materialization window where
 you intentionally want the extra local copy. Records keep their upstream system
 identity — PipesHub is the transport, not the origin — so a Gmail message lands
 under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive file
-under `provider="google"`, a Teams chat message under `provider="teams"`, and so
-on. VEI does not maintain its own provider allowlist at the command boundary;
+under `provider="google"`, and a managed Teams bridge or future PipesHub Teams
+connector would land under `provider="teams"`. VEI does not maintain its own
+provider allowlist at the command boundary;
 connector filters are resolved against the configured PipesHub connectors when
 possible, then whatever PipesHub serves is ingested under the source system it
 came from. ClickUp is the current known exception: PipesHub exposes ClickUp
@@ -242,11 +241,12 @@ PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
 `--base-url` to `inspect`/`capture` and skip the local launcher.
 
 Canonical timeline events (`canonical_events.jsonl`) cover the original
-provider set plus the main PipesHub-backed enterprise surfaces: Outlook mail,
-Teams chat, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
+provider set plus the main enterprise surfaces VEI can normalize today: Outlook
+mail, Teams chat when captured through the direct Graph lane or a compatible
+managed bridge, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
 ServiceNow tickets. Unknown provider/record-type combinations still remain in
-the snapshot under
-their provider's `other` bucket until VEI learns a typed event shape for them.
+the snapshot under their provider's `other` bucket until VEI learns a typed
+event shape for them.
 
 ### Microsoft Teams Graph Capture
 
@@ -308,12 +308,17 @@ a skill map — all from the same canonical event spine:
 
 ```bash
 # 1. Rank strong branch points (no LLM, no training)
-vei whatif candidates --source-dir _vei_out/yourco/context_snapshot.json --limit 10
+vei whatif candidates \
+  --source company_history \
+  --source-dir _vei_out/yourco-teams/context_snapshot.json \
+  --limit 10
 
-# 2. Run a counterfactual. --mode e_jepa trains a structured-state JEPA on the
-#    spine and predicts; --mode heuristic_baseline is deterministic and fast.
+# 2. Run a counterfactual. --mode e_jepa materializes a bounded training window
+#    from the spine and predicts; --mode heuristic_baseline is deterministic
+#    and fast.
 vei whatif experiment \
-  --source-dir _vei_out/yourco/context_snapshot.json \
+  --source company_history \
+  --source-dir _vei_out/yourco-teams/context_snapshot.json \
   --label first_experiment \
   --counterfactual-prompt "What if escalation had gone through legal first?" \
   --mode e_jepa --forecast-backend e_jepa
@@ -321,28 +326,28 @@ vei whatif experiment \
 # 3. Build the company wiki (Overview, Recent Changes, Cases, People,
 #    Knowledge, Skills, Evidence Index). Citations link back to canonical
 #    events; nothing from synthetic vertical packs is mixed in.
-vei wiki build --source-dir _vei_out/yourco/context_snapshot.json \
-  --output _vei_out/yourco/wiki
+vei wiki build --source-dir _vei_out/yourco-teams/context_snapshot.json \
+  --output _vei_out/yourco-teams/wiki
 
 # 4. Compile evidence-backed skills (LLM-derived, every step cited)
 vei knowledge skillmap build \
-  --source-dir _vei_out/yourco/context_snapshot.json \
-  --output _vei_out/yourco/skill_map
+  --source-dir _vei_out/yourco-teams/context_snapshot.json \
+  --output _vei_out/yourco-teams/skill_map
 
 # 5. When real agent activity has been imported into the workspace, refresh
 #    skills + wiki from the context plus the Control evidence spine.
-vei knowledge skillmap refresh --workspace _vei_out/yourco \
-  --output _vei_out/yourco/skill_map
-vei wiki refresh --workspace _vei_out/yourco
+vei knowledge skillmap refresh --workspace _vei_out/yourco-teams \
+  --output _vei_out/yourco-teams/skill_map
+vei wiki refresh --workspace _vei_out/yourco-teams
 
 # 6. Mine recurring work and promote an evidence-backed task spec.
 vei workflow mine \
-  --source-dir _vei_out/yourco/context_snapshot.json \
-  --output _vei_out/yourco/workflows
+  --source-dir _vei_out/yourco-teams/context_snapshot.json \
+  --output _vei_out/yourco-teams/workflows
 vei workflow promote \
-  --root _vei_out/yourco/workflows \
+  --root _vei_out/yourco-teams/workflows \
   --candidate-id <candidate-id> \
-  --output _vei_out/yourco/workflows/task_spec.json
+  --output _vei_out/yourco-teams/workflows/task_spec.json
 ```
 
 For a checked-in end-to-end example of the workflow-intelligence ladder, see

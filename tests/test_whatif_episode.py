@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from vei.cli.vei import app as cli_app
 from vei.data.models import VEIDataset
+from vei.llm.providers import PlanResult, PlanUsage
 from vei.twin import load_customer_twin
 from vei.whatif import (
     load_world,
@@ -22,7 +23,8 @@ from vei.whatif.counterfactual import (
     run_llm_counterfactual,
 )
 from vei.whatif.decision import build_decision_scene, build_saved_decision_scene
-from vei.llm.providers import PlanResult, PlanUsage
+from vei.whatif.episode._snapshot_history import _case_history_source_results
+from vei.whatif.models import WhatIfCaseContext, WhatIfEventReference
 
 materialize_episode_module = materialize_episode
 load_episode_manifest_module = load_episode_manifest
@@ -528,6 +530,33 @@ def test_load_company_history_world_materialize_teams_branch_and_replay(
     assert replay.visible_item_count >= 2
     assert dataset.events[0].channel == "slack"
     assert dataset.events[0].payload["channel"] == "chat/team-leadership"
+
+
+def test_case_history_source_results_preserve_teams_provider() -> None:
+    sources = _case_history_source_results(
+        WhatIfCaseContext(
+            case_id="case:TEAMS-1",
+            title="Teams follow-up",
+            related_history=[
+                WhatIfEventReference(
+                    event_id="teams-message-1",
+                    timestamp="2026-03-01T09:00:00Z",
+                    actor_id="emma@pycorp.example.com",
+                    event_type="message",
+                    thread_id="teams:chat/team-leadership",
+                    case_id="case:TEAMS-1",
+                    surface="teams",
+                    conversation_anchor="2026-03-01T09:00:00Z",
+                    subject="Leadership chat",
+                    snippet="Need one owner for the customer readiness follow-up.",
+                    to_recipients=["chat/team-leadership"],
+                )
+            ],
+        )
+    )
+
+    assert [source.provider for source in sources] == ["teams"]
+    assert sources[0].data["channels"][0]["channel"] == "chat/team-leadership"
 
 
 def test_load_company_history_world_materialize_ticket_branch_and_replay(

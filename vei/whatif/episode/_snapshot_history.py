@@ -64,11 +64,11 @@ def _history_provider_for_reference(reference: WhatIfEventReference) -> str | No
         return "jira"
     if reference.surface == "mail":
         return "mail_archive"
-    if reference.surface == "slack":
+    if reference.surface in {"slack", "teams"}:
         provider = reference.thread_id.split(":", 1)[0].strip().lower()
         if provider in {"slack", "teams"}:
             return provider
-        return "slack"
+        return reference.surface
     return None
 
 
