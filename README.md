@@ -369,7 +369,21 @@ vei eval llm-test run \
   --provider openai --model gpt-5 \
   --task "Triage the open exception and reply to the customer." \
   --artifacts _vei_out/yourco/llm_run
+
+# Or score a real model against a named benchmark family and its workflow contract.
+VEI_OPENAI_REASONING_EFFORT=low vei eval benchmark \
+  --runner llm \
+  --family security_containment \
+  --provider openai --model gpt-5-mini \
+  --max-steps 32 --tool-top-k 48 \
+  --artifacts-root _vei_out/benchmark
 ```
+
+Named-family LLM benchmark runs derive the agent task from the workflow
+objective, constraints, relevant tools, and known argument anchors. The result
+includes both the enterprise score and workflow-contract validation, so you can
+tell whether a real agent achieved the outcome and whether it followed the
+reviewed workflow shape.
 
 Full command reference: [docs/WHATIF.md](docs/WHATIF.md).
 

@@ -13,6 +13,7 @@ import typer
 from vei.benchmark.api import (
     FRONTIER_SCENARIO_SETS,
     get_benchmark_family_manifest,
+    list_benchmark_family_manifest,
     list_default_benchmark_family_manifest,
     resolve_benchmark_workflow_name,
     resolve_scenarios,
@@ -61,6 +62,60 @@ def _temporary_env_var(name: str, value: str | None) -> collections.abc.Iterator
 
 def _shell_quote(value: str | Path) -> str:
     return shlex.quote(str(value))
+
+
+def _resolve_benchmark_case_targets(
+    *,
+    scenario_names: list[str],
+    scenario_set: str | None,
+    family_names: list[str],
+    workflow_name: str | None,
+    workflow_variant: str | None,
+) -> list[dict[str, str | None]]:
+    if family_names and not scenario_names and not scenario_set:
+        targets: list[dict[str, str | None]] = []
+        available = {item.name for item in list_benchmark_family_manifest()}
+        for family_name in family_names:
+            normalized = family_name.strip().lower()
+            if normalized not in available:
+                raise typer.BadParameter(f"unknown benchmark family: {family_name}")
+            manifest = get_benchmark_family_manifest(normalized)
+            target_workflow = workflow_name or manifest.workflow_name
+            target_variant = workflow_variant or manifest.primary_workflow_variant
+            if target_workflow is None:
+                scenario_name = manifest.scenario_names[0]
+            elif target_variant:
+                scenario_name = get_benchmark_family_workflow_variant(
+                    target_workflow,
+                    target_variant,
+                ).scenario_name
+            else:
+                scenario_name = manifest.scenario_names[0]
+            targets.append(
+                {
+                    "scenario_name": scenario_name,
+                    "family_name": manifest.name,
+                    "workflow_name": target_workflow,
+                    "workflow_variant": target_variant,
+                }
+            )
+        return targets
+
+    resolved = resolve_scenarios(
+        scenario_names=scenario_names,
+        scenario_set=scenario_set,
+        family_names=family_names,
+    )
+    family_name = family_names[0].strip().lower() if len(family_names) == 1 else None
+    return [
+        {
+            "scenario_name": scenario_name,
+            "family_name": family_name,
+            "workflow_name": workflow_name,
+            "workflow_variant": workflow_variant,
+        }
+        for scenario_name in resolved
+    ]
 
 
 def run_benchmark_demo(spec: BenchmarkDemoSpec) -> BenchmarkDemoResult:
@@ -433,11 +488,14 @@ def benchmark(
         selected = (
             FRONTIER_SCENARIO_SETS["all_frontier"] if frontier else ["multi_channel"]
         )
-    scenario_names = resolve_scenarios(
+    case_targets = _resolve_benchmark_case_targets(
         scenario_names=selected,
         scenario_set=scenario_set,
         family_names=selected_families,
+        workflow_name=workflow_name,
+        workflow_variant=workflow_variant,
     )
+    scenario_names = [target["scenario_name"] for target in case_targets]
     if workflow_name:
         if len(scenario_names) != 1:
             raise typer.BadParameter(
@@ -468,26 +526,54 @@ def benchmark(
 
     batch_id = run_id or f"{normalized_runner}_{int(time.time())}"
     run_dir = artifacts_root / batch_id
+    duplicate_scenarios = {
+        str(target["scenario_name"])
+        for target in case_targets
+        if sum(
+            1
+            for item in case_targets
+            if str(item["scenario_name"]) == str(target["scenario_name"])
+        )
+        > 1
+    }
     specs = [
         BenchmarkCaseSpec(
             runner=normalized_runner,  # type: ignore[arg-type]
-            scenario_name=scenario_name,
+            scenario_name=str(target["scenario_name"]),
+            family_name=target.get("family_name"),
             workflow_name=(
                 workflow_name
-                or resolve_benchmark_workflow_name(scenario_name=scenario_name)
+                or target.get("workflow_name")
+                or resolve_benchmark_workflow_name(
+                    family_name=target.get("family_name"),
+                    scenario_name=str(target["scenario_name"]),
+                )
                 if normalized_runner == "workflow"
+                or (normalized_runner == "llm" and target.get("family_name"))
                 else None
             ),
             workflow_variant=(
-                workflow_variant if normalized_runner == "workflow" else None
+                workflow_variant
+                or (
+                    target.get("workflow_variant")
+                    if normalized_runner == "workflow"
+                    or (normalized_runner == "llm" and target.get("family_name"))
+                    else None
+                )
             ),
             seed=seed,
-            artifacts_dir=run_dir / scenario_name,
-            branch=scenario_name,
+            artifacts_dir=(
+                run_dir / str(target["scenario_name"])
+                if str(target["scenario_name"]) not in duplicate_scenarios
+                else run_dir
+                / str(target.get("family_name") or target["scenario_name"])
+                / str(target["scenario_name"])
+            ),
+            branch=str(target.get("family_name") or target["scenario_name"]),
             dataset_path=dataset,
             replay_mode="overlay" if dataset else None,
             score_mode=score_success_mode.lower().strip(),
-            frontier=frontier or scenario_name.startswith("f"),
+            frontier=frontier or str(target["scenario_name"]).startswith("f"),
             model=model,
             provider=provider if normalized_runner == "llm" else None,
             bc_model_path=bc_model,
@@ -496,7 +582,7 @@ def benchmark(
             tool_top_k=tool_top_k,
             use_llm_judge=use_llm_judge,
         )
-        for scenario_name in scenario_names
+        for target in case_targets
     ]
     batch = run_benchmark_batch(specs, run_id=batch_id, output_dir=run_dir)
     typer.echo(json.dumps(batch.summary.model_dump(), indent=2))

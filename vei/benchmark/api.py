@@ -529,6 +529,7 @@ def _default_llm_task_for_case(spec: BenchmarkCaseSpec) -> str | None:
     )
     tool_text = ", ".join(tools)
     anchors = _workflow_anchor_text(workflow.metadata.get("workflow_parameters", {}))
+    argument_hints = _workflow_argument_hint_text(workflow.steps)
 
     parts = [objective]
     if success:
@@ -539,10 +540,16 @@ def _default_llm_task_for_case(spec: BenchmarkCaseSpec) -> str | None:
         parts.append(f"Known incident anchors: {anchors}.")
     if tool_text:
         parts.append(f"Likely relevant tool surfaces: {tool_text}.")
+    if argument_hints:
+        parts.append(
+            "Known tool argument hints. Use these IDs and fields when the current "
+            f"observation supports the action:\n{argument_hints}"
+        )
     parts.append(
         "Use the current observation and tool results to decide each next action. "
-        "Preserve evidence before destructive containment actions and record the "
-        "final decision in the appropriate incident artifacts."
+        "When the task asks for evidence preservation, preserve evidence before "
+        "destructive containment actions. Record the final decision in the "
+        "appropriate artifacts."
     )
     return "\n".join(parts)
 
@@ -559,6 +566,62 @@ def _workflow_anchor_text(parameters: object) -> str:
         if isinstance(value, (str, int, float, bool)):
             anchors.append(f"{key}={value}")
     return "; ".join(anchors)
+
+
+def _workflow_argument_hint_text(steps: object) -> str:
+    if not isinstance(steps, list):
+        return ""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for step in steps:
+        tool = getattr(step, "tool", None)
+        graph_domain = getattr(step, "graph_domain", None)
+        graph_action = getattr(step, "graph_action", None)
+        args = getattr(step, "args", None)
+        if not isinstance(args, dict):
+            continue
+        hint_args: dict[str, object]
+        if isinstance(tool, str) and tool.strip():
+            hint_tool = tool.strip()
+            hint_args = dict(args)
+        elif (
+            isinstance(graph_domain, str)
+            and graph_domain.strip()
+            and isinstance(graph_action, str)
+            and graph_action.strip()
+        ):
+            hint_tool = "vei.graph_action"
+            hint_args = {
+                "domain": graph_domain.strip(),
+                "action": graph_action.strip(),
+                "args": dict(args),
+            }
+        else:
+            continue
+        args_text = json.dumps(
+            _compact_workflow_hint_value(hint_args),
+            sort_keys=True,
+        )
+        line = f"- {hint_tool}: {args_text}"
+        if line in seen:
+            continue
+        seen.add(line)
+        lines.append(line)
+        if len(lines) >= 16:
+            break
+    return "\n".join(lines)
+
+
+def _compact_workflow_hint_value(value: object) -> object:
+    if isinstance(value, str):
+        return value if len(value) <= 240 else value[:237] + "..."
+    if isinstance(value, dict):
+        return {
+            str(key): _compact_workflow_hint_value(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_compact_workflow_hint_value(item) for item in value[:8]]
+    return value
 
 
 def _apply_replay(session: Any, spec: BenchmarkCaseSpec) -> None:

@@ -542,12 +542,30 @@ class RouterDispatch:
             return router.tick(**args)
         if tool == "vei.state":
             return router.state_snapshot(**args)
+        if tool == "vei.tools.search":
+            return router.search_tools(**args)
+        if tool == "vei.orientation":
+            return RouterDispatch._orientation(router)
+        if tool == "vei.structure_view":
+            return RouterDispatch._structure_view(router)
+        if tool == "vei.capability_graphs":
+            return RouterDispatch._capability_graphs(router, args)
+        if tool == "vei.graph_plan":
+            return RouterDispatch._graph_plan(router, args)
+        if tool == "vei.graph_action":
+            return RouterDispatch._graph_action(router, args)
         if tool == "vei.act_and_observe":
             target_tool = args.get("tool")
             target_args = args.get("args", {})
             if not target_tool:
                 raise MCPError("invalid_args", "act_and_observe requires tool")
             return router.act_and_observe(target_tool, target_args)
+        if tool == "vei.call":
+            target_tool = args.get("tool")
+            target_args = args.get("args", {})
+            if not target_tool:
+                raise MCPError("invalid_args", "vei.call requires tool")
+            return router.call_and_step(target_tool, target_args)
         if tool == "vei.inject":
             return router.inject(**args)
 
@@ -583,3 +601,164 @@ class RouterDispatch:
                 return provider.call(tool, args)
 
         raise MCPError("unknown_tool", f"No such tool: {tool}")
+
+    @staticmethod
+    def _current_state(router: Router) -> Any:
+        from vei.world.api import serialize_router_state
+
+        return serialize_router_state(router)
+
+    @staticmethod
+    def _orientation(router: Router) -> Dict[str, Any]:
+        from vei.orientation.api import build_world_orientation
+
+        return build_world_orientation(
+            RouterDispatch._current_state(router)
+        ).model_dump(mode="json")
+
+    @staticmethod
+    def _structure_view(router: Router) -> Dict[str, Any]:
+        from vei.structure.api import build_structure_view_from_world_state
+
+        return build_structure_view_from_world_state(
+            RouterDispatch._current_state(router)
+        ).model_dump(mode="json")
+
+    @staticmethod
+    def _capability_graphs(router: Router, args: Dict[str, Any]) -> Dict[str, Any]:
+        from vei.capability_graph.api import build_runtime_capability_graphs
+
+        graphs = build_runtime_capability_graphs(
+            RouterDispatch._current_state(router)
+        ).model_dump(mode="json")
+        domain = args.get("domain")
+        if domain is None:
+            return graphs
+        normalized = str(domain).strip().lower()
+        if normalized not in graphs.get("available_domains", []):
+            return {
+                "error": {
+                    "code": "unknown_domain",
+                    "message": f"Unknown capability graph domain: {domain}",
+                }
+            }
+        return {
+            "branch": graphs["branch"],
+            "clock_ms": graphs["clock_ms"],
+            "domain": normalized,
+            "graph": graphs.get(normalized),
+        }
+
+    @staticmethod
+    def _graph_plan(router: Router, args: Dict[str, Any]) -> Dict[str, Any]:
+        from vei.capability_graph.api import build_graph_action_plan
+
+        limit = args.get("limit", 12)
+        try:
+            normalized_limit = int(limit)
+        except (TypeError, ValueError):
+            raise MCPError("invalid_args", "graph_plan limit must be an integer")
+        return build_graph_action_plan(
+            RouterDispatch._current_state(router),
+            domain=args.get("domain"),
+            limit=normalized_limit,
+        ).model_dump(mode="json")
+
+    @staticmethod
+    def _graph_action(router: Router, args: Dict[str, Any]) -> Dict[str, Any]:
+        from vei.capability_graph.api import (
+            CapabilityGraphActionInput,
+            build_graph_action_plan,
+            get_runtime_capability_graph,
+            infer_graph_action_object_refs,
+            resolve_graph_action,
+        )
+
+        try:
+            payload = CapabilityGraphActionInput.model_validate(args)
+            state = RouterDispatch._current_state(router)
+            resolved = resolve_graph_action(state, payload)
+            result = router.call_and_step(resolved.tool, dict(resolved.args))
+            post_state = RouterDispatch._current_state(router)
+            post_graph = get_runtime_capability_graph(post_state, resolved.domain)
+            next_plan = build_graph_action_plan(post_state, limit=8)
+            next_focuses = list(next_plan.next_focuses)
+            executed_focus = _focus_for_graph_domain(resolved.domain, resolved.tool)
+            if executed_focus and executed_focus not in next_focuses:
+                next_focuses.insert(0, executed_focus)
+            object_refs = infer_graph_action_object_refs(
+                domain=resolved.domain,
+                action=resolved.action,
+                args=resolved.args,
+                result=result,
+            )
+            scenario = post_state.scenario or {}
+            return {
+                "ok": "error" not in result,
+                "branch": post_state.branch,
+                "clock_ms": post_state.clock_ms,
+                "domain": resolved.domain,
+                "action": resolved.action,
+                "tool": resolved.tool,
+                "tool_args": dict(resolved.args),
+                "step_id": resolved.step_id,
+                "result": result,
+                "graph": (
+                    post_graph.model_dump(mode="json")
+                    if hasattr(post_graph, "model_dump")
+                    else {}
+                ),
+                "next_focuses": next_focuses,
+                "metadata": {
+                    "graph_domain": resolved.domain,
+                    "graph_action": resolved.action,
+                    "graph_intent": f"{resolved.domain}.{resolved.action}",
+                    "requested_args": dict(resolved.args),
+                    "affected_object_refs": object_refs,
+                    "executed_focus": executed_focus,
+                    "scenario_name": (
+                        str(scenario.get("name"))
+                        if scenario.get("name") is not None
+                        else None
+                    ),
+                    "step_title": resolved.title,
+                    "remaining_suggested_steps": len(next_plan.suggested_steps),
+                },
+            }
+        except MCPError:
+            raise
+        except (KeyError, ValueError, TypeError) as exc:
+            raise MCPError("invalid_graph_action", str(exc)) from exc
+
+
+def _focus_for_graph_domain(domain: str, tool: str | None = None) -> str | None:
+    tool_prefix = (tool or "").split(".")[0]
+    if tool_prefix in {
+        "slack",
+        "docs",
+        "tickets",
+        "jira",
+        "okta",
+        "hris",
+        "google_admin",
+        "crm",
+        "spreadsheet",
+        "pagerduty",
+        "feature_flags",
+    }:
+        return tool_prefix
+    if domain == "ops_graph":
+        return tool_prefix or "feature_flags"
+    return {
+        "comm_graph": "slack",
+        "doc_graph": "docs",
+        "work_graph": "tickets",
+        "identity_graph": "okta",
+        "revenue_graph": "crm",
+        "knowledge_graph": "knowledge",
+        "data_graph": "spreadsheet",
+        "obs_graph": "pagerduty",
+        "property_graph": "property",
+        "campaign_graph": "campaign",
+        "inventory_graph": "inventory",
+    }.get(domain)

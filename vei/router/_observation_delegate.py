@@ -45,6 +45,21 @@ class RouterObservation:
     ) -> Dict[str, Any]:
         result = router.call_and_step(tool, args)
         focus = RouterObservation.focus_for_tool(router, tool)
+        if tool == "vei.graph_action" and isinstance(result, dict):
+            metadata = result.get("metadata")
+            if isinstance(metadata, dict):
+                executed_focus = metadata.get("executed_focus")
+                if isinstance(executed_focus, str) and executed_focus.strip():
+                    focus = executed_focus.strip()
+            next_focuses = result.get("next_focuses")
+            if (
+                focus == RouterObservation.focus_for_tool(router, tool)
+                and isinstance(next_focuses, list)
+                and next_focuses
+            ):
+                first_focus = next_focuses[0]
+                if isinstance(first_focus, str) and first_focus.strip():
+                    focus = first_focus.strip()
         obs = RouterObservation.snapshot_observation(router, observation_cls, focus)
         return {"result": result, "observation": obs.model_dump()}
 

@@ -9,6 +9,7 @@ import pytest
 import typer.testing
 
 from vei.benchmark.api import (
+    _default_llm_task_for_case,
     _load_latest_snapshot,
     get_benchmark_family_workflow_variant,
     get_benchmark_family_manifest,
@@ -418,6 +419,8 @@ def test_run_benchmark_case_llm_family_includes_workflow_validation(
         default_task = cmd[cmd.index("--task") + 1]
         assert "malicious OAuth app" in default_task
         assert "google_admin.suspend_oauth_app" in default_task
+        assert "Known tool argument hints" in default_task
+        assert '"app_id": "OAUTH-9001"' in default_task
         artifacts = Path(cmd[cmd.index("--artifacts") + 1])
         session = create_world_session(
             seed=int(env["VEI_SEED"]),
@@ -531,6 +534,28 @@ def test_run_benchmark_case_llm_family_includes_workflow_validation(
     assert result.diagnostics.workflow_valid is True
     assert (tmp_path / "llm_family_case" / "blueprint.json").exists()
     assert (tmp_path / "llm_family_case" / "workflow_validation.json").exists()
+
+
+def test_default_llm_task_includes_graph_action_argument_hints(tmp_path: Path) -> None:
+    task = _default_llm_task_for_case(
+        BenchmarkCaseSpec(
+            runner="llm",
+            scenario_name="acquired_sales_onboarding",
+            family_name="enterprise_onboarding_migration",
+            seed=914,
+            artifacts_dir=tmp_path / "llm_enterprise_case",
+            model="fake-gpt",
+            provider="openai",
+            score_mode="full",
+        )
+    )
+
+    assert task is not None
+    assert "Known tool argument hints" in task
+    assert "vei.graph_action" in task
+    assert '"domain": "identity_graph"' in task
+    assert '"action": "assign_application"' in task
+    assert '"app_id": "APP-crm"' in task
 
 
 def test_run_benchmark_case_workflow_runner_variant(tmp_path: Path) -> None:

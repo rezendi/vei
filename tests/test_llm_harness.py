@@ -60,7 +60,7 @@ def test_task_prompt_uses_generic_system_prompt() -> None:
 
     assert "Contain the malicious OAuth app" in prompt
     assert "MacroBook" not in prompt
-    assert "Preserve evidence before destructive" in prompt
+    assert "when the task asks for evidence preservation" in prompt
 
 
 def test_common_hints_are_task_specific() -> None:
@@ -77,6 +77,17 @@ def test_common_hints_are_task_specific() -> None:
     assert security_hints["slack.send_message"]["channel"] == "#security-incident"
     assert "google_admin.get_oauth_app" not in procurement_hints
     assert procurement_hints["slack.send_message"]["channel"] == "#procurement"
+
+
+def test_generic_task_hints_do_not_include_procurement_examples() -> None:
+    hints = _build_common_hints(
+        8,
+        task="Reduce checkout incident impact and update the revenue war room.",
+    )
+
+    assert "slack.send_message" not in hints
+    assert "mail.compose" not in hints
+    assert "docs.create" not in hints
 
 
 def test_visible_tools_keep_hinted_tools_when_top_k_is_small() -> None:
@@ -119,6 +130,33 @@ def test_tool_progress_text_lists_remaining_hinted_tools() -> None:
     assert "google_admin.preserve_oauth_evidence x1" in progress
     assert "docs.update" in progress
     assert "jira.add_comment" in progress
+
+
+def test_tool_progress_text_tracks_workflow_argument_hints() -> None:
+    task = "\n".join(
+        [
+            "Known tool argument hints. Use these IDs:",
+            '- vei.graph_action: {"action": "assign_application", "args": {"app_id": "APP-crm", "user_id": "USR-ACQ-1"}, "domain": "identity_graph"}',
+            '- vei.graph_action: {"action": "restrict_drive_share", "args": {"doc_id": "GDRIVE-2201", "visibility": "internal"}, "domain": "doc_graph"}',
+            '- docs.update: {"doc_id": "CUTOVER-2201", "body": "done"}',
+        ]
+    )
+    progress = _tool_progress_text(
+        [
+            (
+                'action 1: {"tool": "vei.graph_action", "args": {"domain": '
+                '"identity_graph", "action": "assign_application", "args": '
+                '{"user_id": "USR-ACQ-1", "app_id": "APP-crm"}}}'
+            )
+        ],
+        {"vei.graph_action": {}, "docs.update": {}},
+        task=task,
+    )
+
+    assert "Remaining workflow argument hints" in progress
+    assert "restrict_drive_share" in progress
+    assert "CUTOVER-2201" in progress
+    assert "assign_application" not in progress
 
 
 def test_stdio_server_parameters_put_state_under_artifacts(tmp_path: Path) -> None:

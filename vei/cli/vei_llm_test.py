@@ -643,7 +643,7 @@ TASK_SYSTEM_PROMPT = (
     "You are an MCP agent operating in a synthetic enterprise environment with deterministic tool twins. "
     "Use the task, the current observation, the visible tool catalog, and prior tool results to choose the next action. "
     "Planner rules: one tool per step. Start with a single vei.observe to inspect state. AFTER THAT, choose a concrete non-observe action that progresses the task. "
-    "Do not return vei.observe twice in a row. Preserve evidence before destructive or containment actions. Prefer targeted actions over broad blast-radius actions. "
+    "Do not return vei.observe twice in a row. Preserve evidence before destructive or containment actions when the task asks for evidence preservation. Prefer targeted actions over broad blast-radius actions. "
     'Always reply with a single JSON object of the form {"tool": string, "args": object}.'
 )
 
@@ -822,9 +822,9 @@ def _build_common_hints(tool_top_k: int, *, task: str | None = None) -> dict[str
         "vei.capability_graphs": {"domain": "identity_graph"},
         "vei.graph_plan": {"domain": "identity_graph"},
         "vei.graph_action": {
-            "domain": "identity_graph",
-            "action": "assign_application",
-            "args": {"user_id": "USR-ACQ-1", "app_id": "APP-crm"},
+            "domain": "domain from vei.graph_plan",
+            "action": "action from vei.graph_plan",
+            "args": {"field": "value"},
         },
         "vei.tools.search": {"query": "keywords", "top_k": tool_top_k or 8},
     }
@@ -875,6 +875,8 @@ def _build_common_hints(tool_top_k: int, *, task: str | None = None) -> dict[str
                 },
             }
         )
+        return hints
+    if task and not _task_looks_like_procurement(task):
         return hints
 
     hints.update(
@@ -929,17 +931,10 @@ def _task_looks_like_security_containment(task: str | None) -> bool:
     )
 
 
-def _should_use_strict_procurement_flow(
-    *, score_success_mode: str, task: str | None, scenario_name: str | None
-) -> bool:
-    if score_success_mode.lower().strip() != "full":
+def _task_looks_like_procurement(task: str | None) -> bool:
+    text = (task or "").lower()
+    if not text:
         return False
-    scenario = (scenario_name or "").strip().lower()
-    if scenario and scenario not in {"multi_channel", "default"}:
-        return False
-    if not task:
-        return True
-    text = task.lower()
     return any(
         token in text
         for token in (
@@ -950,6 +945,19 @@ def _should_use_strict_procurement_flow(
             "price and eta",
         )
     )
+
+
+def _should_use_strict_procurement_flow(
+    *, score_success_mode: str, task: str | None, scenario_name: str | None
+) -> bool:
+    if score_success_mode.lower().strip() != "full":
+        return False
+    scenario = (scenario_name or "").strip().lower()
+    if scenario and scenario not in {"multi_channel", "default"}:
+        return False
+    if not task:
+        return True
+    return _task_looks_like_procurement(task)
 
 
 async def _load_episode_tool_context(
@@ -1178,10 +1186,16 @@ def _visible_tool_hints_text(
     )
 
 
-def _tool_progress_text(history: list[str], common_hints: dict[str, dict]) -> str:
+def _tool_progress_text(
+    history: list[str],
+    common_hints: dict[str, dict],
+    *,
+    task: str | None = None,
+) -> str:
     used = Counter(_iter_action_tools(history))
+    workflow_progress = _workflow_hint_progress_text(task, history)
     if not used:
-        return ""
+        return workflow_progress
     used_text = ", ".join(f"{tool} x{count}" for tool, count in sorted(used.items()))
     remaining = [
         tool
@@ -1196,11 +1210,85 @@ def _tool_progress_text(history: list[str], common_hints: dict[str, dict]) -> st
             "Remaining hinted tools not used yet: "
             + ", ".join(remaining)
             + ". Prefer a remaining hinted tool before repeating a completed action."
+            + (f" {workflow_progress}" if workflow_progress else "")
         )
-    return f"Run progress: used tools: {used_text}."
+    return f"Run progress: used tools: {used_text}." + (
+        f" {workflow_progress}" if workflow_progress else ""
+    )
+
+
+def _workflow_hint_progress_text(task: str | None, history: list[str]) -> str:
+    hints = _parse_workflow_argument_hints(task)
+    if not hints:
+        return ""
+    used = set(_iter_action_keys(history))
+    remaining: list[str] = []
+    for tool, args_key, args in hints:
+        if (tool, args_key) in used:
+            continue
+        remaining.append(
+            f"{tool} {json.dumps(_compact_progress_hint_value(args), sort_keys=True)}"
+        )
+        if len(remaining) >= 8:
+            break
+    if not remaining:
+        return "All workflow argument hints have been tried; do not repeat them unless a tool result clearly failed."
+    return (
+        "Remaining workflow argument hints not used yet: "
+        + "; ".join(remaining)
+        + ". Prefer the next remaining workflow hint before repeating a successful action."
+    )
+
+
+def _parse_workflow_argument_hints(
+    task: str | None,
+) -> list[tuple[str, str, dict[str, Any]]]:
+    if not task or "Known tool argument hints" not in task:
+        return []
+    hints: list[tuple[str, str, dict[str, Any]]] = []
+    for line in task.splitlines():
+        match = re.match(r"^- ([^:]+): (\{.*\})$", line.strip())
+        if not match:
+            continue
+        tool = match.group(1).strip()
+        try:
+            args = json.loads(match.group(2))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(args, dict):
+            continue
+        hints.append((tool, json.dumps(args, sort_keys=True), args))
+    return hints
+
+
+def _compact_progress_hint_value(value: object) -> object:
+    if isinstance(value, str):
+        return value if len(value) <= 96 else value[:93] + "..."
+    if isinstance(value, dict):
+        return {
+            str(key): _compact_progress_hint_value(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_compact_progress_hint_value(item) for item in value[:4]]
+    return value
 
 
 def _iter_action_tools(history: list[str]) -> Iterable[str]:
+    for action in _iter_action_records(history):
+        tool = action.get("tool")
+        if isinstance(tool, str) and tool.strip():
+            yield tool
+
+
+def _iter_action_keys(history: list[str]) -> Iterable[tuple[str, str]]:
+    for action in _iter_action_records(history):
+        tool = action.get("tool")
+        args = action.get("args")
+        if isinstance(tool, str) and tool.strip() and isinstance(args, dict):
+            yield (tool, json.dumps(args, sort_keys=True))
+
+
+def _iter_action_records(history: list[str]) -> Iterable[dict[str, Any]]:
     for item in history:
         if not item.startswith("action "):
             continue
@@ -1211,9 +1299,8 @@ def _iter_action_tools(history: list[str]) -> Iterable[str]:
             action = json.loads(payload)
         except Exception:
             continue
-        tool = action.get("tool") if isinstance(action, dict) else None
-        if isinstance(tool, str) and tool.strip():
-            yield tool
+        if isinstance(action, dict):
+            yield action
 
 
 def _build_plan_user_prompt(
@@ -1227,7 +1314,7 @@ def _build_plan_user_prompt(
 ) -> str:
     catalog_text = _visible_tool_catalog_text(visible_tools, tool_catalog)
     hints_text = _visible_tool_hints_text(visible_tools, common_hints)
-    progress_text = _tool_progress_text(history, common_hints)
+    progress_text = _tool_progress_text(history, common_hints, task=task)
     context_block = "\n".join(history[-6:])
     prompt = (
         (

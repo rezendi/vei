@@ -10,6 +10,34 @@ document covers the evaluation framework itself.
 See [ARCHITECTURE.md](ARCHITECTURE.md) § What Is and Isn't Learned for the canonical breakdown of learned, heuristic, and external components. The shipped Enron reference checkpoint reports factual next-event AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951`.
 Treat that repo-local checkpoint as the flagship learned path. Clearwater workflow families stay in the repo as kernel and workflow smoke tests.
 
+## Actual agent benchmarks
+
+The same benchmark families can run a live model through the MCP world instead
+of replaying the deterministic workflow baseline:
+
+```bash
+VEI_OPENAI_REASONING_EFFORT=low vei eval benchmark \
+  --runner llm \
+  --family security_containment \
+  --provider openai --model gpt-5-mini \
+  --max-steps 32 --tool-top-k 48 \
+  --artifacts-root _vei_out/benchmark
+```
+
+For named families, VEI preserves the requested family even when two families
+share the same scenario world. The default LLM task is generated from the
+workflow objective, success criteria, constraints, relevant tools, graph-native
+actions, and argument anchors. Each result writes the normal benchmark artifact
+bundle plus the final world snapshot, enterprise score, metrics, diagnostics,
+and workflow-contract validation.
+
+Interpret the two gates separately:
+
+- **Enterprise score / success** says whether the agent reached the business
+  outcome under the family scoring dimensions.
+- **Workflow validation** says whether the final state satisfies the reviewed
+  declarative workflow contract exactly.
+
 ## Layer 1: Factual forecast metrics
 
 The cheapest layer. No humans, no LLM calls. The model predicts what happened after the branch point, and VEI compares the prediction against the observed historical future.
