@@ -9,6 +9,8 @@ import pytest
 import typer.testing
 
 from vei.benchmark.api import (
+    _default_llm_task_for_case,
+    _load_latest_snapshot,
     get_benchmark_family_workflow_variant,
     get_benchmark_family_manifest,
     list_benchmark_family_manifest,
@@ -264,6 +266,45 @@ def test_enterprise_dimension_scoring_for_security_containment(
     assert score["dimensions"]["blast_radius_minimization"] >= 0.75
 
 
+def test_load_latest_snapshot_finds_router_branch_state_dir(tmp_path: Path) -> None:
+    nested = tmp_path / "main" / "snapshots"
+    nested.mkdir(parents=True)
+    (nested / "000000001.json").write_text(
+        json.dumps(
+            {
+                "index": 1,
+                "clock_ms": 1000,
+                "branch": "main",
+                "label": "llm.final",
+                "data": {
+                    "branch": "main",
+                    "clock_ms": 1000,
+                    "rng_state": 1,
+                    "queue_seq": 0,
+                    "seed": 42,
+                    "scenario": {},
+                    "pending_events": [],
+                    "event_log": [],
+                    "components": {},
+                    "trace_entries": [],
+                    "receipts": [],
+                    "connector_runtime": {},
+                    "actor_states": {},
+                    "audit_state": {},
+                    "replay": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    snapshot = _load_latest_snapshot(tmp_path / "snapshots")
+
+    assert snapshot is not None
+    assert snapshot.snapshot_id == 1
+    assert snapshot.label == "llm.final"
+
+
 def test_run_benchmark_case_for_family_scenario_includes_family_dimensions(
     tmp_path: Path,
 ) -> None:
@@ -374,6 +415,12 @@ def test_run_benchmark_case_llm_family_includes_workflow_validation(
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         del capture_output, text, timeout
+        assert "--task" in cmd
+        default_task = cmd[cmd.index("--task") + 1]
+        assert "malicious OAuth app" in default_task
+        assert "google_admin.suspend_oauth_app" in default_task
+        assert "Known tool argument hints" in default_task
+        assert '"app_id": "OAUTH-9001"' in default_task
         artifacts = Path(cmd[cmd.index("--artifacts") + 1])
         session = create_world_session(
             seed=int(env["VEI_SEED"]),
@@ -487,6 +534,28 @@ def test_run_benchmark_case_llm_family_includes_workflow_validation(
     assert result.diagnostics.workflow_valid is True
     assert (tmp_path / "llm_family_case" / "blueprint.json").exists()
     assert (tmp_path / "llm_family_case" / "workflow_validation.json").exists()
+
+
+def test_default_llm_task_includes_graph_action_argument_hints(tmp_path: Path) -> None:
+    task = _default_llm_task_for_case(
+        BenchmarkCaseSpec(
+            runner="llm",
+            scenario_name="acquired_sales_onboarding",
+            family_name="enterprise_onboarding_migration",
+            seed=914,
+            artifacts_dir=tmp_path / "llm_enterprise_case",
+            model="fake-gpt",
+            provider="openai",
+            score_mode="full",
+        )
+    )
+
+    assert task is not None
+    assert "Known tool argument hints" in task
+    assert "vei.graph_action" in task
+    assert '"domain": "identity_graph"' in task
+    assert '"action": "assign_application"' in task
+    assert '"app_id": "APP-crm"' in task
 
 
 def test_run_benchmark_case_workflow_runner_variant(tmp_path: Path) -> None:

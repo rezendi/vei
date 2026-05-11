@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from vei.router.core import Router
+from vei.world.api import get_catalog_scenario
 
 pytestmark = pytest.mark.integration
 
@@ -13,6 +14,38 @@ def test_act_and_observe_basic():
     assert "result" in ao and "observation" in ao
     assert "title" in ao["result"]
     assert "action_menu" in ao["observation"]
+
+
+def test_act_and_observe_supports_graph_native_tools():
+    r = Router(
+        seed=1,
+        artifacts_dir=None,
+        scenario=get_catalog_scenario("acquired_sales_onboarding"),
+    )
+
+    plan = r.act_and_observe(
+        "vei.graph_plan",
+        {"domain": "identity_graph", "limit": 4},
+    )
+    assert any(
+        step["action"] == "assign_application"
+        for step in plan["result"]["available_actions"]
+    )
+
+    ao = r.act_and_observe(
+        "vei.graph_action",
+        {
+            "domain": "identity_graph",
+            "action": "assign_application",
+            "args": {"user_id": "USR-ACQ-1", "app_id": "APP-crm"},
+        },
+    )
+
+    assert ao["result"]["ok"] is True
+    assert ao["result"]["tool"] == "okta.assign_application"
+    assert ao["result"]["result"]["app_id"] == "APP-crm"
+    assert ao["result"]["result"]["assignments"] == 2
+    assert ao["observation"]["focus"] == "okta"
 
 
 def test_pending_and_tick_mail_delivery(tmp_path):

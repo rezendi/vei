@@ -102,7 +102,10 @@ Eval runners:
 - `workflow` is the reference runner.
 - `scripted` is the deterministic floor baseline.
 - `bc` is the tool-frequency baseline powered by `FrequencyPolicy`.
-- `llm` runs a real model through the MCP world.
+- `llm` runs a real model through the MCP world. For `vei eval benchmark
+  --runner llm --family <family>`, VEI derives the task and argument anchors
+  from the family workflow, then reports both enterprise scoring and exact
+  workflow-contract validation.
 
 Same seed means same world. Determinism is part of the product. User-facing LLM
 generation defaults to the local Codex CLI using `gpt-5.3-codex-spark`; direct
