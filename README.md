@@ -131,7 +131,7 @@ vei context normalize \
 
 vei context verify --snapshot _vei_out/yourco/context_snapshot.json
 
-# Or: onboard from live sources (GitHub, ClickUp, Gmail, Notion, etc.)
+# Or: onboard from live sources (GitHub, ClickUp, Gmail, Notion, Teams, etc.)
 vei workspace twin onboard \
   --root _vei_out/yourco/twin \
   --org "YourCo" --domain "yourco.example" \
@@ -227,8 +227,9 @@ agent/tool code in the inspected build, but not a mature normalized ingestion
 connector, so use VEI's direct ClickUp provider for now. Teams is VEI-ready when
 PipesHub, a managed bridge, or a future PipesHub release exposes chat/message
 records, but the inspected local PipesHub image does not ship a mature Teams
-sync connector like Outlook or OneDrive. Records whose record type does not have
-a VEI-normalized shape land in an `other` bucket on their provider so they
+sync connector like Outlook or OneDrive. For Teams backfills today, use VEI's
+direct Microsoft Graph capture lane below. Records whose record type does not
+have a VEI-normalized shape land in an `other` bucket on their provider so they
 remain discoverable downstream.
 
 The local launcher keeps the service boundary explicit. Generated Compose/env
@@ -246,6 +247,59 @@ Teams chat, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
 ServiceNow tickets. Unknown provider/record-type combinations still remain in
 the snapshot under
 their provider's `other` bucket until VEI learns a typed event shape for them.
+
+### Microsoft Teams Graph Capture
+
+Teams is captured directly from Microsoft Graph rather than through PipesHub for
+now. This is the tenant-backfill path for Microsoft 365 customers: VEI gets an
+application token, reads Teams channel and chat messages for a bounded time
+window, writes raw local evidence, and emits the same `context_snapshot.json`
+plus canonical sidecars as the PipesHub lane.
+
+Customer-side setup is the main gate. In Microsoft Entra, create an app
+registration, add a client secret, and grant admin consent for the read-only
+Graph application permissions needed by the scope you want:
+
+- `Team.ReadBasic.All` and `Channel.ReadBasic.All` for team/channel discovery.
+- `ChannelMessage.Read.All` for Teams channel messages.
+- `User.Read.All` and `Chat.Read.All` for 1:1 and group chat backfill.
+- Later, add `OnlineMeetingTranscript.Read.All` only if you want meeting
+  transcripts. Do not capture recordings by default; they are large binary
+  assets and should be explicitly materialized.
+
+Store the local pilot credentials in `.env`:
+
+```bash
+VEI_MSFT_TENANT_ID="<tenant-id>"
+VEI_MSFT_CLIENT_ID="<app-client-id>"
+VEI_MSFT_CLIENT_SECRET="<client-secret>"
+```
+
+Then run a bounded capture:
+
+```bash
+vei context teams inspect --format json
+
+vei context teams capture \
+  --workspace _vei_out/yourco-teams \
+  --run-id teams_20260504_20260511 \
+  --org "YourCo" --domain "yourco.example" \
+  --since 2026-05-04T00:00:00Z \
+  --until 2026-05-11T23:59:59Z \
+  --limit 5000 \
+  --format json
+
+vei context verify --snapshot _vei_out/yourco-teams/context_snapshot.json
+vei wiki build --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/wiki
+vei workflow mine --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/workflows
+```
+
+Use `--team` to restrict channel export to specific team ids or display names,
+and `--user` to restrict chat scanning to specific users. Re-run with
+`--resume --run-id <same-id>` if a long capture is interrupted. The raw audit
+bundle lands under
+`imports/source_syncs/microsoft_teams/<run_id>/records.jsonl`, with a
+`capture_manifest.json` beside it.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile
 a skill map — all from the same canonical event spine:
