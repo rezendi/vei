@@ -992,10 +992,10 @@ def _add_mail_record(
         "thread_id": thread_id,
         "subject": subject,
         "from": _text_field(
-            record, "fromEmail", "from_email", "sender", "creatorEmail"
+            record, "fromEmail", "from_email", "from", "sender", "creatorEmail"
         ),
-        "to": _list_field(record, "toEmails", "to_emails", "recipients"),
-        "cc": _list_field(record, "ccEmails", "cc_emails"),
+        "to": _list_field(record, "toEmails", "to_emails", "to", "recipients"),
+        "cc": _list_field(record, "ccEmails", "cc_emails", "cc"),
         "timestamp": timestamp,
         "date": timestamp,
         "body_text": _body(record),
@@ -1776,7 +1776,17 @@ def _list_field(record: dict[str, Any], *keys: str) -> list[str]:
     for key in keys:
         value = _field(record, key)
         if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
+            parsed: list[str] = []
+            for item in value:
+                if isinstance(item, dict):
+                    text = _text_field(
+                        item, "email", "address", "displayName", "name", "value"
+                    )
+                else:
+                    text = str(item).strip()
+                if text:
+                    parsed.append(text)
+            return parsed
         if isinstance(value, str) and value.strip():
             return [part.strip() for part in value.split(",") if part.strip()]
     return []
@@ -1800,6 +1810,20 @@ def _field(record: dict[str, Any], key: str) -> Any:
             return semantic[key]
         if snake in semantic:
             return semantic[snake]
+    for nested_key in (
+        "mailRecord",
+        "mail_record",
+        "fileRecord",
+        "file_record",
+        "ticketRecord",
+        "ticket_record",
+    ):
+        nested = record.get(nested_key)
+        if isinstance(nested, dict):
+            if key in nested:
+                return nested[key]
+            if snake in nested:
+                return nested[snake]
     return None
 
 

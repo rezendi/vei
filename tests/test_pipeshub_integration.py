@@ -592,6 +592,74 @@ def test_pipeshub_capture_resume_cli_requires_run_id(tmp_path: Path) -> None:
     assert "--resume requires --run-id" in result.output
 
 
+def test_pipeshub_capture_reads_nested_record_payloads(monkeypatch) -> None:
+    records = [
+        {
+            "recordId": "outlook-nested-1",
+            "recordType": "MAIL",
+            "connectorName": "OUTLOOK",
+            "recordName": "Nested Outlook parent",
+            "sourceCreatedAtTimestamp": "2026-05-04T10:00:00Z",
+            "mailRecord": {
+                "threadId": "nested-thread-1",
+                "subject": "Nested Outlook thread",
+                "from": "sender@py-insights.example",
+                "to": [{"email": "recipient@example.com"}],
+                "cc": [{"address": "observer@example.com"}],
+            },
+        },
+        {
+            "recordId": "outlook-nested-2",
+            "recordType": "MAIL",
+            "connectorName": "OUTLOOK",
+            "recordName": "Nested Outlook reply",
+            "sourceCreatedAtTimestamp": "2026-05-04T10:15:00Z",
+            "mailRecord": {
+                "threadId": "nested-thread-1",
+                "subject": "Nested Outlook thread",
+                "from": "recipient@example.com",
+                "to": [{"email": "sender@py-insights.example"}],
+            },
+        },
+    ]
+
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        parsed = urlparse(request.full_url)
+        if parsed.path.endswith("/api/v1/connectors"):
+            return _Response(
+                {"connectors": [{"_key": "conn-outlook", "type": "Outlook"}]}
+            )
+        if parsed.path.endswith("/api/v1/knowledgeBase/records"):
+            return _Response({"records": records, "total": len(records)})
+        if "/api/v1/knowledgeBase/record/" in parsed.path:
+            record_id = parsed.path.rsplit("/", 1)[-1]
+            record = next(item for item in records if item["recordId"] == record_id)
+            return _Response({"record": record})
+        raise AssertionError(f"unexpected URL: {request.full_url}")
+
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    capture = capture_pipeshub_context(
+        PipesHubClient(base_url="http://pipeshub.test", bearer_token="token"),
+        organization_name="Py Insights",
+        organization_domain="py-insights.example",
+        connectors=["outlook"],
+        since="2026-05-04T00:00:00Z",
+        until="2026-05-05T00:00:00Z",
+    )
+
+    outlook = next(
+        source for source in capture.snapshot.sources if source.provider == "outlook"
+    )
+    threads = outlook.data["threads"]
+    assert len(threads) == 1
+    assert threads[0]["thread_id"] == "nested-thread-1"
+    assert threads[0]["subject"] == "Nested Outlook thread"
+    assert len(threads[0]["messages"]) == 2
+    assert threads[0]["messages"][0]["from"] == "sender@py-insights.example"
+    assert threads[0]["messages"][0]["to"] == ["recipient@example.com"]
+    assert threads[0]["messages"][0]["cc"] == ["observer@example.com"]
+
+
 def test_pipeshub_capture_resumes_large_snapshot_without_content_backfill(
     tmp_path: Path,
     monkeypatch,
