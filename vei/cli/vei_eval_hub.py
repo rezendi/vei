@@ -17,7 +17,7 @@ app = typer.Typer(
 app.add_typer(eval_app)
 app.add_typer(
     demo_app,
-    name="demo",
+    name="agent-demo",
     help="Run lightweight scripted or LLM-driven demos.",
 )
 app.add_typer(

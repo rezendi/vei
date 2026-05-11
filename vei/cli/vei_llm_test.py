@@ -381,8 +381,9 @@ def _select_visible_tools(
         if name and name in available_set and name not in ordered:
             ordered.append(name)
 
-    baseline_set = {name for name in baseline if name in available_set}
-    for name in baseline_set:
+    baseline_tools = [name for name in baseline if name in available_set]
+    baseline_set = set(baseline_tools)
+    for name in baseline_tools:
         _add(name)
 
     action_tools = {
