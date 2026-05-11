@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,7 +14,11 @@ from vei.whatif.benchmark_runtime import (
     _run_bridge_command,
     run_branch_point_benchmark_predictions,
 )
-from vei.whatif.ejepa_bridge import _clamp_count, _delta_as_count
+from vei.whatif.ejepa_bridge import (
+    _clamp_count,
+    _delta_as_count,
+    _training_window_stats,
+)
 from vei.whatif.ejepa import (
     default_forecast_backend,
     resolve_ejepa_runtime,
@@ -21,6 +26,7 @@ from vei.whatif.ejepa import (
 )
 from vei.whatif.models import (
     WhatIfBenchmarkDatasetRow,
+    WhatIfEvent,
     WhatIfEventReference,
     WhatIfPreBranchContract,
 )
@@ -192,6 +198,38 @@ def test_ejepa_count_helpers_treat_nan_as_zero() -> None:
     assert _clamp_count(5.0, float("nan"), ceiling=10) == 0
 
 
+def test_ejepa_training_window_stats_detects_too_thin_history() -> None:
+    world = SimpleNamespace(
+        events=[
+            _event("event-1", "thread-a", 1_700_000_000_000),
+            _event("event-2", "thread-b", 1_700_000_001_000),
+        ]
+    )
+
+    stats = _training_window_stats(
+        world=world, training_thread_ids=["thread-a", "thread-b"]
+    )
+
+    assert stats["thread_count"] == 2
+    assert stats["event_count"] == 2
+    assert stats["max_episode_length"] == 1
+    assert stats["window_count"] == 0
+
+
+def test_ejepa_training_window_stats_accepts_multi_event_thread() -> None:
+    world = SimpleNamespace(
+        events=[
+            _event("event-1", "thread-a", 1_700_000_000_000),
+            _event("event-2", "thread-a", 1_700_000_001_000),
+        ]
+    )
+
+    stats = _training_window_stats(world=world, training_thread_ids=["thread-a"])
+
+    assert stats["max_episode_length"] == 2
+    assert stats["window_count"] == 1
+
+
 def test_reference_runtime_scratch_defaults_to_vei_out(tmp_path: Path) -> None:
     checkpoint = tmp_path / "reference_backend" / "model.pt"
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -270,4 +308,15 @@ def _benchmark_row(row_id: str) -> WhatIfBenchmarkDatasetRow:
         thread_id=branch_event.thread_id,
         branch_event_id=branch_event.event_id,
         contract=contract,
+    )
+
+
+def _event(event_id: str, thread_id: str, timestamp_ms: int) -> WhatIfEvent:
+    return WhatIfEvent(
+        event_id=event_id,
+        timestamp="2026-01-01T00:00:00Z",
+        timestamp_ms=timestamp_ms,
+        actor_id="actor@example.com",
+        event_type="message",
+        thread_id=thread_id,
     )

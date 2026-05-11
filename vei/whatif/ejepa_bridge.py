@@ -107,6 +107,29 @@ def _run_forecast(payload: dict[str, Any]) -> WhatIfCounterfactualEstimateResult
         thread_id=thread_id,
         branch_event=branch_event,
     )
+    training_stats = _training_window_stats(
+        world=world, training_thread_ids=training_thread_ids
+    )
+    if training_stats["window_count"] == 0:
+        return WhatIfCounterfactualEstimateResult(
+            status="error",
+            backend="e_jepa",
+            prompt=prompt,
+            summary=(
+                "The selected history is too thin to train an E-JEPA sequence model."
+            ),
+            notes=[
+                "E-JEPA needs at least one trainable multi-event thread in the selected history slice.",
+                (
+                    "Training slice: "
+                    f"{training_stats['thread_count']} thread(s), "
+                    f"{training_stats['event_count']} event(s), "
+                    f"max thread length {training_stats['max_episode_length']}."
+                ),
+                "Capture more history or choose a thread with multiple related events.",
+            ],
+            error="insufficient E-JEPA training windows",
+        )
 
     prepared, checkpoint_path, decoder_path, evaluation = _ensure_training_bundle(
         world=world,
@@ -339,6 +362,28 @@ def _select_training_threads(
         selected.append(candidate_thread_id)
         event_budget += thread_event_count
     return selected
+
+
+def _training_window_stats(
+    *,
+    world,
+    training_thread_ids: Sequence[str],
+) -> dict[str, int]:
+    lengths = [
+        len(thread_events(world.events, training_thread_id))
+        for training_thread_id in training_thread_ids
+    ]
+    max_episode_length = max(lengths, default=0)
+    context_length = max(1, min(8, max_episode_length - 1))
+    window_size = context_length + 1
+    window_count = sum(max(0, length - window_size + 1) for length in lengths)
+    return {
+        "thread_count": len(lengths),
+        "event_count": sum(lengths),
+        "max_episode_length": max_episode_length,
+        "context_length": context_length,
+        "window_count": window_count,
+    }
 
 
 def _build_training_rows(

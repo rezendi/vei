@@ -1176,6 +1176,7 @@ def _doc_entries(
         if isinstance(value, list):
             items.extend(item for item in value if isinstance(item, dict))
     entries: list[_NormalizedHistoryEvent] = []
+    document_timestamps: dict[str, int] = {}
     for item_index, item in enumerate(items):
         doc_id = str(
             item.get("doc_id")
@@ -1195,6 +1196,7 @@ def _doc_entries(
             or "",
             fallback=(item_index + 1) * 1000,
         )
+        document_timestamps[doc_id] = timestamp_ms
         entries.append(
             _NormalizedHistoryEvent(
                 provider=provider,
@@ -1226,7 +1228,7 @@ def _doc_entries(
                     or comment.get("created_at")
                     or comment.get("updated_at")
                     or "",
-                    fallback=(item_index + 1) * 1000 + comment_index + 1,
+                    fallback=timestamp_ms + comment_index + 1,
                 )
                 comment_body = str(
                     comment.get("body") or comment.get("text") or ""
@@ -1269,7 +1271,7 @@ def _doc_entries(
                     or permission.get("created_at")
                     or permission.get("granted_at")
                     or "",
-                    fallback=(item_index + 1) * 1000 + 200 + permission_index,
+                    fallback=timestamp_ms + 200 + permission_index,
                 )
                 shared_with = _recipient_ids(permission.get("shared_with"))
                 granted_by = (
@@ -1317,7 +1319,7 @@ def _doc_entries(
             shared_with = _recipient_ids(share.get("shared_with"))
             share_ts, share_text, share_quality = _timestamp_ms(
                 share.get("created") or share.get("created_at") or "",
-                fallback=900_000 + share_index,
+                fallback=document_timestamps.get(doc_id, 900_000 + share_index),
             )
             entries.append(
                 _NormalizedHistoryEvent(

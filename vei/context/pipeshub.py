@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -348,11 +349,18 @@ class PipesHubClient:
         request = Request(
             self.url(path, params=params), headers=self.headers(), method="GET"
         )
-        try:
-            with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
-                return json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise RuntimeError(_http_error_message(exc)) from exc
+        for attempt in range(4):
+            try:
+                with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+                    return json.loads(response.read().decode("utf-8"))
+            except HTTPError as exc:
+                if exc.code == 429 and attempt < 3:
+                    retry_after = exc.headers.get("Retry-After")
+                    delay = float(retry_after) if retry_after else 2.0 * (attempt + 1)
+                    time.sleep(delay)
+                    continue
+                raise RuntimeError(_http_error_message(exc)) from exc
+        return {}
 
     def url(self, path: str, *, params: dict[str, Any] | None = None) -> str:
         url = join_url(self.base_url, path)
@@ -436,19 +444,24 @@ def capture_pipeshub_context(
     page = 1
     page_size = max(1, min(page_size, 200))
     while len(records) < limit:
-        request_limit = min(page_size, limit - len(records))
+        request_limit = page_size
         page_records, total = client.list_records(
             connectors=query_connectors,
             page=page,
             limit=request_limit,
-            date_from=date_from,
-            date_to=date_to,
         )
         if not page_records:
             break
         for listed in page_records:
             record_id = _record_id(listed)
             if record_id and record_id in seen_ids:
+                continue
+            listed_has_source_time = bool(_record_source_timestamps_ms(listed))
+            if listed_has_source_time and not _record_in_source_window(
+                listed, date_from, date_to
+            ):
+                if record_id:
+                    seen_ids.add(record_id)
                 continue
             detail = listed
             if record_id:
@@ -457,6 +470,12 @@ def capture_pipeshub_context(
                     detail_count += 1
                 except Exception as exc:  # pragma: no cover - covered through warnings
                     warnings.append(f"detail fetch failed for {record_id}: {exc}")
+            if record_id:
+                seen_ids.add(record_id)
+            if not listed_has_source_time and not _record_in_source_window(
+                detail, date_from, date_to
+            ):
+                continue
             if include_content and record_id:
                 try:
                     text = client.stream_record_text(record_id)
@@ -465,8 +484,6 @@ def capture_pipeshub_context(
                         content_count += 1
                 except Exception as exc:  # pragma: no cover - covered through warnings
                     warnings.append(f"content fetch failed for {record_id}: {exc}")
-            if record_id:
-                seen_ids.add(record_id)
             records.append(detail)
             if len(records) >= limit:
                 break
@@ -1180,6 +1197,8 @@ def _permissions(record: dict[str, Any]) -> list[dict[str, Any]]:
     for index, permission in enumerate(permissions):
         if not isinstance(permission, dict):
             continue
+        if _is_connector_owner_permission(permission):
+            continue
         shared_with = _text_field(
             permission, "email", "entityId", "entity_id", "name", "principal"
         )
@@ -1189,11 +1208,26 @@ def _permissions(record: dict[str, Any]) -> list[dict[str, Any]]:
                 or f"permission-{index + 1}",
                 "shared_with": [shared_with] if shared_with else [],
                 "granted_by": _text_field(permission, "grantedBy", "granted_by"),
-                "role": _text_field(permission, "permissionType", "type", "role"),
+                "role": _text_field(
+                    permission,
+                    "permissionType",
+                    "role",
+                    "accessType",
+                    "relationship",
+                    "type",
+                ),
                 "created": _text_field(permission, "createdAt", "created_at"),
             }
         )
     return parsed
+
+
+def _is_connector_owner_permission(permission: dict[str, Any]) -> bool:
+    access_type = _text_field(permission, "accessType", "access_type").lower()
+    relationship = _text_field(permission, "relationship").lower()
+    if access_type == "connector_owner":
+        return True
+    return relationship == "owner"
 
 
 def _provenance(record: dict[str, Any]) -> dict[str, Any]:
@@ -1239,6 +1273,79 @@ def _date_bound_to_pipeshub_ms(value: str, option_name: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return str(int(parsed.timestamp() * 1000))
+
+
+def _record_in_source_window(
+    record: dict[str, Any], date_from_ms: str, date_to_ms: str
+) -> bool:
+    if not date_from_ms and not date_to_ms:
+        return True
+    lower = int(date_from_ms) if date_from_ms else None
+    upper = int(date_to_ms) if date_to_ms else None
+    timestamps = _record_source_timestamps_ms(record)
+    if not timestamps:
+        return False
+    for timestamp in timestamps:
+        if lower is not None and timestamp < lower:
+            continue
+        if upper is not None and timestamp > upper:
+            continue
+        return True
+    return False
+
+
+def _record_source_timestamps_ms(record: dict[str, Any]) -> list[int]:
+    values: list[int] = []
+    for key in (
+        "sourceLastModifiedTimestamp",
+        "source_last_modified_timestamp",
+        "sourceUpdatedAtTimestamp",
+        "source_updated_at_timestamp",
+        "sourceCreatedAtTimestamp",
+        "source_created_at_timestamp",
+        "receivedDateTime",
+        "received_date_time",
+        "lastModifiedDateTime",
+        "last_modified_date_time",
+        "createdDateTime",
+        "created_date_time",
+        "updatedAtTimestamp",
+        "updated_at_timestamp",
+        "createdAtTimestamp",
+        "created_at_timestamp",
+    ):
+        timestamp = _coerce_timestamp_ms(_field(record, key))
+        if timestamp is not None:
+            values.append(timestamp)
+    return values
+
+
+def _coerce_timestamp_ms(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        timestamp = int(value)
+        return (
+            timestamp * 1000 if timestamp and timestamp < 10_000_000_000 else timestamp
+        )
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        timestamp = int(text)
+        return (
+            timestamp * 1000 if timestamp and timestamp < 10_000_000_000 else timestamp
+        )
+    parseable = text
+    if parseable.endswith("Z"):
+        parseable = parseable[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(parseable)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return int(parsed.timestamp() * 1000)
 
 
 def _source_capture_count(source: ContextSourceResult) -> int:

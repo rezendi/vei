@@ -314,6 +314,15 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "connectorName": "onedrive",
             "recordName": "MS account notes",
             "sourceLastModifiedTimestamp": "2026-03-01T15:00:00Z",
+            "permissions": [
+                {
+                    "accessType": "CONNECTOR_OWNER",
+                    "id": "onedrive-owner",
+                    "name": "MS account notes",
+                    "relationship": "OWNER",
+                    "type": "FILE",
+                }
+            ],
         },
         {
             "recordId": "sharepoint-1",
@@ -358,6 +367,15 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             "sourceLastModifiedTimestamp": "2026-03-01T17:00:00Z",
             "description": "Provision renewal workspace access.",
         },
+        {
+            "recordId": "outlook-old",
+            "recordType": "MAIL",
+            "connectorName": "outlook",
+            "recordName": "Old Outlook note",
+            "subject": "Old Outlook note",
+            "threadId": "thread-old",
+            "sourceCreatedAtTimestamp": "2026-02-01T16:00:00Z",
+        },
     ]
 
     def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
@@ -391,9 +409,8 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
             )
         if parsed.path.endswith("/api/v1/knowledgeBase/records"):
             query = parse_qs(parsed.query)
-            assert query["dateFrom"][0].isdigit()
-            assert query["dateTo"][0].isdigit()
-            assert query["dateFrom"][0] != "2026-03-01T00:00:00Z"
+            assert "dateFrom" not in query
+            assert "dateTo" not in query
             connector_filter = query["connectors"][0].split(",")
             for expected in (
                 "conn-gmail",
@@ -509,7 +526,10 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     } <= providers
     assert snapshot["metadata"]["source_gateway"] == "pipeshub"
 
-    events = Path(payload["canonical_events_path"]).read_text(encoding="utf-8")
+    events_path = Path(payload["canonical_events_path"])
+    events = events_path.read_text(encoding="utf-8")
+    event_payloads = [json.loads(line) for line in events.splitlines() if line.strip()]
+    event_kinds = {event["kind"] for event in event_payloads}
     assert "gmail.message" in events
     assert "google.document" in events
     assert "jira.open" in events
@@ -521,6 +541,8 @@ def test_pipeshub_capture_maps_records_to_context_bundle(
     assert "dropbox.document" in events
     assert "outlook.message" in events
     assert "servicenow.in_progress" in events
+    assert "onedrive.share" not in event_kinds
+    assert min(event["ts_ms"] for event in event_payloads) > 1_700_000_000_000
 
     verify_result = runner.invoke(
         app,
