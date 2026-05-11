@@ -6,7 +6,12 @@
 
 Try it now: [strangelab.ai/enron](https://strangelab.ai/enron) · [strangelab.ai/public-history](https://strangelab.ai/public-history)
 
-One deterministic kernel, one event spine, five infrastructure surfaces:
+VEI sits above the systems of record and any existing data platform. It preserves
+reviewable evidence or source pointers, builds a canonical event spine of how
+the company works, and materializes bounded packages for governance, evals,
+what-if analysis, and model training.
+
+That spine powers one deterministic kernel and five infrastructure surfaces:
 
 1. **Test / Eval** — run agents against fixed company worlds before production.
 2. **Governor / Control** — gate writes, record agent activity, and export evidence packs.
@@ -15,35 +20,31 @@ One deterministic kernel, one event spine, five infrastructure surfaces:
 5. **Knowledge / Wiki / Skill Map** — compile company memory, recurring workflows, and draft agent skills from evidence.
 
 ```mermaid
-flowchart LR
-    subgraph ORG["How the organisation works"]
-        A["People"]
-        B["Agents"]
-        C["Systems of record<br/>email, Slack, docs, tickets,<br/>CRM, GitHub, admin, observability"]
+flowchart TB
+    subgraph SOURCES["1. Enterprise sources of record"]
+        SYS["Email, Slack/Teams, docs, tickets,<br/>CRM, GitHub, identity, observability,<br/>product systems"]
+        ACTORS["People, agents, and activity traces"]
     end
 
-    ORG --> SYNC["Source sync<br/>PipesHub, direct connectors,<br/>archives, exports, agent traces"]
+    subgraph DATA["2. Existing data platform, if present"]
+        WAREHOUSE["Warehouse / lakehouse / archive<br/>Snowflake, BigQuery, Databricks,<br/>Redshift, S3, ADLS, GCS, eDiscovery"]
+    end
 
-    SYNC --> PACKAGE["Reviewable import bundle<br/>raw evidence + context_snapshot.json"]
+    SYNC["3. Governed sync<br/>PipesHub, direct connectors,<br/>warehouse adapters, exports"]
+    EVIDENCE["4. Reviewable evidence layer<br/>raw snapshots or source pointers<br/>hashes, manifests, permissions, retention"]
+    SPINE["5. VEI canonical event spine<br/>who did what, when, to what<br/>with provenance, links, and case threads"]
+    SURFACES["6. VEI infrastructure surfaces<br/>wiki, skill map, workflow mining<br/>control, audit, policy replay<br/>what-if, evals, bounded training packages"]
+    MODELS["7. Models and agents<br/>JEPA/world model, frontier agents,<br/>small models, deterministic tools"]
 
-    PACKAGE --> SPINE["Canonical event spine<br/>one evidence ledger for company activity"]
-
-    SPINE --> WIKI["Knowledge / Wiki / Skill Map<br/>what is known, what repeats, what skills emerge"]
-    SPINE --> CONTROL["Governor / Control<br/>what happened, who touched what, what risk exists"]
-    SPINE --> WHATIF["Sandbox / What-if<br/>decision support over alternate actions"]
-    SPINE --> EVALS["Test / Eval<br/>rubric or contract depending on evidence"]
-    SPINE --> PACKAGES["Train / Data<br/>only when contract-ready"]
-
-    WIKI --> SPEC["Business Task Specs<br/>objective, context, evidence,<br/>constraints, labels, rubrics, escalation"]
-    CONTROL --> SPEC
-
-    SPEC --> EVALS
-    SPEC --> PACKAGES
-
-    WIKI --> IMPROVE["Improvement loop<br/>frontier model, small model,<br/>deterministic tool, human escalation"]
-    EVALS --> IMPROVE
-    WHATIF --> IMPROVE
-    PACKAGES --> IMPROVE
+    SOURCES --> SYNC
+    DATA --> SYNC
+    SYNC --> EVIDENCE
+    EVIDENCE --> SPINE
+    SPINE --> SURFACES
+    SURFACES --> MODELS
+    MODELS --> ACTIVITY["New actions and decisions"]
+    ACTIVITY --> SYNC
+    SPINE -.->|optional export| WAREHOUSE
 ```
 
 ## Product Surfaces
@@ -169,6 +170,7 @@ vei context pipeshub inspect
 # connectors, or gmailworkspace/driveworkspace for Workspace connectors.
 vei context pipeshub capture \
   --workspace _vei_out/yourco \
+  --run-id first_march_backfill \
   --org "YourCo" --domain "yourco.example" \
   --connector gmail \
   --connector drive \
@@ -177,6 +179,23 @@ vei context pipeshub capture \
   --connector salesforce \
   --connector onedrive \
   --connector outlook \
+  --connector teams \
+  --since 2026-03-01T00:00:00Z
+
+# If a long capture is interrupted, rerun with the same run id.
+vei context pipeshub capture \
+  --workspace _vei_out/yourco \
+  --run-id first_march_backfill \
+  --resume \
+  --org "YourCo" --domain "yourco.example" \
+  --connector gmail \
+  --connector drive \
+  --connector jira \
+  --connector confluence \
+  --connector salesforce \
+  --connector onedrive \
+  --connector outlook \
+  --connector teams \
   --since 2026-03-01T00:00:00Z
 
 # Smoke the captured bundle through VEI's downstream read models.
@@ -190,20 +209,27 @@ vei connectors pipeshub down
 ```
 
 The capture writes raw evidence under
-`imports/source_syncs/pipeshub/<run_id>/`, then writes
-`context_snapshot.json`, `canonical_events.jsonl`, and
-`canonical_event_index.json`. Records keep their upstream system identity
-— PipesHub is the transport, not the origin — so a Gmail message lands
-under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive
-file under `provider="google"`, and so on. VEI does not maintain its own
-provider allowlist at the command boundary; connector filters are resolved
-against the configured PipesHub connectors when possible, then whatever
-PipesHub serves is ingested under the source system it came from. The known
-exceptions are Teams and ClickUp, which VEI reports as not yet supported by
-mature PipesHub ingestion so they are not accidentally treated as normal
-capture candidates. Records whose record type does not have a VEI-normalized
-shape land in an `other` bucket on their provider so they remain discoverable
-downstream.
+`imports/source_syncs/pipeshub/<run_id>/`, including `records.jsonl` and a
+page-level `capture_manifest.json` that can resume an interrupted backfill.
+It then writes `context_snapshot.json`, `canonical_events.jsonl`, and
+`canonical_event_index.json`. By default VEI captures metadata, snippets, source
+links, permissions, and other list/detail fields without streaming full document
+text; pass `--include-content` only for a bounded materialization window where
+you intentionally want the extra local copy. Records keep their upstream system
+identity — PipesHub is the transport, not the origin — so a Gmail message lands
+under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive file
+under `provider="google"`, a Teams chat message under `provider="teams"`, and so
+on. VEI does not maintain its own provider allowlist at the command boundary;
+connector filters are resolved against the configured PipesHub connectors when
+possible, then whatever PipesHub serves is ingested under the source system it
+came from. ClickUp is the current known exception: PipesHub exposes ClickUp
+agent/tool code in the inspected build, but not a mature normalized ingestion
+connector, so use VEI's direct ClickUp provider for now. Teams is VEI-ready when
+PipesHub, a managed bridge, or a future PipesHub release exposes chat/message
+records, but the inspected local PipesHub image does not ship a mature Teams
+sync connector like Outlook or OneDrive. Records whose record type does not have
+a VEI-normalized shape land in an `other` bucket on their provider so they
+remain discoverable downstream.
 
 The local launcher keeps the service boundary explicit. Generated Compose/env
 files live under the VEI-managed runtime directory, PipesHub stores synced data
@@ -216,8 +242,9 @@ PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
 
 Canonical timeline events (`canonical_events.jsonl`) cover the original
 provider set plus the main PipesHub-backed enterprise surfaces: Outlook mail,
-OneDrive/SharePoint/Confluence/Box/Dropbox documents, and ServiceNow tickets.
-Unknown provider/record-type combinations still remain in the snapshot under
+Teams chat, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
+ServiceNow tickets. Unknown provider/record-type combinations still remain in
+the snapshot under
 their provider's `other` bucket until VEI learns a typed event shape for them.
 
 Then explore branch points, run what-if experiments, build a wiki, or compile

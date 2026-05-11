@@ -142,6 +142,19 @@ _PIPESHUB_CONNECTOR_FILTER_VALUES: dict[str, tuple[str, ...]] = {
         "outlookpersonal",
         "outlook_personal",
     ),
+    "teams": ("MICROSOFT TEAMS", "MICROSOFT_TEAMS", "microsoftTeams", "teams"),
+    "microsoftteams": (
+        "MICROSOFT TEAMS",
+        "MICROSOFT_TEAMS",
+        "microsoftTeams",
+        "microsoft_teams",
+    ),
+    "microsoft_teams": (
+        "MICROSOFT TEAMS",
+        "MICROSOFT_TEAMS",
+        "microsoftTeams",
+        "microsoft_teams",
+    ),
     "box": ("BOX", "box"),
     "dropbox": ("DROPBOX", "dropbox"),
     "dropboxpersonal": ("DROPBOX PERSONAL", "dropboxpersonal", "dropbox_personal"),
@@ -154,9 +167,6 @@ _PIPESHUB_CONNECTOR_FILTER_VALUES: dict[str, tuple[str, ...]] = {
 }
 
 PIPESHUB_UNSUPPORTED_INGESTION: dict[str, str] = {
-    "teams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoftteams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
-    "microsoft_teams": "PipesHub exposes Microsoft Teams agent/actions code, but not a mature normalized Teams sync connector in the inspected build.",
     "clickup": "PipesHub exposes ClickUp agent/tool code, but not a mature normalized ClickUp ingestion connector in the inspected build; use VEI's direct ClickUp provider for now.",
 }
 
@@ -167,6 +177,10 @@ _SHAPE_BY_TYPE: dict[str, str] = {
     "mail": "mail",
     "email": "mail",
     "group_mail": "mail",
+    "chat": "chat",
+    "chat_message": "chat",
+    "channel_message": "chat",
+    "teams_message": "chat",
     "file": "document",
     "webpage": "document",
     "confluence_page": "document",
@@ -224,12 +238,49 @@ class PipesHubCaptureReport(BaseModel):
     raw_record_count: int = 0
     detail_record_count: int = 0
     content_record_count: int = 0
+    duplicate_record_count: int = 0
+    skipped_source_window_count: int = 0
     skipped_records: int = 0
+    pages_completed: int = 0
+    total_available: int | None = None
+    resumed: bool = False
+    complete: bool = True
     warnings: list[str] = Field(default_factory=list)
+    capture_manifest_path: str = ""
     raw_records_path: str = ""
     snapshot_path: str = ""
     canonical_events_path: str = ""
     canonical_index_path: str = ""
+
+
+class PipesHubCaptureManifest(BaseModel):
+    version: str = "1"
+    run_id: str
+    base_url: str
+    status: str = "running"
+    started_at: str
+    updated_at: str
+    completed_at: str = ""
+    requested_connectors: list[str] = Field(default_factory=list)
+    query_connectors: list[str] = Field(default_factory=list)
+    since: str = ""
+    until: str = ""
+    date_from_ms: str = ""
+    date_to_ms: str = ""
+    include_content: bool = False
+    limit: int = 1000
+    page_size: int = DEFAULT_PAGE_SIZE
+    next_page: int = 1
+    pages_completed: int = 0
+    total_available: int | None = None
+    raw_record_count: int = 0
+    detail_record_count: int = 0
+    content_record_count: int = 0
+    duplicate_record_count: int = 0
+    skipped_source_window_count: int = 0
+    skipped_records: int = 0
+    warnings: list[str] = Field(default_factory=list)
+    raw_records_path: str = ""
 
 
 @dataclass(frozen=True)
@@ -409,6 +460,11 @@ def capture_pipeshub_context(
     include_content: bool = False,
     limit: int = 1000,
     page_size: int = DEFAULT_PAGE_SIZE,
+    run_id: str | None = None,
+    manifest_path: str | Path | None = None,
+    raw_records_path: str | Path | None = None,
+    resume: bool = False,
+    _interrupt_after_pages: int | None = None,
 ) -> PipesHubCapture:
     normalized_connectors = _normalize_connectors(connectors or [])
     unsupported = [
@@ -424,9 +480,22 @@ def capture_pipeshub_context(
     if date_from and date_to and int(date_to) < int(date_from):
         raise ValueError("--until must be greater than or equal to --since")
 
+    resolved_run_id = run_id or new_pipeshub_run_id()
+    resolved_manifest_path = (
+        Path(manifest_path).expanduser().resolve() if manifest_path else None
+    )
+    resolved_raw_records_path = (
+        Path(raw_records_path).expanduser().resolve() if raw_records_path else None
+    )
+    if resolved_manifest_path and resolved_raw_records_path is None:
+        resolved_raw_records_path = resolved_manifest_path.with_name("records.jsonl")
+
+    started_at = iso_now()
     records: list[dict[str, Any]] = []
     detail_count = 0
     content_count = 0
+    duplicate_count = 0
+    skipped_source_window_count = 0
     warnings: list[str] = []
     raw_connectors: list[dict[str, Any]] = []
     if normalized_connectors:
@@ -442,7 +511,80 @@ def capture_pipeshub_context(
     )
     seen_ids: set[str] = set()
     page = 1
+    pages_completed = 0
+    total_available: int | None = None
+    resumed = False
     page_size = max(1, min(page_size, 200))
+    if resume:
+        if resolved_manifest_path is None:
+            raise ValueError("resume requires a PipesHub capture manifest path")
+        manifest = _read_capture_manifest(resolved_manifest_path)
+        _validate_resume_manifest(
+            manifest,
+            base_url=client.base_url,
+            requested_connectors=normalized_connectors,
+            query_connectors=query_connectors,
+            since=since,
+            until=until,
+            date_from_ms=date_from,
+            date_to_ms=date_to,
+            include_content=include_content,
+            limit=limit,
+            page_size=page_size,
+        )
+        resolved_run_id = manifest.run_id
+        resolved_raw_records_path = (
+            Path(manifest.raw_records_path).expanduser().resolve()
+            if manifest.raw_records_path
+            else resolved_raw_records_path
+        )
+        records = _read_raw_records(resolved_raw_records_path)
+        seen_ids = {
+            record_id for record in records if (record_id := _record_id(record))
+        }
+        detail_count = manifest.detail_record_count
+        content_count = manifest.content_record_count
+        duplicate_count = manifest.duplicate_record_count
+        skipped_source_window_count = manifest.skipped_source_window_count
+        warnings = list(manifest.warnings)
+        started_at = manifest.started_at
+        page = max(1, manifest.next_page)
+        pages_completed = manifest.pages_completed
+        total_available = manifest.total_available
+        resumed = True
+    elif resolved_raw_records_path and resolved_raw_records_path.exists():
+        resolved_raw_records_path.unlink()
+
+    if resolved_manifest_path:
+        _write_capture_manifest(
+            resolved_manifest_path,
+            _capture_manifest(
+                run_id=resolved_run_id,
+                base_url=client.base_url,
+                status="running",
+                requested_connectors=normalized_connectors,
+                query_connectors=query_connectors,
+                since=since,
+                until=until,
+                date_from_ms=date_from,
+                date_to_ms=date_to,
+                include_content=include_content,
+                limit=limit,
+                page_size=page_size,
+                next_page=page,
+                pages_completed=pages_completed,
+                total_available=total_available,
+                raw_record_count=len(records),
+                detail_record_count=detail_count,
+                content_record_count=content_count,
+                duplicate_record_count=duplicate_count,
+                skipped_source_window_count=skipped_source_window_count,
+                warnings=warnings,
+                raw_records_path=resolved_raw_records_path,
+                started_at=started_at,
+            ),
+        )
+
     while len(records) < limit:
         request_limit = page_size
         page_records, total = client.list_records(
@@ -450,11 +592,14 @@ def capture_pipeshub_context(
             page=page,
             limit=request_limit,
         )
+        total_available = total if total is not None else total_available
         if not page_records:
             break
+        page_included_records: list[dict[str, Any]] = []
         for listed in page_records:
             record_id = _record_id(listed)
             if record_id and record_id in seen_ids:
+                duplicate_count += 1
                 continue
             listed_has_source_time = bool(_record_source_timestamps_ms(listed))
             if listed_has_source_time and not _record_in_source_window(
@@ -462,6 +607,7 @@ def capture_pipeshub_context(
             ):
                 if record_id:
                     seen_ids.add(record_id)
+                skipped_source_window_count += 1
                 continue
             detail = listed
             if record_id:
@@ -475,6 +621,7 @@ def capture_pipeshub_context(
             if not listed_has_source_time and not _record_in_source_window(
                 detail, date_from, date_to
             ):
+                skipped_source_window_count += 1
                 continue
             if include_content and record_id:
                 try:
@@ -485,13 +632,54 @@ def capture_pipeshub_context(
                 except Exception as exc:  # pragma: no cover - covered through warnings
                     warnings.append(f"content fetch failed for {record_id}: {exc}")
             records.append(detail)
+            page_included_records.append(detail)
             if len(records) >= limit:
                 break
+        if page_included_records:
+            _append_raw_records(resolved_raw_records_path, page_included_records)
+        pages_completed += 1
+        page += 1
+        if resolved_manifest_path:
+            _write_capture_manifest(
+                resolved_manifest_path,
+                _capture_manifest(
+                    run_id=resolved_run_id,
+                    base_url=client.base_url,
+                    status="running",
+                    requested_connectors=normalized_connectors,
+                    query_connectors=query_connectors,
+                    since=since,
+                    until=until,
+                    date_from_ms=date_from,
+                    date_to_ms=date_to,
+                    include_content=include_content,
+                    limit=limit,
+                    page_size=page_size,
+                    next_page=page,
+                    pages_completed=pages_completed,
+                    total_available=total_available,
+                    raw_record_count=len(records),
+                    detail_record_count=detail_count,
+                    content_record_count=content_count,
+                    duplicate_record_count=duplicate_count,
+                    skipped_source_window_count=skipped_source_window_count,
+                    warnings=warnings,
+                    raw_records_path=resolved_raw_records_path,
+                    started_at=started_at,
+                ),
+            )
+        if _interrupt_after_pages and pages_completed >= _interrupt_after_pages:
+            if resolved_manifest_path:
+                manifest = _read_capture_manifest(resolved_manifest_path)
+                manifest = manifest.model_copy(
+                    update={"status": "interrupted", "updated_at": iso_now()}
+                )
+                _write_capture_manifest(resolved_manifest_path, manifest)
+            raise RuntimeError("simulated PipesHub capture interruption")
         if len(page_records) < request_limit:
             break
-        if total is not None and page * page_size >= total:
+        if total is not None and pages_completed * page_size >= total:
             break
-        page += 1
 
     sources, skipped = _records_to_sources(records)
     snapshot = ContextSnapshot(
@@ -511,23 +699,69 @@ def capture_pipeshub_context(
                 "until": until,
                 "date_from_ms": date_from,
                 "date_to_ms": date_to,
+                "run_id": resolved_run_id,
+                "resume": resumed,
+                "capture_manifest_path": (
+                    str(resolved_manifest_path) if resolved_manifest_path else ""
+                ),
             },
         },
     )
     source_counts = {
         source.provider: _source_capture_count(source) for source in sources
     }
+    if resolved_manifest_path:
+        manifest = _capture_manifest(
+            run_id=resolved_run_id,
+            base_url=client.base_url,
+            status="complete",
+            requested_connectors=normalized_connectors,
+            query_connectors=query_connectors,
+            since=since,
+            until=until,
+            date_from_ms=date_from,
+            date_to_ms=date_to,
+            include_content=include_content,
+            limit=limit,
+            page_size=page_size,
+            next_page=page,
+            pages_completed=pages_completed,
+            total_available=total_available,
+            raw_record_count=len(records),
+            detail_record_count=detail_count,
+            content_record_count=content_count,
+            duplicate_record_count=duplicate_count,
+            skipped_source_window_count=skipped_source_window_count,
+            skipped_records=skipped,
+            warnings=warnings,
+            raw_records_path=resolved_raw_records_path,
+            started_at=started_at,
+        )
+        manifest = manifest.model_copy(update={"completed_at": iso_now()})
+        _write_capture_manifest(resolved_manifest_path, manifest)
     report = PipesHubCaptureReport(
         base_url=client.base_url,
-        run_id=_run_id(),
+        run_id=resolved_run_id,
         captured_at=snapshot.captured_at,
         requested_connectors=normalized_connectors,
         source_counts=source_counts,
         raw_record_count=len(records),
         detail_record_count=detail_count,
         content_record_count=content_count,
+        duplicate_record_count=duplicate_count,
+        skipped_source_window_count=skipped_source_window_count,
         skipped_records=skipped,
+        pages_completed=pages_completed,
+        total_available=total_available,
+        resumed=resumed,
+        complete=True,
         warnings=warnings,
+        capture_manifest_path=(
+            str(resolved_manifest_path) if resolved_manifest_path else ""
+        ),
+        raw_records_path=(
+            str(resolved_raw_records_path) if resolved_raw_records_path else ""
+        ),
     )
     return PipesHubCapture(snapshot=snapshot, report=report, records=records)
 
@@ -649,10 +883,16 @@ def _records_to_sources(
     for index, record in enumerate(records):
         provider = _vei_provider(_connector_name(record))
         bucket = buckets[provider]
-        shape = _SHAPE_BY_TYPE.get(_record_type(record), "other")
+        record_type = _record_type(record)
+        shape = _SHAPE_BY_TYPE.get(record_type, "other")
+        if shape == "other" and provider in {"slack", "teams"}:
+            if record_type in {"message"}:
+                shape = "chat"
 
         if shape == "mail":
             _add_mail_record(bucket["mail_threads"], record, fallback=index)
+        elif shape == "chat":
+            _add_chat_record(bucket["chat_channels"], record, fallback=index)
         elif shape == "document":
             bucket["documents"].append(_document_record(record, fallback=index))
         elif shape == "ticket":
@@ -685,6 +925,7 @@ def _records_to_sources(
 def _empty_bucket() -> dict[str, Any]:
     return {
         "mail_threads": {},
+        "chat_channels": {},
         "documents": [],
         "tickets": {},
         "issues": [],
@@ -704,6 +945,7 @@ def _assemble_source(provider: str, bucket: dict[str, Any]) -> ContextSourceResu
     `other` so they're still discoverable downstream.
     """
     threads = list(bucket["mail_threads"].values())
+    channels = list(bucket["chat_channels"].values())
     tickets = list(bucket["tickets"].values())
 
     data: dict[str, Any] = {}
@@ -714,6 +956,11 @@ def _assemble_source(provider: str, bucket: dict[str, Any]) -> ContextSourceResu
         data["profile"] = {"source_gateway": "pipeshub"}
         counts["threads"] = len(threads)
         counts["messages"] = sum(len(t.get("messages", [])) for t in threads)
+    if channels:
+        data["channels"] = channels
+        data.setdefault("profile", {"source_gateway": "pipeshub"})
+        counts["channels"] = len(channels)
+        counts["messages"] = sum(len(c.get("messages", [])) for c in channels)
     if bucket["documents"]:
         data["documents"] = bucket["documents"]
         data.setdefault("users", [])
@@ -772,16 +1019,112 @@ def _add_mail_record(
         "thread_id": thread_id,
         "subject": subject,
         "from": _text_field(
-            record, "fromEmail", "from_email", "sender", "creatorEmail"
+            record, "fromEmail", "from_email", "from", "sender", "creatorEmail"
         ),
-        "to": _list_field(record, "toEmails", "to_emails", "recipients"),
-        "cc": _list_field(record, "ccEmails", "cc_emails"),
+        "to": _list_field(record, "toEmails", "to_emails", "to", "recipients"),
+        "cc": _list_field(record, "ccEmails", "cc_emails", "cc"),
         "timestamp": timestamp,
         "date": timestamp,
         "body_text": _body(record),
         "metadata": _provenance(record),
     }
     thread["messages"].append(message)
+
+
+def _add_chat_record(
+    channels: dict[str, dict[str, Any]], record: dict[str, Any], *, fallback: int
+) -> None:
+    channel_id = (
+        _text_field(
+            record,
+            "channelId",
+            "channel_id",
+            "chatId",
+            "chat_id",
+            "conversationId",
+            "conversation_id",
+            "teamId",
+            "team_id",
+        )
+        or f"pipeshub-chat-{fallback + 1}"
+    )
+    team_name = _text_field(record, "teamName", "team_name", "team")
+    channel_name = (
+        _text_field(
+            record,
+            "channelName",
+            "channel_name",
+            "channel",
+            "displayName",
+            "display_name",
+            "chatName",
+            "chat_name",
+            "topic",
+        )
+        or channel_id
+    )
+    if team_name and not channel_name.startswith("#"):
+        display_channel = f"#{team_name}/{channel_name}"
+    elif channel_name.startswith("#"):
+        display_channel = channel_name
+    else:
+        display_channel = f"#{channel_name}"
+
+    channel = channels.setdefault(
+        channel_id,
+        {
+            "channel": display_channel,
+            "channel_id": channel_id,
+            "team_id": _text_field(record, "teamId", "team_id"),
+            "team_name": team_name,
+            "unread": 0,
+            "messages": [],
+        },
+    )
+    timestamp = _timestamp(record)
+    message_id = _record_id(record) or f"{channel_id}-{len(channel['messages']) + 1}"
+    conversation_id = (
+        _text_field(
+            record,
+            "threadId",
+            "thread_id",
+            "conversationId",
+            "conversation_id",
+        )
+        or timestamp
+        or message_id
+    )
+    reply_to_id = _text_field(
+        record,
+        "replyToId",
+        "reply_to_id",
+        "parentMessageId",
+        "parent_message_id",
+    )
+    message = {
+        "id": message_id,
+        "message_id": message_id,
+        "ts": timestamp,
+        "timestamp": timestamp,
+        "thread_ts": reply_to_id,
+        "thread_id": reply_to_id or conversation_id,
+        "user": _text_field(
+            record,
+            "fromEmail",
+            "from_email",
+            "senderEmail",
+            "sender_email",
+            "from",
+            "sender",
+            "author",
+            "user",
+            "creatorEmail",
+            "createdBy",
+        ),
+        "text": _body(record),
+        "metadata": _provenance(record),
+    }
+    channel["messages"].append(message)
 
 
 def _document_record(record: dict[str, Any], *, fallback: int) -> dict[str, Any]:
@@ -1136,6 +1479,8 @@ def _timestamp(record: dict[str, Any]) -> str:
         "sourceLastModifiedTimestamp",
         "source_updated_at",
         "sourceUpdatedAtTimestamp",
+        "lastModifiedDateTime",
+        "last_modified_date_time",
         "updatedAt",
         "updated_at",
         "updated",
@@ -1143,6 +1488,8 @@ def _timestamp(record: dict[str, Any]) -> str:
         "modified_time",
         "sourceCreatedAtTimestamp",
         "source_created_at",
+        "createdDateTime",
+        "created_date_time",
         "createdAt",
         "created_at",
         "created",
@@ -1163,6 +1510,11 @@ def _created_timestamp(record: dict[str, Any]) -> str:
 
 
 def _body(record: dict[str, Any]) -> str:
+    body_value = _field(record, "body")
+    if isinstance(body_value, dict):
+        body_text = _text_field(body_value, "content", "text", "body")
+        if body_text:
+            return _strip_html(body_text)
     direct = _text_field(
         record,
         "vei_content_text",
@@ -1187,6 +1539,15 @@ def _body(record: dict[str, Any]) -> str:
                     parts.append(text)
         return "\n".join(parts)
     return ""
+
+
+def _strip_html(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "<" in text and ">" in text:
+        return re.sub(r"<[^>]+>", "", text).strip()
+    return text
 
 
 def _permissions(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1348,6 +1709,157 @@ def _coerce_timestamp_ms(value: Any) -> int | None:
     return int(parsed.timestamp() * 1000)
 
 
+def _capture_manifest(
+    *,
+    run_id: str,
+    base_url: str,
+    status: str,
+    requested_connectors: list[str],
+    query_connectors: list[str],
+    since: str,
+    until: str,
+    date_from_ms: str,
+    date_to_ms: str,
+    include_content: bool,
+    limit: int,
+    page_size: int,
+    next_page: int,
+    pages_completed: int,
+    total_available: int | None,
+    raw_record_count: int,
+    detail_record_count: int,
+    content_record_count: int,
+    duplicate_record_count: int,
+    skipped_source_window_count: int,
+    warnings: list[str],
+    raw_records_path: str | Path | None,
+    started_at: str,
+    skipped_records: int = 0,
+) -> PipesHubCaptureManifest:
+    return PipesHubCaptureManifest(
+        run_id=run_id,
+        base_url=base_url,
+        status=status,
+        started_at=started_at,
+        updated_at=iso_now(),
+        requested_connectors=requested_connectors,
+        query_connectors=query_connectors,
+        since=since,
+        until=until,
+        date_from_ms=date_from_ms,
+        date_to_ms=date_to_ms,
+        include_content=include_content,
+        limit=limit,
+        page_size=page_size,
+        next_page=next_page,
+        pages_completed=pages_completed,
+        total_available=total_available,
+        raw_record_count=raw_record_count,
+        detail_record_count=detail_record_count,
+        content_record_count=content_record_count,
+        duplicate_record_count=duplicate_record_count,
+        skipped_source_window_count=skipped_source_window_count,
+        skipped_records=skipped_records,
+        warnings=list(warnings),
+        raw_records_path=str(raw_records_path) if raw_records_path else "",
+    )
+
+
+def _write_capture_manifest(path: Path, manifest: PipesHubCaptureManifest) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(manifest.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+
+def _read_capture_manifest(path: Path) -> PipesHubCaptureManifest:
+    if not path.exists():
+        raise ValueError(f"PipesHub capture manifest not found: {path}")
+    return PipesHubCaptureManifest.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _validate_resume_manifest(
+    manifest: PipesHubCaptureManifest,
+    *,
+    base_url: str,
+    requested_connectors: list[str],
+    query_connectors: list[str],
+    since: str,
+    until: str,
+    date_from_ms: str,
+    date_to_ms: str,
+    include_content: bool,
+    limit: int,
+    page_size: int,
+) -> None:
+    expected: dict[str, Any] = {
+        "base_url": base_url,
+        "requested_connectors": requested_connectors,
+        "query_connectors": query_connectors,
+        "since": since,
+        "until": until,
+        "date_from_ms": date_from_ms,
+        "date_to_ms": date_to_ms,
+        "include_content": include_content,
+        "limit": limit,
+        "page_size": page_size,
+    }
+    mismatches = [
+        key
+        for key, expected_value in expected.items()
+        if getattr(manifest, key) != expected_value
+    ]
+    if mismatches:
+        formatted = ", ".join(mismatches)
+        raise ValueError(
+            "resume options do not match the existing PipesHub capture manifest: "
+            f"{formatted}"
+        )
+    if manifest.status not in {"running", "interrupted", "complete"}:
+        raise ValueError(
+            f"cannot resume PipesHub capture with status={manifest.status!r}"
+        )
+    if not manifest.raw_records_path:
+        raise ValueError("resume manifest does not name a raw records path")
+    if not Path(manifest.raw_records_path).expanduser().exists():
+        raise ValueError(
+            "resume manifest raw records path does not exist: "
+            f"{manifest.raw_records_path}"
+        )
+
+
+def _read_raw_records(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        raise ValueError("resume requires a raw records path")
+    if not path.exists():
+        raise ValueError(f"raw PipesHub records not found: {path}")
+    records: list[dict[str, Any]] = []
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), 1
+    ):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"invalid raw PipesHub record JSON on line {line_number}: {path}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"raw PipesHub record on line {line_number} is not an object: {path}"
+            )
+        records.append(payload)
+    return records
+
+
+def _append_raw_records(path: Path | None, records: list[dict[str, Any]]) -> None:
+    if path is None or not records:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+
 def _source_capture_count(source: ContextSourceResult) -> int:
     counts = source.record_counts
     if "messages" in counts:
@@ -1405,7 +1917,17 @@ def _list_field(record: dict[str, Any], *keys: str) -> list[str]:
     for key in keys:
         value = _field(record, key)
         if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
+            parsed: list[str] = []
+            for item in value:
+                if isinstance(item, dict):
+                    text = _text_field(
+                        item, "email", "address", "displayName", "name", "value"
+                    )
+                else:
+                    text = str(item).strip()
+                if text:
+                    parsed.append(text)
+            return parsed
         if isinstance(value, str) and value.strip():
             return [part.strip() for part in value.split(",") if part.strip()]
     return []
@@ -1429,6 +1951,32 @@ def _field(record: dict[str, Any], key: str) -> Any:
             return semantic[key]
         if snake in semantic:
             return semantic[snake]
+    for nested_key in (
+        "mailRecord",
+        "mail_record",
+        "fileRecord",
+        "file_record",
+        "ticketRecord",
+        "ticket_record",
+        "chatRecord",
+        "chat_record",
+        "messageRecord",
+        "message_record",
+        "channelMessageRecord",
+        "channel_message_record",
+        "chatMessage",
+        "chat_message",
+        "channelMessage",
+        "channel_message",
+        "teamsRecord",
+        "teams_record",
+    ):
+        nested = record.get(nested_key)
+        if isinstance(nested, dict):
+            if key in nested:
+                return nested[key]
+            if snake in nested:
+                return nested[snake]
     return None
 
 
@@ -1466,5 +2014,9 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
 
 
 def _run_id() -> str:
+    return new_pipeshub_run_id()
+
+
+def new_pipeshub_run_id() -> str:
     stamp = datetime.now(UTC).replace(microsecond=0).isoformat()
     return "pipeshub_" + stamp.replace("+00:00", "Z").replace(":", "-")

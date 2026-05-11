@@ -158,14 +158,32 @@ def capture_pipeshub(
     ),
     limit: int = typer.Option(1000, "--limit", min=1, help="Maximum records to pull."),
     page_size: int = typer.Option(100, "--page-size", min=1, max=200),
+    run_id: str = typer.Option(
+        "",
+        "--run-id",
+        help="Stable PipesHub capture run id. Use with --resume to continue a previous capture.",
+    ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume from <workspace>/imports/source_syncs/pipeshub/<run-id>/capture_manifest.json.",
+    ),
     timeout_s: int = typer.Option(30, "--timeout-s", min=1),
     format: str = typer.Option("plain", "--format", help="plain | json"),
 ) -> None:
     """Pull a reviewed PipesHub snapshot into VEI canonical context artifacts."""
     from vei.context.pipeshub import capture_pipeshub_context
+    from vei.context.pipeshub import new_pipeshub_run_id
     from vei.context.pipeshub import write_pipeshub_capture
 
     try:
+        if resume and not run_id:
+            raise ValueError("--resume requires --run-id")
+        workspace_path = workspace.expanduser().resolve()
+        resolved_run_id = run_id or new_pipeshub_run_id()
+        sync_root = (
+            workspace_path / "imports" / "source_syncs" / "pipeshub" / resolved_run_id
+        )
         capture_result = capture_pipeshub_context(
             _pipeshub_client(base_url, token_env, timeout_s),
             organization_name=org,
@@ -176,10 +194,14 @@ def capture_pipeshub(
             include_content=include_content,
             limit=limit,
             page_size=page_size,
+            run_id=resolved_run_id,
+            manifest_path=sync_root / "capture_manifest.json",
+            raw_records_path=sync_root / "records.jsonl",
+            resume=resume,
         )
         report = write_pipeshub_capture(
             capture_result,
-            workspace=workspace,
+            workspace=workspace_path,
             output=output,
         )
     except Exception as exc:
@@ -194,6 +216,7 @@ def capture_pipeshub(
     typer.echo(f"Canonical events: {report.canonical_events_path}")
     typer.echo(f"Canonical index: {report.canonical_index_path}")
     typer.echo(f"Raw evidence: {report.raw_records_path}")
+    typer.echo(f"Capture manifest: {report.capture_manifest_path}")
     if report.source_counts:
         typer.echo(
             "Sources: "
