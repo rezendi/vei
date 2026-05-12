@@ -69,6 +69,17 @@ This check is part of the `make check` interface contract target described in [A
 - Include the commands you ran and the result in the PR description.
 - Link related issues or benchmark context when it exists.
 
+## Hardening smokes
+
+Run these before tagging a release or after changes to public-facing paths:
+
+```bash
+make codex-live-smoke      # Codex-backed planning, skillmap, and what-if smoke
+make worldmodel-smoke      # JEPA/reference world-model contracts
+make public-demo-smoke     # strangelab.ai/enron and /public-history assets
+make workflow-intel-smoke  # workflow mining/spec/package gates
+```
+
 ## Review standard
 
 Before asking for review, make sure the branch is in the new steady state:

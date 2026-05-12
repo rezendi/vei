@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [
-  { name = "VEI", email = "noreply@example.com" }
+  { name = "Strange Lab" }
 ]
 dependencies = [
   "mcp>=1.13.0",

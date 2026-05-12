@@ -2,22 +2,13 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Strange-Lab-AI/vei)
 
-**VEI is infrastructure for enterprise AI agents.** It turns a company's real operational history — email, Slack, tickets, docs, CRM, GitHub, identity, observability, and agent traces — into one canonical event spine, then exposes that spine as replayable enterprise environments where agents can be tested, governed, audited, and improved before they touch production systems.
+VEI turns a company's email, Slack, tickets, docs, CRM, identity, and agent traces into a replayable company environment: one canonical event spine that can be branched, audited, mined for workflows, and packaged into process-training worlds for AI agents.
 
-Try it now: [strangelab.ai/enron](https://strangelab.ai/enron) · [strangelab.ai/public-history](https://strangelab.ai/public-history)
+From [Strange Lab](https://strangelab.ai). The first public release of our enterprise-AI infrastructure stack.
 
-VEI sits above the systems of record and any existing data platform. It preserves
-reviewable evidence or source pointers, builds a canonical event spine of how
-the company works, and materializes bounded packages for governance, evals,
-what-if analysis, and model training.
+## The bet
 
-That spine powers one deterministic kernel and five infrastructure surfaces:
-
-1. **Test / Eval** — run agents against fixed company worlds before production.
-2. **Governor / Control** — gate writes, record agent activity, and export evidence packs.
-3. **Sandbox / What-if** — replay historical branch points and compare alternate actions as decision support.
-4. **Train / Data** — turn traces and reviewed workflow specs into bounded process-training packages.
-5. **Knowledge / Wiki / Skill Map** — compile company memory, recurring workflows, and draft agent skills from evidence.
+Every company that runs agents will need a machine-readable model of how work actually happens. VEI's bet is that the right primitive is a canonical event spine: who did what, when, to what, with provenance.
 
 ```mermaid
 flowchart TB
@@ -47,23 +38,20 @@ flowchart TB
     SPINE -.->|optional export| WAREHOUSE
 ```
 
-## Product Surfaces
+## Try it now
 
-**Test / Eval** — Run fixed company worlds and score agents against contracts. Compare scripted, workflow, behavioral-cloning, and live LLM runners on the same scenario. See [docs/EVALS.md](docs/EVALS.md).
+Live demos (no install, no API key):
 
-**Governor / Control** — Ingest agent activity from JSONL, MCP transcripts, or OpenAI org exports. Review access, blast radius, and policy compliance; gate writes and export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § VEI Control.
+- [strangelab.ai/enron](https://strangelab.ai/enron) — Enron what-if archive
+- [strangelab.ai/public-history](https://strangelab.ai/public-history) — public news timeline
 
-**Sandbox / What-if** — Fork a world, change a policy or action, and compare alternate paths as decision support. Branch from real historical decisions in the Enron archive, from your own company data, or from public news timelines. See [docs/WHATIF.md](docs/WHATIF.md).
-
-**Train / Data** — Turn traces into rollouts, demonstrations, and scoped training data. Mine repeated work from canonical company history, promote evidence-backed Business Task Specs, and package only reviewed contract-ready specs into process environments. See [docs/RL_GYM.md](docs/RL_GYM.md).
-
-**Knowledge / Wiki / Skill Map** — Hydrate notes, transcripts, metrics, SOPs, and pricing into a knowledge graph; materialize a company wiki with citations; compile company-specific draft skills from the normalized bundle, with replay checks and evidence backing.
+![Readable decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-readme.jpg)
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/Strange-Lab-AI/vei.git
-cd vei                # or your checkout folder name
+cd vei
 make setup-full       # creates .venv, installs all extras
 vei doctor            # checks environment
 vei quickstart run    # launches Studio + Twin Gateway
@@ -86,7 +74,17 @@ pip install -e ".[jepa]"
 
 `make setup-full` already includes this extra for full local development.
 
-### Try a saved example
+## What VEI gives you
+
+Five surfaces, one spine:
+
+- **Knowledge / Wiki / Skill Map** — materialize a company wiki with citations; compile draft agent skills from evidence.
+- **Workflow Intelligence / Train** — mine repeated work, promote reviewed task specs, and package scoped process-training data. See [docs/RL_GYM.md](docs/RL_GYM.md).
+- **Sandbox / What-if** — fork a world, change a policy or action, compare alternate paths. See [docs/WHATIF.md](docs/WHATIF.md).
+- **Governor / Control** — gate writes, record agent activity, export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Test / Eval** — run agents against fixed company worlds and score them against contracts. See [docs/EVALS.md](docs/EVALS.md).
+
+## Open a saved example
 
 Open the flagship Enron what-if bundle from a fresh clone — no API key needed:
 
@@ -96,31 +94,11 @@ vei ui serve \
   --host 127.0.0.1 --port 3055
 ```
 
-Studio exposes the what-if surface as two explicit modes when both are available: **Live archive** for full-history exploration and **Saved reference** for the committed branch replay. Live archive remains the default and warms its loaded world in the UI server after status loads, so whole-history exploration stays visible without hiding behind the saved reference path.
-
-![Readable decision scene for the Enron Master Agreement branch point](docs/assets/enron-whatif/enron-decision-scene-readme.jpg)
+Studio exposes the what-if surface as two modes: **Live archive** for full-history exploration and **Saved reference** for the committed branch replay.
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public history, Clearwater).
 
-## CLI Map
-
-All commands live under `vei <group> <command>`. The top-level surface is
-grouped by product workflow:
-
-| Surface | Key commands |
-|---|---|
-| **Quickstart** | `vei admin quickstart run`, `vei admin doctor`, `vei eval smoke run` |
-| **Test / Eval** | `vei eval benchmark`, `vei eval demo`, `vei eval showcase`, `vei eval llm-test run`, `vei eval agent-demo run`, `vei run start`, `vei admin report` |
-| **Governor / Control** | `vei workspace twin serve`, `vei workspace twin onboard`, `vei workspace ingest agent-activity`, `vei provenance access-review`, `vei provenance verify`, `vei provenance export` |
-| **Sandbox / What-if** | `vei whatif candidates`, `vei whatif events`, `vei whatif open`, `vei whatif experiment` (`--mode e_jepa` for the trained backend), `vei whatif rank`, `vei whatif pack run` |
-| **Train / Data** | `vei rollout procurement`, `vei train bc`, `vei workflow package-env` |
-| **Knowledge / Skills / Wiki** | `vei knowledge compose`, `vei knowledge ingest`, `vei knowledge skillmap build`, `vei knowledge skillmap refresh`, `vei wiki build`, `vei wiki refresh`, `vei wiki query` |
-| **Workflow intelligence** | `vei workflow mine`, `vei workflow label`, `vei workflow promote`, `vei workflow refresh` |
-| **Inspect / Debug** | `vei admin world list`, `vei inspect fidelity`, `vei workspace context timeline`, `vei workspace context readiness`, `vei admin visualize`, `vei ui serve` |
-| **Project / Workspace** | `vei workspace project init`, `vei workspace project show`, `vei admin blueprint`, `vei admin contract`, `vei admin release` |
-| **Static-site exports** | `python scripts/export_enron_static_assets.py`, `python scripts/export_public_history_static_assets.py` (powers `strangelab.ai/enron` and `strangelab.ai/public-history`) |
-
-## Bring Your Own Company History
+## Bring your own company history
 
 ```bash
 # Normalize raw exports into a verified bundle
@@ -140,229 +118,12 @@ vei workspace twin onboard \
   --base-url notion=/path/to/notion-export.zip
 ```
 
-### Experimental PipesHub Connector Pilot
+For managed connector pipelines and tenant-level backfills:
 
-VEI can also launch a local PipesHub stack and snapshot its synced enterprise
-records into the same canonical company-history bundle. PipesHub remains a
-separate connector/search service; VEI pulls a point-in-time snapshot and writes
-reviewable local artifacts.
+- **PipesHub** (Gmail, Drive, Jira, Confluence, Salesforce, OneDrive, Outlook) — `pip install -e ".[pipeshub]"` then `vei connectors pipeshub up`. See [docs/CONNECTORS.md](docs/CONNECTORS.md#pipeshub).
+- **Microsoft Teams via Graph** — direct tenant capture using `vei context teams capture`. See [docs/CONNECTORS.md](docs/CONNECTORS.md#microsoft-teams).
 
-```bash
-pip install -e ".[pipeshub]"
-
-# Generate a local Compose profile and start PipesHub.
-vei connectors pipeshub up
-
-# Open http://127.0.0.1:3000, create the local PipesHub admin account, and
-# configure connectors in the PipesHub UI. Personal Google accounts are fine
-# for the Drive/Gmail pilot if you provide a Google OAuth desktop/web client
-# ID + secret. Google Workspace Drive/Gmail connectors use the workspace
-# service-account/domain-delegation path instead.
-#
-# Then export a PipesHub API token. The inspect/capture commands also accept
-# --token-env if you store it elsewhere.
-export PIPESHUB_BEARER_AUTH="<pipeshub bearer token>"
-
-# Inspect what VEI can ingest.
-vei context pipeshub inspect
-
-# Pull a snapshot from PipesHub into VEI. Use gmail/drive for personal Google
-# connectors, or gmailworkspace/driveworkspace for Workspace connectors.
-vei context pipeshub capture \
-  --workspace _vei_out/yourco \
-  --run-id first_march_backfill \
-  --org "YourCo" --domain "yourco.example" \
-  --connector gmail \
-  --connector drive \
-  --connector jira \
-  --connector confluence \
-  --connector salesforce \
-  --connector onedrive \
-  --connector outlook \
-  --since 2026-03-01T00:00:00Z
-
-# If a long capture is interrupted, rerun with the same run id.
-vei context pipeshub capture \
-  --workspace _vei_out/yourco \
-  --run-id first_march_backfill \
-  --resume \
-  --org "YourCo" --domain "yourco.example" \
-  --connector gmail \
-  --connector drive \
-  --connector jira \
-  --connector confluence \
-  --connector salesforce \
-  --connector onedrive \
-  --connector outlook \
-  --since 2026-03-01T00:00:00Z
-
-# Smoke the captured bundle through VEI's downstream read models.
-vei context verify --snapshot _vei_out/yourco/context_snapshot.json
-vei wiki build --source-dir _vei_out/yourco --output _vei_out/yourco/wiki
-vei workflow mine --source-dir _vei_out/yourco --output _vei_out/yourco/workflows
-vei context readiness --root _vei_out/yourco --format json
-
-# Stop the local PipesHub stack when the pilot sync is finished.
-vei connectors pipeshub down
-```
-
-The capture writes raw evidence under
-`imports/source_syncs/pipeshub/<run_id>/`, including `records.jsonl` and a
-page-level `capture_manifest.json` that can resume an interrupted backfill.
-It then writes `context_snapshot.json`, `canonical_events.jsonl`, and
-`canonical_event_index.json`. By default VEI captures metadata, snippets, source
-links, permissions, and other list/detail fields without streaming full document
-text; pass `--include-content` only for a bounded materialization window where
-you intentionally want the extra local copy. Records keep their upstream system
-identity — PipesHub is the transport, not the origin — so a Gmail message lands
-under `provider="gmail"`, a Jira ticket under `provider="jira"`, a Drive file
-under `provider="google"`, and a managed Teams bridge or future PipesHub Teams
-connector would land under `provider="teams"`. VEI does not maintain its own
-provider allowlist at the command boundary;
-connector filters are resolved against the configured PipesHub connectors when
-possible, then whatever PipesHub serves is ingested under the source system it
-came from. ClickUp is the current known exception: PipesHub exposes ClickUp
-agent/tool code in the inspected build, but not a mature normalized ingestion
-connector, so use VEI's direct ClickUp provider for now. Teams is VEI-ready when
-PipesHub, a managed bridge, or a future PipesHub release exposes chat/message
-records, but the inspected local PipesHub image does not ship a mature Teams
-sync connector like Outlook or OneDrive. For Teams backfills today, use VEI's
-direct Microsoft Graph capture lane below. Records whose record type does not
-have a VEI-normalized shape land in an `other` bucket on their provider so they
-remain discoverable downstream.
-
-The local launcher keeps the service boundary explicit. Generated Compose/env
-files live under the VEI-managed runtime directory, PipesHub stores synced data
-inside its own databases and indexes, and VEI only reads a reviewed snapshot.
-For the local pilot, the launcher pins the PipesHub image and builds a small
-local image layer to normalize deployment config parsing, keep Google Drive and
-Gmail OAuth scopes read-only, and expose connector-owned records through the
-PipesHub list/detail APIs. If a managed PipesHub deployment already exists, pass
-`--base-url` to `inspect`/`capture` and skip the local launcher.
-
-Canonical timeline events (`canonical_events.jsonl`) cover the original
-provider set plus the main enterprise surfaces VEI can normalize today: Outlook
-mail, Teams chat when captured through the direct Graph lane or a compatible
-managed bridge, OneDrive/SharePoint/Confluence/Box/Dropbox documents, and
-ServiceNow tickets. Unknown provider/record-type combinations still remain in
-the snapshot under their provider's `other` bucket until VEI learns a typed
-event shape for them.
-
-### Microsoft Teams Graph Capture
-
-Teams is captured directly from Microsoft Graph rather than through PipesHub for
-now. This is the tenant-backfill path for Microsoft 365 customers: VEI gets an
-application token, reads Teams channel and chat messages for a bounded time
-window, writes raw local evidence, and emits the same `context_snapshot.json`
-plus canonical sidecars as the PipesHub lane.
-
-Customer-side setup is the main gate. In Microsoft Entra, create an app
-registration, add a client secret, and grant admin consent for the read-only
-Graph application permissions needed by the scope you want:
-
-- `Team.ReadBasic.All` and `Channel.ReadBasic.All` for team/channel discovery.
-- `ChannelMessage.Read.All` for Teams channel messages.
-- `User.Read.All` and `Chat.Read.All` for 1:1 and group chat backfill.
-- Later, add `OnlineMeetingTranscript.Read.All` only if you want meeting
-  transcripts. Do not capture recordings by default; they are large binary
-  assets and should be explicitly materialized.
-
-Store the local pilot credentials in `.env`:
-
-```bash
-VEI_MSFT_TENANT_ID="<tenant-id>"
-VEI_MSFT_CLIENT_ID="<app-client-id>"
-VEI_MSFT_CLIENT_SECRET="<client-secret>"
-```
-
-Then run a bounded capture:
-
-```bash
-vei context teams inspect --format json
-
-vei context teams capture \
-  --workspace _vei_out/yourco-teams \
-  --run-id teams_20260504_20260511 \
-  --org "YourCo" --domain "yourco.example" \
-  --since 2026-05-04T00:00:00Z \
-  --until 2026-05-11T23:59:59Z \
-  --limit 5000 \
-  --format json
-
-vei context verify --snapshot _vei_out/yourco-teams/context_snapshot.json
-vei wiki build --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/wiki
-vei workflow mine --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/workflows
-```
-
-Use `--team` to restrict channel export to specific team ids or display names,
-and `--user` to restrict chat scanning to specific users. Re-run with
-`--resume --run-id <same-id>` if a long capture is interrupted. The raw audit
-bundle lands under
-`imports/source_syncs/microsoft_teams/<run_id>/records.jsonl`, with a
-`capture_manifest.json` beside it. Microsoft Teams export endpoints reject
-Graph `$top`, so `--limit` is enforced locally while VEI follows Graph
-pagination.
-
-Then explore branch points, run what-if experiments, build a wiki, or compile
-a skill map — all from the same canonical event spine:
-
-```bash
-# 1. Rank strong branch points (no LLM, no training)
-vei whatif candidates \
-  --source company_history \
-  --source-dir _vei_out/yourco-teams/context_snapshot.json \
-  --limit 10
-
-# 2. Run a counterfactual. --mode e_jepa materializes a bounded training window
-#    from the spine and predicts; --mode heuristic_baseline is deterministic
-#    and fast.
-vei whatif experiment \
-  --source company_history \
-  --source-dir _vei_out/yourco-teams/context_snapshot.json \
-  --label first_experiment \
-  --counterfactual-prompt "What if escalation had gone through legal first?" \
-  --mode e_jepa --forecast-backend e_jepa
-
-# 3. Build the company wiki (Overview, Recent Changes, Cases, People,
-#    Knowledge, Skills, Evidence Index). Citations link back to canonical
-#    events; nothing from synthetic vertical packs is mixed in.
-vei wiki build --source-dir _vei_out/yourco-teams/context_snapshot.json \
-  --output _vei_out/yourco-teams/wiki
-
-# 4. Compile evidence-backed skills (LLM-derived, every step cited)
-vei knowledge skillmap build \
-  --source-dir _vei_out/yourco-teams/context_snapshot.json \
-  --output _vei_out/yourco-teams/skill_map
-
-# 5. When real agent activity has been imported into the workspace, refresh
-#    skills + wiki from the context plus the Control evidence spine.
-vei knowledge skillmap refresh --workspace _vei_out/yourco-teams \
-  --output _vei_out/yourco-teams/skill_map
-vei wiki refresh --workspace _vei_out/yourco-teams
-
-# 6. Mine recurring work and promote an evidence-backed task spec.
-vei workflow mine \
-  --source-dir _vei_out/yourco-teams/context_snapshot.json \
-  --output _vei_out/yourco-teams/workflows
-vei workflow promote \
-  --root _vei_out/yourco-teams/workflows \
-  --candidate-id <candidate-id> \
-  --output _vei_out/yourco-teams/workflows/task_spec.json
-```
-
-For a checked-in end-to-end example of the workflow-intelligence ladder, see
-[docs/examples/workflow-intelligence-walkthrough](docs/examples/workflow-intelligence-walkthrough/).
-
-Hardening smokes for public-facing paths:
-
-```bash
-make codex-live-smoke      # Codex-backed planning, skillmap, and what-if smoke
-make worldmodel-smoke      # JEPA/reference world-model contracts
-make public-demo-smoke     # strangelab.ai/enron and /public-history assets
-make workflow-intel-smoke  # workflow mining/spec/package gates
-```
-
-Run a real LLM agent against the resulting twin via MCP stdio:
+## Run a real LLM agent against the twin
 
 ```bash
 vei eval llm-test run \
@@ -370,7 +131,7 @@ vei eval llm-test run \
   --task "Triage the open exception and reply to the customer." \
   --artifacts _vei_out/yourco/llm_run
 
-# Or score a real model against a named benchmark family and its workflow contract.
+# Or score a model against a named benchmark family and its workflow contract.
 VEI_OPENAI_REASONING_EFFORT=low vei eval benchmark \
   --runner llm \
   --family security_containment \
@@ -379,13 +140,23 @@ VEI_OPENAI_REASONING_EFFORT=low vei eval benchmark \
   --artifacts-root _vei_out/benchmark
 ```
 
-Named-family LLM benchmark runs derive the agent task from the workflow
-objective, constraints, relevant tools, and known argument anchors. The result
-includes both the enterprise score and workflow-contract validation, so you can
-tell whether a real agent achieved the outcome and whether it followed the
-reviewed workflow shape.
+Named-family benchmark runs derive the agent task from the workflow objective, constraints, relevant tools, and known argument anchors. The result includes both the enterprise score and workflow-contract validation.
 
-Full command reference: [docs/WHATIF.md](docs/WHATIF.md).
+## CLI Map
+
+All commands live under `vei <group> <command>`:
+
+| Surface | Key commands |
+|---|---|
+| **Quickstart** | **`vei quickstart run`**, **`vei doctor`**, `vei eval smoke run` |
+| **Test / Eval** | **`vei eval benchmark`**, `vei eval demo`, `vei eval showcase`, **`vei eval llm-test run`**, `vei eval agent-demo run`, `vei run start`, `vei admin report` |
+| **Governor / Control** | `vei workspace twin serve`, `vei workspace twin onboard`, `vei workspace ingest agent-activity`, `vei provenance access-review`, `vei provenance verify`, `vei provenance export` |
+| **Sandbox / What-if** | `vei whatif candidates`, `vei whatif events`, `vei whatif open`, `vei whatif experiment` (`--mode e_jepa` for the trained backend), `vei whatif rank`, `vei whatif pack run` |
+| **Train / Data** | `vei rollout procurement`, `vei train bc`, `vei workflow package-env` |
+| **Knowledge / Skills / Wiki** | `vei knowledge compose`, `vei knowledge ingest`, `vei knowledge skillmap build`, `vei knowledge skillmap refresh`, `vei wiki build`, `vei wiki refresh`, `vei wiki query` |
+| **Workflow intelligence** | `vei workflow mine`, `vei workflow label`, `vei workflow promote`, `vei workflow refresh` |
+| **Inspect / Debug** | `vei admin world list`, `vei inspect fidelity`, `vei workspace context timeline`, `vei workspace context readiness`, `vei admin visualize`, **`vei ui serve`** |
+| **Project / Workspace** | `vei workspace project init`, `vei workspace project show`, `vei admin blueprint`, `vei admin contract`, `vei admin release` |
 
 ## Repo Checks
 
@@ -409,8 +180,17 @@ Exit codes: `0` pass · `1` test/gate failure · `2` cost ceiling exceeded · `3
 - [docs/EXAMPLES.md](docs/EXAMPLES.md) — Enron, public history, and Clearwater worked examples
 - [docs/EVALS.md](docs/EVALS.md) — evaluation layers: factual metrics, LLM judge, human audit
 - [docs/RL_GYM.md](docs/RL_GYM.md) — scoped RL-training plan over deterministic process contracts
+- [docs/CONNECTORS.md](docs/CONNECTORS.md) — PipesHub pilot and Microsoft Teams Graph capture runbooks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup, daily loop, module boundaries, PR workflow
+
+## About Strange Lab
+
+Strange Lab builds infrastructure for enterprise AI agents — testing, governance, replay, and training over real company history. VEI is the first public piece of that stack.
+
+- GitHub: [github.com/Strange-Lab-AI](https://github.com/Strange-Lab-AI)
+- Web: [strangelab.ai](https://strangelab.ai)
+- Questions or bugs: open an issue on this repo.
 
 ## License
 
-Business Source License 1.1. See [LICENSE](LICENSE). Change date: `2030-03-10`. Change license: `GPL-2.0-or-later`.
+Business Source License 1.1. See [LICENSE](LICENSE). BSL today; converts to GPL-2.0-or-later on 2030-03-10.
