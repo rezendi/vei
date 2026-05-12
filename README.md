@@ -2,13 +2,13 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Strange-Lab-AI/vei)
 
-VEI turns a company's email, Slack, tickets, docs, CRM, identity, and agent traces into a replayable company environment: one canonical event spine that can be branched, audited, mined for workflows, and packaged into process-training worlds for AI agents.
+VEI turns a company's email, Slack, tickets, docs, CRM, identity, and agent traces into a replayable company environment: building a canonical event spine that can be branched, audited, mined for workflows, and packaged into process-training worlds for AI agents.
 
 From [Strange Lab](https://strangelab.ai). The first public release of our enterprise-AI infrastructure stack.
 
 ## The bet
 
-Every company that runs agents will need a machine-readable model of how work actually happens. VEI's bet is that the right primitive is a canonical event spine: who did what, when, to what, with provenance.
+Every company will need a machine-readable model of how work actually happens. VEI's bet is that the right primitive is a canonical event spine: who did what, when, to what, with provenance.
 
 ```mermaid
 flowchart TB
@@ -76,7 +76,7 @@ pip install -e ".[jepa]"
 
 ## What VEI gives you
 
-Five surfaces, one spine:
+Five surfaces across one spine:
 
 - **Knowledge / Wiki / Skill Map** — materialize a company wiki with citations; compile draft agent skills from evidence.
 - **Workflow Intelligence / Train** — mine repeated work, promote reviewed task specs, and package scoped process-training data. See [docs/RL_GYM.md](docs/RL_GYM.md).
@@ -84,7 +84,8 @@ Five surfaces, one spine:
 - **Governor / Control** — gate writes, record agent activity, export evidence packs. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Test / Eval** — run agents against fixed company worlds and score them against contracts. See [docs/EVALS.md](docs/EVALS.md).
 
-## Open a saved example
+<details>
+<summary>Open a saved example</summary>
 
 Open the flagship Enron what-if bundle from a fresh clone — no API key needed:
 
@@ -98,7 +99,10 @@ Studio exposes the what-if surface as two modes: **Live archive** for full-histo
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for all saved bundles (Enron, public history, Clearwater).
 
-## Bring your own company history
+</details>
+
+<details>
+<summary>Bring your own company history</summary>
 
 ```bash
 # Normalize raw exports into a verified bundle
@@ -123,7 +127,10 @@ For managed connector pipelines and tenant-level backfills:
 - **PipesHub** (Gmail, Drive, Jira, Confluence, Salesforce, OneDrive, Outlook) — `pip install -e ".[pipeshub]"` then `vei connectors pipeshub up`. See [docs/CONNECTORS.md](docs/CONNECTORS.md#pipeshub).
 - **Microsoft Teams via Graph** — direct tenant capture using `vei context teams capture`. See [docs/CONNECTORS.md](docs/CONNECTORS.md#microsoft-teams).
 
-## Run a real LLM agent against the twin
+</details>
+
+<details>
+<summary>Run an LLM agent against the twin</summary>
 
 ```bash
 vei eval llm-test run \
@@ -142,7 +149,10 @@ VEI_OPENAI_REASONING_EFFORT=low vei eval benchmark \
 
 Named-family benchmark runs derive the agent task from the workflow objective, constraints, relevant tools, and known argument anchors. The result includes both the enterprise score and workflow-contract validation.
 
-## CLI Map
+</details>
+
+<details>
+<summary>CLI map</summary>
 
 All commands live under `vei <group> <command>`:
 
@@ -158,7 +168,10 @@ All commands live under `vei <group> <command>`:
 | **Inspect / Debug** | `vei admin world list`, `vei inspect fidelity`, `vei workspace context timeline`, `vei workspace context readiness`, `vei admin visualize`, **`vei ui serve`** |
 | **Project / Workspace** | `vei workspace project init`, `vei workspace project show`, `vei admin blueprint`, `vei admin contract`, `vei admin release` |
 
-## Repo Checks
+</details>
+
+<details>
+<summary>Repo checks</summary>
 
 ```bash
 make check          # format, lint, types, import boundaries, security
@@ -171,26 +184,21 @@ make clean-workspace  # clears caches; leaves _vei_out/ runs alone
 
 Exit codes: `0` pass · `1` test/gate failure · `2` cost ceiling exceeded · `3` infrastructure failure · `4` threshold/config missing.
 
+</details>
+
 ## Where to Go Next
 
 - [docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md) — fast repo briefing and 10-minute checklist for humans and agents
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, five infrastructure surfaces, runtime shape, what is and isn't learned
-- [docs/GLOSSARY.md](docs/GLOSSARY.md) — every term of art used in this repo, defined in one place
 - [docs/WHATIF.md](docs/WHATIF.md) — world-model and what-if command reference
 - [docs/EXAMPLES.md](docs/EXAMPLES.md) — Enron, public history, and Clearwater worked examples
-- [docs/EVALS.md](docs/EVALS.md) — evaluation layers: factual metrics, LLM judge, human audit
-- [docs/RL_GYM.md](docs/RL_GYM.md) — scoped RL-training plan over deterministic process contracts
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — PipesHub pilot and Microsoft Teams Graph capture runbooks
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup, daily loop, module boundaries, PR workflow
 
 ## About Strange Lab
 
-Strange Lab builds infrastructure for enterprise AI agents — testing, governance, replay, and training over real company history. VEI is the first public piece of that stack.
+Strange Lab builds world models for work — testing, governance, replay, and training over real organisational history. VEI is the first piece of that stack.
 
 - GitHub: [github.com/Strange-Lab-AI](https://github.com/Strange-Lab-AI)
 - Web: [strangelab.ai](https://strangelab.ai)
 - Questions or bugs: open an issue on this repo.
-
-## License
-
-Business Source License 1.1. See [LICENSE](LICENSE). BSL today; converts to GPL-2.0-or-later on 2030-03-10.
