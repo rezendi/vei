@@ -140,6 +140,7 @@ of letting metadata become the real product contract.
 > This section covers the JEPA-style learned world model, strategic state points, leakage rules, and counterfactual workflows. Skip it if you're just getting started with the repo.
 >
 > For the canonical breakdown of what is learned vs. heuristic vs. external, see [ARCHITECTURE.md](ARCHITECTURE.md) § What Is and Isn't Learned.
+> For the training-loop diagram, target factory, and trust boundaries, see [WORLD_MODEL_TRAINING.md](WORLD_MODEL_TRAINING.md).
 
 ### Mental model
 

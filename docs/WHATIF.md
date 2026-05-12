@@ -499,8 +499,15 @@ vei whatif benchmark study \
 
 The pooled learned world-model path is `vei whatif benchmark build-multitenant`.
 It accepts multiple normalized company-history snapshots and builds one dataset
-with strict per-company time splits. A typical Enron + Dispatch + new-company
-run is:
+with strict per-company time splits.
+
+See [WORLD_MODEL_TRAINING.md](WORLD_MODEL_TRAINING.md) for the architecture
+diagram behind this flow: connectors feed the canonical event spine, branch
+windows produce observed future tails, the target factory derives structural,
+real-outcome, curated semantic, and proxy/debug heads, and the target manifest
+masks unsupported heads before JEPA training.
+
+A typical Enron + Dispatch + new-company run is:
 
 - train on earlier rows from every company
 - validate on later but non-final rows for every company

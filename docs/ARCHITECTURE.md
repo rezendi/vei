@@ -453,6 +453,26 @@ VEI keeps the current router twins, but the public ontology now groups them as f
 
 VEI today is a deterministic enterprise simulator, governed twin, replay platform, and learned forecasting workbench over canonical event spines. Its strongest claims are factual forecasting, decision support, governed control, and scoped process-training surfaces backed by event evidence.
 
+For the box-level training architecture, trust boundaries, target factory, and
+daily update path, see [WORLD_MODEL_TRAINING.md](WORLD_MODEL_TRAINING.md).
+
+```mermaid
+flowchart LR
+    A["Connectors / exports"] --> B["Canonical event spine"]
+    B --> C["Branch + future windows"]
+    C --> D["Target factory"]
+    D --> E["Target manifest"]
+    E --> F["JEPA world model"]
+    F --> G["Counterfactual scoring"]
+    G --> H["CEO / operator report"]
+    I["LLM / human proposals"] --> G
+```
+
+The key rule is that LLMs can propose, summarize, label, and augment, but they
+are not the truth layer. Canonical events and real system outcomes are the truth
+layer; the target manifest decides which structural, real-outcome, semantic, or
+proxy heads are supported enough to train or rank on.
+
 **What is learned (in-repo, under `vei.dynamics`):**
 
 - The reference backend (`vei.dynamics.backends.reference`) and benchmark bridge are real PyTorch forecasting paths trained on canonical event sequences with AUROC, ECE, business-head MAE, and held-out case evaluation.
