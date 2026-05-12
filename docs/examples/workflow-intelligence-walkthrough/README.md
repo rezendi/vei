@@ -157,11 +157,11 @@ Final claim boundary:
 
 ## Private Data Boundary
 
-Dispatch and Powr of You bundles can be used as private local inputs under
-`_vei_out/datasets/`. They are useful for local validation, and the test suite
-has optional skipped tests for them. They are not used as this repo-owned
-walkthrough fixture because raw exports and full normalized bundles are private,
-large, and intentionally ignored by git.
+Private tenant bundles can be used as local inputs under `_vei_out/datasets/`.
+They are useful for local validation, and the test suite can include optional
+skipped tests for them. They are not used as this repo-owned walkthrough fixture
+because raw exports and full normalized bundles are private, large, and
+intentionally ignored by git.
 
-No external Dispatch, Powr of You, or process-mining library is required for
-this path. The walkthrough exercises VEI's current `vei workflow` commands.
+No external private tenant bundle or process-mining library is required for this
+path. The walkthrough exercises VEI's current `vei workflow` commands.

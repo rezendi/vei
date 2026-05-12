@@ -371,7 +371,7 @@ only; JEPA scores the predicted future vector.
 ```bash
 vei whatif benchmark strategic-state-points \
   --input news=_vei_out/datasets/news_americanstories_1859_1865/context_snapshot.json \
-  --checkpoint _vei_out/world_model_multitenant_jepa/enron_dispatch_powr_news_fuller_cap512_h12_20260427/model_runs/jepa_latent/model.pt \
+  --checkpoint _vei_out/world_model_multitenant_jepa/current/model_runs/jepa_latent/model.pt \
   --artifacts-root _vei_out/world_model_strategic_state_points \
   --label news_public_world_statepoints \
   --as-of news=1861-04-12 \
@@ -388,8 +388,8 @@ only when an explicit direct-provider API run is intended.
 
 ### Current Local Result
 
-The latest local four-group run includes Enron, Dispatch, Powr of You, and a
-small AmericanStories news sample. The human-facing current output is:
+The latest local four-group run includes Enron, two private tenant bundles, and
+a small AmericanStories news sample. The human-facing current output is:
 
 ```text
 _vei_out/world_model_current/world_model_decision_summary.csv

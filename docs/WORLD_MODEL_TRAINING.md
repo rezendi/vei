@@ -100,13 +100,13 @@ Universal structural heads:
 - `deadline_sla_miss_count`
 - `evidence_completeness`
 
-Current v0 domain packs:
+Example v0 domain packs:
 
 | Tenant/domain | Heads |
 |---|---|
-| Py Insights | `onboarding_integrity`, `user_trust_confusion`, `release_readiness` |
-| Powr of You | `data_coverage_gap`, `compliance_privacy_sensitivity`, `repeated_clarification_loop` |
-| Dispatch | `product_readiness_proof`, `gtm_narrative_consistency`, `partner_customer_traction` |
+| SaaS onboarding/product | `onboarding_integrity`, `user_trust_confusion`, `release_readiness` |
+| Consumer-data research | `data_coverage_gap`, `compliance_privacy_sensitivity`, `repeated_clarification_loop` |
+| Startup product/GTM | `product_readiness_proof`, `gtm_narrative_consistency`, `partner_customer_traction` |
 
 Legacy global proxy heads stay available as `proxy_global_v1` diagnostics. They
 are useful for comparison and debugging, but they are not product-grade ranking
@@ -123,9 +123,9 @@ opinion. A label must fit the schema and cite future events:
   "value": 0.74,
   "confidence": 0.82,
   "horizon": "30d",
-  "evidence_event_ids": ["pyinsights:history_123"],
+  "evidence_event_ids": ["tenant:history_123"],
   "supporting_spans": ["qa passed"],
-  "negative_evidence": ["Android callback still under review"],
+  "negative_evidence": ["mobile callback still under review"],
   "label_source": "llm_semantic_v1"
 }
 ```
@@ -155,9 +155,9 @@ The manifest records:
 - reviewed examples
 - known blind spots
 
-Unsupported heads are masked, not zero-filled. This matters: if Py Insights has
-no credible `partner_customer_traction` label, the model should not learn that
-the value is zero. It should learn that the target is absent.
+Unsupported heads are masked, not zero-filled. This matters: if a tenant has no
+credible `partner_customer_traction` label, the model should not learn that the
+value is zero. It should learn that the target is absent.
 
 ## Training Rows
 

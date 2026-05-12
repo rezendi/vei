@@ -223,25 +223,10 @@ vei workspace twin onboard \
   --base-url notion=/path/to/notion-export.zip
 ```
 
-The repo also includes a local-only helper for the real Dispatch startup archives. It auto-detects `~/Downloads/dispatch-gmail.zip` and `~/Downloads/dispatch-notion.zip`, builds a private workspace under `_vei_out/dispatch-real-example`, and writes a readiness plus timeline summary beside it:
-
-```bash
-python scripts/build_dispatch_local_example.py
-```
-
-A matching local-only helper exists for the private Powr of You Gmail, ClickUp, and Drive exports. It reads from `~/Downloads/onedrive dload` by default, writes `_vei_out/datasets/powrofyou`, and emits the same `context_snapshot.json`, canonical timeline sidecars, readiness report, and bundle build report:
-
-```bash
-python scripts/build_powrofyou_private_bundle.py
-```
-
-By default the helper reads the full Gmail MBOX; pass `--mail-limit <n>` only for bounded smoke runs. The generated files contain private source content. Keep them under `_vei_out/` or another ignored/out-of-repo local path; the helper refuses to write inside the repo to a non-ignored path unless `--unsafe-allow-tracked-output` is passed. The PoY `readiness.json` also separates exploratory world-model readiness from deployment readiness: `ready_for_learned_world_model` means the local history is usable for exploratory model work, while `daily_company_deployment.ready` remains `false` until a separate privacy review, freshness gate, and outcome logging loop exist.
-
-The repo-owned drift check is fixture-backed and does not require the private exports:
-
-```bash
-pytest -q tests/test_powrofyou_private_bundle.py tests/test_canonical_history_stitching.py
-```
+Some maintainer-only private-bundle helpers exist for local exports. They must
+write generated source content only under ignored paths such as `_vei_out/`.
+They are fixture-tested and are not required for public examples or fresh-clone
+workflows.
 
 ### From a quickstart / playable workspace
 
@@ -507,7 +492,7 @@ windows produce observed future tails, the target factory derives structural,
 real-outcome, curated semantic, and proxy/debug heads, and the target manifest
 masks unsupported heads before JEPA training.
 
-A typical Enron + Dispatch + new-company run is:
+A typical Enron + private-tenant + new-company run is:
 
 - train on earlier rows from every company
 - validate on later but non-final rows for every company
@@ -535,17 +520,17 @@ run.
 ```bash
 vei whatif benchmark build-multitenant \
   --input enron=/path/to/enron/context_snapshot.json \
-  --input dispatch=/path/to/dispatch/context_snapshot.json \
-  --input powrofyou=/path/to/powrofyou/context_snapshot.json \
+  --input tenant_a=/path/to/tenant-a/context_snapshot.json \
+  --input tenant_b=/path/to/tenant-b/context_snapshot.json \
   --artifacts-root _vei_out/world_model_multitenant_jepa \
-  --label enron_dispatch_powrofyou \
+  --label enron_private_tenants \
   --heldout-cases-per-tenant 4 \
   --future-horizon-events 12 \
   --max-branch-rows-per-thread 512 \
   --candidate-mode template
 
 vei whatif benchmark train \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_powrofyou \
+  --root _vei_out/world_model_multitenant_jepa/enron_private_tenants \
   --model-id jepa_latent \
   --epochs 10 \
   --batch-size 128 \
@@ -554,30 +539,31 @@ vei whatif benchmark train \
   --validation-split test
 
 vei whatif benchmark eval \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_powrofyou \
+  --root _vei_out/world_model_multitenant_jepa/enron_private_tenants \
   --model-id jepa_latent
 
 # Optional factual comparator under the same split
 vei whatif benchmark train \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_powrofyou \
+  --root _vei_out/world_model_multitenant_jepa/enron_private_tenants \
   --model-id heuristic_baseline \
   --train-split train \
   --train-split validation \
   --validation-split test
 
 vei whatif benchmark eval \
-  --root _vei_out/world_model_multitenant_jepa/enron_dispatch_powrofyou \
+  --root _vei_out/world_model_multitenant_jepa/enron_private_tenants \
   --model-id heuristic_baseline
 ```
 
-Point a Dispatch what-if at the pooled checkpoint through the existing reference backend boundary:
+Point a tenant what-if at the pooled checkpoint through the existing reference
+backend boundary:
 
 ```bash
-VEI_REFERENCE_BACKEND_CHECKPOINT=_vei_out/world_model_multitenant_jepa/enron_dispatch_powrofyou/model_runs/jepa_latent/model.pt \
+VEI_REFERENCE_BACKEND_CHECKPOINT=_vei_out/world_model_multitenant_jepa/enron_private_tenants/model_runs/jepa_latent/model.pt \
   vei whatif experiment \
     --source company_history \
-    --source-dir /path/to/dispatch/context_snapshot.json \
-    --label dispatch_reference_forecast \
+    --source-dir /path/to/tenant-a/context_snapshot.json \
+    --label tenant_reference_forecast \
     --forecast-backend reference \
     --counterfactual-prompt "Route the incident to an accountable owner, hold broad sends, and send one controlled status update."
 ```
@@ -606,9 +592,9 @@ future-head prediction for each candidate action.
 
 ```bash
 vei whatif benchmark strategic-state-points \
-  --input dispatch=_vei_out/datasets/dispatch_real/context_snapshot.json \
-  --input powrofyou=_vei_out/datasets/powrofyou/context_snapshot.json \
-  --checkpoint _vei_out/world_model_multitenant_jepa/enron_dispatch_powr_news_fuller_cap512_h12_20260427/model_runs/jepa_latent/model.pt \
+  --input tenant_a=_vei_out/datasets/tenant_a/context_snapshot.json \
+  --input tenant_b=_vei_out/datasets/tenant_b/context_snapshot.json \
+  --checkpoint _vei_out/world_model_multitenant_jepa/current/model_runs/jepa_latent/model.pt \
   --artifacts-root _vei_out/world_model_strategic_state_points \
   --label current_strategic_state_points \
   --decisions-per-tenant 3 \
@@ -660,9 +646,9 @@ reference backend under `data/enron/reference_backend/`. It reports factual
 next-event AUROC `0.787817`, Brier `0.332025`, and calibration ECE `0.373951`
 on the held-out Enron validation split.
 
-The latest local pooled JEPA run combined the Enron Rosetta sample, Dispatch,
-Powr of You, and a small AmericanStories historical-news sample under
-`_vei_out/world_model_multitenant_jepa/enron_dispatch_powr_news_fuller_cap512_h12_20260427/`.
+The latest local pooled JEPA run combined the Enron Rosetta sample, two private
+tenant bundles, and a small AmericanStories historical-news sample under
+`_vei_out/world_model_multitenant_jepa/current/`.
 It built `4,206` train rows, `785` validation rows, `965` test rows, and `12`
 final held-out cases. This is the fuller action-conditioned cutover: doctrine
 text, pre-as-of state, structured action schema, and raw candidate action text
@@ -677,7 +663,7 @@ future vector is predicted.
 
 The latest local strategic state-point run selected `12` LLM-proposed decisions
 and scored `96` candidate actions under
-`_vei_out/world_model_strategic_state_points/enron_dispatch_powr_news_frontier_gpt54_statepoints_20260427/`.
+`_vei_out/world_model_strategic_state_points/current/`.
 The saved proposal manifest records the exact proposal model used for that run.
 New strategic proposal reruns default to `gpt-5.3-codex-spark` through Codex and use the
 pooled action-conditioned JEPA checkpoint for scoring. Treat the current
