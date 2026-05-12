@@ -54,10 +54,19 @@ from .models import (
     WhatIfResearchHypothesisLabel,
     WhatIfWorld,
 )
+from .target_layer import (
+    CURATED_TARGET_LAYER_VERSION,
+    PROXY_GLOBAL_HEAD_VERSION,
+    build_curated_targets,
+    build_target_manifest,
+    semantic_labeling_window_payload,
+)
 
 CandidateGenerationMode = Literal["llm", "template"]
 
 _MULTITENANT_PACK_ID = "multitenant_world_model_v1"
+_SEMANTIC_LABEL_BATCH_MAX_WINDOWS = 100
+_SEMANTIC_LABEL_BATCH_REVIEW_SAMPLE_SIZE = 20
 _REQUIRED_POSTURES = (
     "containment_hold",
     "narrow_controlled_response",
@@ -129,12 +138,15 @@ def build_multitenant_world_model_benchmark(
     judge_template_path = root / "judged_ranking_template.json"
     audit_template_path = root / "audit_record_template.json"
     data_provenance_path = root / "data_provenance_report.json"
+    semantic_label_batch_path = root / "semantic_labeling_batch.json"
     doctrine_root = root / "doctrine_packets"
     dossier_root = root / "dossiers"
     dataset_root = root / "dataset"
+    target_manifest_root = root / "target_manifests"
     dataset_root.mkdir(parents=True, exist_ok=True)
     dossier_root.mkdir(parents=True, exist_ok=True)
     doctrine_root.mkdir(parents=True, exist_ok=True)
+    target_manifest_root.mkdir(parents=True, exist_ok=True)
 
     split_rows: dict[str, list[WhatIfBenchmarkDatasetRow]] = {
         "train": [],
@@ -144,7 +156,9 @@ def build_multitenant_world_model_benchmark(
     }
     heldout_candidates: list[_RowCandidate] = []
     candidate_manifest: list[dict[str, Any]] = []
+    semantic_label_windows: list[dict[str, Any]] = []
     doctrine_packet_paths: dict[str, str] = {}
+    target_manifest_paths: dict[str, str] = {}
     leakage_manifest: dict[str, Any] = {
         "checks": {},
         "tenants": {},
@@ -171,6 +185,13 @@ def build_multitenant_world_model_benchmark(
         )
         if not tenant_rows:
             raise ValueError(f"no eligible branch rows for tenant {source.tenant_id!r}")
+        semantic_label_windows.extend(
+            _semantic_label_windows_for_tenant(
+                tenant_id=source.tenant_id,
+                rows=tenant_rows,
+                source_count=len(sources),
+            )
+        )
         tenant_splits, tenant_heldout = _split_tenant_rows(
             tenant_rows,
             heldout_cases_per_tenant=heldout_cases_per_tenant,
@@ -185,6 +206,16 @@ def build_multitenant_world_model_benchmark(
             encoding="utf-8",
         )
         doctrine_packet_paths[source.tenant_id] = str(doctrine_packet_path)
+        target_manifest = build_target_manifest(
+            tenant_id=source.tenant_id,
+            rows=[item.row for item in tenant_rows],
+        )
+        target_manifest_path = target_manifest_root / f"{_slug(source.tenant_id)}.json"
+        target_manifest_path.write_text(
+            target_manifest.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        target_manifest_paths[source.tenant_id] = str(target_manifest_path)
         tenant_split_counts = {
             split_name: len(rows) for split_name, rows in tenant_splits.items()
         }
@@ -200,6 +231,7 @@ def build_multitenant_world_model_benchmark(
             "future_horizon_events": future_horizon_events,
             "doctrine_packet_path": str(doctrine_packet_path),
             "doctrine_text_sha256": doctrine_text_sha256(doctrine_packet),
+            "target_manifest_path": str(target_manifest_path),
         }
         provenance_manifest["tenants"][source.tenant_id] = _tenant_provenance_payload(
             source=source,
@@ -210,6 +242,9 @@ def build_multitenant_world_model_benchmark(
             max_branch_rows_per_thread=max_branch_rows_per_thread,
             doctrine_packet=doctrine_packet,
             doctrine_packet_path=doctrine_packet_path,
+        )
+        provenance_manifest["tenants"][source.tenant_id]["target_manifest_path"] = str(
+            target_manifest_path
         )
 
     benchmark_cases: list[WhatIfBenchmarkCase] = []
@@ -315,6 +350,24 @@ def build_multitenant_world_model_benchmark(
         json.dumps(candidate_manifest, indent=2),
         encoding="utf-8",
     )
+    semantic_label_batch_payload = {
+        "version": "semantic_labeling_batch_v0",
+        "target_layer_version": CURATED_TARGET_LAYER_VERSION,
+        "label_source": "llm_semantic_v1",
+        "purpose": (
+            "Offline citation-required labeling queue for v0 curated domain heads."
+        ),
+        "window_count": len(semantic_label_windows),
+        "manual_review_sample_size": min(
+            _SEMANTIC_LABEL_BATCH_REVIEW_SAMPLE_SIZE,
+            len(semantic_label_windows),
+        ),
+        "windows": semantic_label_windows[:_SEMANTIC_LABEL_BATCH_MAX_WINDOWS],
+    }
+    semantic_label_batch_path.write_text(
+        json.dumps(semantic_label_batch_payload, indent=2),
+        encoding="utf-8",
+    )
     leave_one_tenant_out_build_roots = _write_leave_one_tenant_out_builds(
         root=root,
         label=label,
@@ -335,6 +388,7 @@ def build_multitenant_world_model_benchmark(
     provenance_manifest["dataset_split_counts"] = split_counts
     provenance_manifest["tenant_count"] = len(sources)
     provenance_manifest["doctrine_packet_paths"] = doctrine_packet_paths
+    provenance_manifest["target_manifest_paths"] = target_manifest_paths
     provenance_manifest["leave_one_tenant_out"] = leave_one_tenant_out
     provenance_manifest["leave_one_tenant_out_build_roots"] = (
         leave_one_tenant_out_build_roots
@@ -361,10 +415,20 @@ def build_multitenant_world_model_benchmark(
             "future_horizon_events": future_horizon_events,
             "max_branch_rows_per_thread": max_branch_rows_per_thread,
             "candidate_generation_manifest_path": str(candidate_manifest_path),
+            "semantic_labeling_batch_path": str(semantic_label_batch_path),
             "leakage_report_path": str(leakage_path),
             "data_provenance_report_path": str(data_provenance_path),
             "doctrine_packet_paths": doctrine_packet_paths,
             "doctrine_context": "archive_derived_text_v1",
+            "target_layer": {
+                "version": CURATED_TARGET_LAYER_VERSION,
+                "target_manifest_paths": target_manifest_paths,
+                "proxy_debug_head_version": PROXY_GLOBAL_HEAD_VERSION,
+                "ranking_policy": (
+                    "supported_structural_and_curated_heads_only; "
+                    "proxy_global_v1 kept as diagnostics"
+                ),
+            },
             "leave_one_tenant_out_available": True,
             "leave_one_tenant_out_build_roots": leave_one_tenant_out_build_roots,
         },
@@ -542,6 +606,30 @@ def _leave_one_tenant_out_payload(
     return payload
 
 
+def _semantic_label_windows_for_tenant(
+    *,
+    tenant_id: str,
+    rows: Sequence[_RowCandidate],
+    source_count: int,
+) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    per_tenant_limit = max(
+        1,
+        _SEMANTIC_LABEL_BATCH_MAX_WINDOWS // max(source_count, 1),
+    )
+    windows: list[dict[str, Any]] = []
+    for item in rows[:per_tenant_limit]:
+        window = semantic_labeling_window_payload(
+            tenant_id=tenant_id,
+            window_id=item.row.row_id,
+            future_events=item.future_events,
+        )
+        if window["target_ids"]:
+            windows.append(window)
+    return windows
+
+
 def _write_leave_one_tenant_out_builds(
     *,
     root: Path,
@@ -562,8 +650,10 @@ def _write_leave_one_tenant_out_builds(
         tenant_root = loto_root / _slug(tenant_id)
         dataset_root = tenant_root / "dataset"
         dossier_root = tenant_root / "dossiers"
+        target_manifest_root = tenant_root / "target_manifests"
         dataset_root.mkdir(parents=True, exist_ok=True)
         dossier_root.mkdir(parents=True, exist_ok=True)
+        target_manifest_root.mkdir(parents=True, exist_ok=True)
         build_path = tenant_root / "branch_point_benchmark_build.json"
         heldout_cases_path = tenant_root / "heldout_cases.json"
         judge_template_path = tenant_root / "judged_ranking_template.json"
@@ -598,6 +688,28 @@ def _write_leave_one_tenant_out_builds(
             _write_jsonl(split_path, rows)
             split_paths[split_name] = str(split_path)
             split_counts[split_name] = len(rows)
+
+        target_manifest_paths: dict[str, str] = {}
+        all_loto_rows = [row for rows in tenant_split_rows.values() for row in rows]
+        for manifest_source in sources:
+            manifest_prefix = f"{_slug(manifest_source.tenant_id)}:"
+            manifest_rows = [
+                row for row in all_loto_rows if row.row_id.startswith(manifest_prefix)
+            ]
+            if not manifest_rows:
+                continue
+            target_manifest = build_target_manifest(
+                tenant_id=manifest_source.tenant_id,
+                rows=manifest_rows,
+            )
+            target_manifest_path = (
+                target_manifest_root / f"{_slug(manifest_source.tenant_id)}.json"
+            )
+            target_manifest_path.write_text(
+                target_manifest.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+            target_manifest_paths[manifest_source.tenant_id] = str(target_manifest_path)
 
         tenant_cases = [
             case for case in benchmark_cases if case.case_id.startswith(tenant_prefix)
@@ -643,6 +755,15 @@ def _write_leave_one_tenant_out_builds(
                 "future_horizon_events": future_horizon_events,
                 "max_branch_rows_per_thread": max_branch_rows_per_thread,
                 "doctrine_context": "archive_derived_text_v1",
+                "target_layer": {
+                    "version": CURATED_TARGET_LAYER_VERSION,
+                    "target_manifest_paths": target_manifest_paths,
+                    "proxy_debug_head_version": PROXY_GLOBAL_HEAD_VERSION,
+                    "ranking_policy": (
+                        "supported_structural_and_curated_heads_only; "
+                        "proxy_global_v1 kept as diagnostics"
+                    ),
+                },
             },
         )
         (dataset_root / "dataset_manifest.json").write_text(
@@ -817,6 +938,16 @@ def _row_candidate_from_branch(
             "case_id": safe_case_id,
         }
     )
+    normalized_future_events = [
+        event.model_copy(
+            update={
+                "event_id": _safe_id(source.tenant_id, event.event_id),
+                "thread_id": safe_thread_id,
+                "case_id": _safe_id(source.tenant_id, event.case_id or raw_thread_id),
+            }
+        )
+        for event in future_events
+    ]
     doctrine_profile = classify_doctrine_decision(
         doctrine_packet,
         text=_decision_text_from_events(
@@ -885,6 +1016,11 @@ def _row_candidate_from_branch(
         observed_future_state=future_state,
         observed_targets=targets,
         observed_outcome_signals=outcome_targets_to_signals(targets),
+        curated_targets=build_curated_targets(
+            tenant_id=source.tenant_id,
+            branch_event=normalized_branch,
+            future_events=normalized_future_events,
+        ),
     )
     return _RowCandidate(
         tenant_id=source.tenant_id,

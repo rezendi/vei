@@ -33,6 +33,13 @@ from vei.whatif.models import (
     WhatIfObservedEvidenceHeads,
     WhatIfFutureStateHeads,
 )
+from vei.whatif.target_layer import (
+    CURATED_TARGET_HEAD_NAMES,
+    CURATED_TARGET_LAYER_VERSION,
+    PROXY_GLOBAL_HEAD_VERSION,
+    STRUCTURAL_HEAD_NAMES,
+    curated_target_values_and_mask,
+)
 
 _RANDOM_SEED = 42042
 _HOLDOUT_BATCH_SIZE = 256
@@ -104,6 +111,7 @@ _FUTURE_STATE_TARGET_NAMES = (
     "evidence_control",
     "external_confidence_pressure",
 )
+_CURATED_TARGET_NAMES = CURATED_TARGET_HEAD_NAMES
 _PHASE_VALUES = ("history", "branch", "generated", "historical_future")
 _SEQUENCE_TOKEN_LIMIT = 12
 _SEQUENCE_NUMERIC_WIDTH = 12
@@ -133,6 +141,8 @@ class _RowEncoding:
     business_target: np.ndarray | None
     objective_target: np.ndarray | None
     future_state_target: np.ndarray | None
+    curated_target: np.ndarray | None
+    curated_target_mask: np.ndarray | None
     row: WhatIfBenchmarkDatasetRow
 
 
@@ -147,6 +157,8 @@ class _BatchTensors:
     target_business: Any | None = None
     target_objective: Any | None = None
     target_future_state: Any | None = None
+    target_curated: Any | None = None
+    target_curated_mask: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +168,7 @@ class _PredictionBatch:
     business_values: np.ndarray | None = None
     objective_values: np.ndarray | None = None
     future_state_values: np.ndarray | None = None
+    curated_values: np.ndarray | None = None
     latent_values: np.ndarray | None = None
 
 
@@ -166,6 +179,7 @@ class _RowPrediction:
     business_values: np.ndarray | None = None
     objective_values: np.ndarray | None = None
     future_state_values: np.ndarray | None = None
+    curated_values: np.ndarray | None = None
     latent_values: np.ndarray | None = None
 
 
@@ -300,6 +314,8 @@ def _train_from_request(path: Path) -> WhatIfBenchmarkTrainResult:
             f"business_heads={len(_BUSINESS_TARGET_NAMES)}",
             "objective_heads=0_not_trained_policy_view_only",
             f"future_state_heads={len(_FUTURE_STATE_TARGET_NAMES)}",
+            f"curated_target_heads={len(_CURATED_TARGET_NAMES)}",
+            "proxy_global_v1_heads=debug_only",
             f"action_text_encoder={preprocessor.action_text_encoder_version}",
             f"action_text_width={preprocessor.action_text_vector_width}",
         ],
@@ -557,6 +573,10 @@ def _predict_payloads(
     _load_compatible_state_dict(model, checkpoint["state_dict"])
     model.eval()
     checkpoint_id = _file_sha256(checkpoint_path)
+    target_layer_metadata = checkpoint["metadata"].get("target_layer") or {}
+    curated_targets_available = (
+        target_layer_metadata.get("version") == CURATED_TARGET_LAYER_VERSION
+    )
 
     encoded_rows = [preprocessor.encode_row_for_predict(row) for row in rows]
     predictions = predict_rows(
@@ -580,6 +600,11 @@ def _predict_payloads(
         future_state_heads = preprocessor.decode_future_state(
             prediction.future_state_values,
         )
+        curated_target_heads = (
+            preprocessor.decode_curated_targets(prediction.curated_values)
+            if curated_targets_available
+            else {}
+        )
         latent_vector = (
             prediction.latent_values.astype(float).tolist()
             if prediction.latent_values is not None
@@ -595,6 +620,9 @@ def _predict_payloads(
                 "evidence_heads": evidence_heads.model_dump(mode="json"),
                 "business_heads": business_heads.model_dump(mode="json"),
                 "future_state_heads": future_state_heads.model_dump(mode="json"),
+                "curated_target_heads": curated_target_heads,
+                "curated_targets_available": curated_targets_available,
+                "target_layer": target_layer_metadata,
                 "objective_scores": preprocessor.decode_objective_scores(
                     prediction.objective_values
                 ),
@@ -707,6 +735,8 @@ class BenchmarkPreprocessor:
         objective_std: Sequence[float] | None = None,
         future_state_mean: Sequence[float] | None = None,
         future_state_std: Sequence[float] | None = None,
+        curated_target_mean: Sequence[float] | None = None,
+        curated_target_std: Sequence[float] | None = None,
         doctrine_text_vector_width: int = 0,
         doctrine_text_encoder_version: str = _DOCTRINE_TEXT_ENCODER_VERSION,
         action_text_vector_width: int = 0,
@@ -788,6 +818,22 @@ class BenchmarkPreprocessor:
             ),
             dtype=np.float32,
         )
+        self.curated_target_mean = np.asarray(
+            (
+                curated_target_mean
+                if curated_target_mean is not None
+                else np.zeros(len(_CURATED_TARGET_NAMES))
+            ),
+            dtype=np.float32,
+        )
+        self.curated_target_std = np.asarray(
+            (
+                curated_target_std
+                if curated_target_std is not None
+                else np.ones(len(_CURATED_TARGET_NAMES))
+            ),
+            dtype=np.float32,
+        )
 
     @classmethod
     def from_metadata(cls, payload: dict[str, Any]) -> "BenchmarkPreprocessor":
@@ -805,6 +851,8 @@ class BenchmarkPreprocessor:
             objective_std=payload.get("objective_std"),
             future_state_mean=payload.get("future_state_mean"),
             future_state_std=payload.get("future_state_std"),
+            curated_target_mean=payload.get("curated_target_mean"),
+            curated_target_std=payload.get("curated_target_std"),
             doctrine_text_vector_width=int(
                 (payload.get("doctrine_text_encoder") or {}).get("width", 0)
             ),
@@ -850,6 +898,24 @@ class BenchmarkPreprocessor:
             "future_state_target_names": list(_FUTURE_STATE_TARGET_NAMES),
             "future_state_mean": self.future_state_mean.tolist(),
             "future_state_std": self.future_state_std.tolist(),
+            "curated_target_names": list(_CURATED_TARGET_NAMES),
+            "curated_target_mean": self.curated_target_mean.tolist(),
+            "curated_target_std": self.curated_target_std.tolist(),
+            "target_layer": {
+                "version": CURATED_TARGET_LAYER_VERSION,
+                "trained_families": {
+                    "structural": list(STRUCTURAL_HEAD_NAMES),
+                    "curated_semantic": [
+                        name
+                        for name in _CURATED_TARGET_NAMES
+                        if name not in STRUCTURAL_HEAD_NAMES
+                    ],
+                    "proxy_debug": list(_BUSINESS_TARGET_NAMES)
+                    + list(_FUTURE_STATE_TARGET_NAMES),
+                },
+                "proxy_debug_head_version": PROXY_GLOBAL_HEAD_VERSION,
+                "masking": "unsupported curated targets are masked, not zero-filled",
+            },
             "doctrine_text_encoder": {
                 "version": self.doctrine_text_encoder_version,
                 "width": self.doctrine_text_vector_width,
@@ -886,8 +952,11 @@ class BenchmarkPreprocessor:
                 business_target=None,
                 objective_target=None,
                 future_state_target=None,
+                curated_target=None,
+                curated_target_mask=None,
                 row=row,
             )
+        curated_target, curated_target_mask = self._encode_curated_targets(row)
         return _RowEncoding(
             summary_values=summary_values,
             action_values=action_values,
@@ -898,6 +967,8 @@ class BenchmarkPreprocessor:
             business_target=self._encode_business(row.observed_business_outcomes),
             objective_target=self._encode_objectives(row),
             future_state_target=self._encode_future_state(row.observed_future_state),
+            curated_target=curated_target,
+            curated_target_mask=curated_target_mask,
             row=row,
         )
 
@@ -1033,6 +1104,27 @@ class BenchmarkPreprocessor:
             for index, name in enumerate(_FUTURE_STATE_TARGET_NAMES)
         }
         return WhatIfFutureStateHeads(**payload)
+
+    def decode_curated_targets(
+        self,
+        curated_values: Sequence[float] | None,
+    ) -> dict[str, float]:
+        if curated_values is None:
+            return {}
+        values = np.nan_to_num(
+            (np.asarray(curated_values, dtype=np.float32) * self.curated_target_std)
+            + self.curated_target_mean,
+            nan=0.0,
+            posinf=1.0,
+            neginf=0.0,
+        )
+        payload: dict[str, float] = {}
+        for index, name in enumerate(_CURATED_TARGET_NAMES):
+            value = max(0.0, float(values[index]))
+            if name not in STRUCTURAL_HEAD_NAMES:
+                value = min(1.0, value)
+            payload[name] = round(value, 3)
+        return payload
 
     def _encode_summary(
         self,
@@ -1240,6 +1332,16 @@ class BenchmarkPreprocessor:
         )
         return (raw_values - self.future_state_mean) / self.future_state_std
 
+    def _encode_curated_targets(
+        self,
+        row: WhatIfBenchmarkDatasetRow,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        values, masks = curated_target_values_and_mask(row.curated_targets)
+        raw_values = np.asarray(values, dtype=np.float32)
+        mask_values = np.asarray(masks, dtype=np.float32)
+        encoded = (raw_values - self.curated_target_mean) / self.curated_target_std
+        return encoded, mask_values
+
 
 def _fit_preprocessor(
     *,
@@ -1416,6 +1518,23 @@ def _fit_preprocessor(
         else np.ones(len(_FUTURE_STATE_TARGET_NAMES))
     )
     future_state_std = np.where(future_state_std < 1e-6, 1.0, future_state_std)
+    curated_values: list[list[float]] = []
+    curated_masks: list[list[float]] = []
+    for row in train_rows:
+        values, masks = curated_target_values_and_mask(row.curated_targets)
+        curated_values.append(values)
+        curated_masks.append(masks)
+    curated_value_matrix = np.asarray(curated_values, dtype=np.float32)
+    curated_mask_matrix = np.asarray(curated_masks, dtype=np.float32)
+    curated_mean = np.zeros(len(_CURATED_TARGET_NAMES), dtype=np.float32)
+    curated_std = np.ones(len(_CURATED_TARGET_NAMES), dtype=np.float32)
+    if len(curated_value_matrix):
+        for index in range(len(_CURATED_TARGET_NAMES)):
+            observed = curated_value_matrix[curated_mask_matrix[:, index] > 0.0, index]
+            if len(observed):
+                curated_mean[index] = float(observed.mean())
+                std = float(observed.std())
+                curated_std[index] = std if std >= 1e-6 else 1.0
     return BenchmarkPreprocessor(
         summary_feature_names=summary_names,
         summary_mean=summary_mean.tolist(),
@@ -1430,6 +1549,8 @@ def _fit_preprocessor(
         objective_std=objective_std.tolist(),
         future_state_mean=future_state_mean.tolist(),
         future_state_std=future_state_std.tolist(),
+        curated_target_mean=curated_mean.tolist(),
+        curated_target_std=curated_std.tolist(),
         doctrine_text_vector_width=doctrine_width,
         doctrine_text_encoder_version=_DOCTRINE_TEXT_ENCODER_VERSION,
         action_text_vector_width=action_text_width,
@@ -1567,6 +1688,7 @@ class TorchTrainer:
         business_dim = len(_BUSINESS_TARGET_NAMES)
         objective_dim = len(_OBJECTIVE_TARGET_NAMES)
         future_state_dim = len(_FUTURE_STATE_TARGET_NAMES)
+        curated_dim = len(_CURATED_TARGET_NAMES)
         latent_dim = 128
         event_type_count = max(len(self.preprocessor.event_type_names), 1)
 
@@ -1606,7 +1728,12 @@ class TorchTrainer:
                 )
                 self.target_encoder = nn.Sequential(
                     nn.Linear(
-                        target_dim + business_dim + future_state_dim + 1,
+                        target_dim
+                        + business_dim
+                        + future_state_dim
+                        + curated_dim
+                        + curated_dim
+                        + 1,
                         256,
                     ),
                     nn.ReLU(),
@@ -1622,6 +1749,7 @@ class TorchTrainer:
                 self.business_head = nn.Linear(latent_dim, business_dim)
                 self.objective_head = nn.Linear(latent_dim, objective_dim)
                 self.future_state_head = nn.Linear(latent_dim, future_state_dim)
+                self.curated_head = nn.Linear(latent_dim, curated_dim)
 
             def forward(
                 self,
@@ -1634,6 +1762,8 @@ class TorchTrainer:
                 target_business: Any | None = None,
                 target_objective: Any | None = None,
                 target_future_state: Any | None = None,
+                target_curated: Any | None = None,
+                target_curated_mask: Any | None = None,
             ) -> dict[str, Any]:
                 summary_action = self.summary_action_encoder(
                     self._concat([summary, action], dim=1)
@@ -1656,12 +1786,15 @@ class TorchTrainer:
                     "business": self.business_head(predicted_latent),
                     "objective": self.objective_head(predicted_latent),
                     "future_state": self.future_state_head(predicted_latent),
+                    "curated": self.curated_head(predicted_latent),
                 }
                 if (
                     target_binary is None
                     or target_regression is None
                     or target_business is None
                     or target_future_state is None
+                    or target_curated is None
+                    or target_curated_mask is None
                 ):
                     result["latent_loss"] = None
                     return result
@@ -1672,6 +1805,8 @@ class TorchTrainer:
                             target_regression,
                             target_business,
                             target_future_state,
+                            target_curated * target_curated_mask,
+                            target_curated_mask,
                         ],
                         dim=1,
                     )
@@ -1693,6 +1828,7 @@ class TorchTrainer:
         business_dim = len(_BUSINESS_TARGET_NAMES)
         objective_dim = len(_OBJECTIVE_TARGET_NAMES)
         future_state_dim = len(_FUTURE_STATE_TARGET_NAMES)
+        curated_dim = len(_CURATED_TARGET_NAMES)
         model_dim = 96
         event_type_count = max(len(self.preprocessor.event_type_names), 1)
 
@@ -1727,6 +1863,7 @@ class TorchTrainer:
                 self.business_head = nn.Linear(model_dim, business_dim)
                 self.objective_head = nn.Linear(model_dim, objective_dim)
                 self.future_state_head = nn.Linear(model_dim, future_state_dim)
+                self.curated_head = nn.Linear(model_dim, curated_dim)
 
             def forward(
                 self,
@@ -1739,6 +1876,8 @@ class TorchTrainer:
                 target_business: Any | None = None,
                 target_objective: Any | None = None,
                 target_future_state: Any | None = None,
+                target_curated: Any | None = None,
+                target_curated_mask: Any | None = None,
             ) -> dict[str, Any]:
                 del (
                     target_binary,
@@ -1746,6 +1885,8 @@ class TorchTrainer:
                     target_business,
                     target_objective,
                     target_future_state,
+                    target_curated,
+                    target_curated_mask,
                 )
                 summary_action_token = self.summary_action_projection(
                     self._concat([summary, action], dim=1)
@@ -1766,6 +1907,7 @@ class TorchTrainer:
                     "business": self.business_head(pooled),
                     "objective": self.objective_head(pooled),
                     "future_state": self.future_state_head(pooled),
+                    "curated": self.curated_head(pooled),
                     "latent_loss": None,
                 }
 
@@ -1785,6 +1927,7 @@ class TorchTrainer:
         business_dim = len(_BUSINESS_TARGET_NAMES)
         objective_dim = len(_OBJECTIVE_TARGET_NAMES)
         future_state_dim = len(_FUTURE_STATE_TARGET_NAMES)
+        curated_dim = len(_CURATED_TARGET_NAMES)
 
         class FTTransformerModel(nn.Module):
             def __init__(self) -> None:
@@ -1804,6 +1947,7 @@ class TorchTrainer:
                 self.business_head = nn.Linear(model_dim, business_dim)
                 self.objective_head = nn.Linear(model_dim, objective_dim)
                 self.future_state_head = nn.Linear(model_dim, future_state_dim)
+                self.curated_head = nn.Linear(model_dim, curated_dim)
 
             def forward(
                 self,
@@ -1816,6 +1960,8 @@ class TorchTrainer:
                 target_business: Any | None = None,
                 target_objective: Any | None = None,
                 target_future_state: Any | None = None,
+                target_curated: Any | None = None,
+                target_curated_mask: Any | None = None,
             ) -> dict[str, Any]:
                 del (
                     token_categorical,
@@ -1825,6 +1971,8 @@ class TorchTrainer:
                     target_business,
                     target_objective,
                     target_future_state,
+                    target_curated,
+                    target_curated_mask,
                 )
                 features = self._concat([summary, action], dim=1)
                 indices = self._indices(features)
@@ -1839,6 +1987,7 @@ class TorchTrainer:
                     "business": self.business_head(pooled),
                     "objective": self.objective_head(pooled),
                     "future_state": self.future_state_head(pooled),
+                    "curated": self.curated_head(pooled),
                     "latent_loss": None,
                 }
 
@@ -1865,6 +2014,7 @@ class TorchTrainer:
         business_dim = len(_BUSINESS_TARGET_NAMES)
         objective_dim = len(_OBJECTIVE_TARGET_NAMES)
         future_state_dim = len(_FUTURE_STATE_TARGET_NAMES)
+        curated_dim = len(_CURATED_TARGET_NAMES)
         event_type_count = max(len(self.preprocessor.event_type_names), 1)
 
         class SequenceTransformerModel(nn.Module):
@@ -1889,6 +2039,7 @@ class TorchTrainer:
                 self.business_head = nn.Linear(model_dim, business_dim)
                 self.objective_head = nn.Linear(model_dim, objective_dim)
                 self.future_state_head = nn.Linear(model_dim, future_state_dim)
+                self.curated_head = nn.Linear(model_dim, curated_dim)
 
             def forward(
                 self,
@@ -1901,6 +2052,8 @@ class TorchTrainer:
                 target_business: Any | None = None,
                 target_objective: Any | None = None,
                 target_future_state: Any | None = None,
+                target_curated: Any | None = None,
+                target_curated_mask: Any | None = None,
             ) -> dict[str, Any]:
                 del (
                     summary,
@@ -1910,6 +2063,8 @@ class TorchTrainer:
                     target_business,
                     target_objective,
                     target_future_state,
+                    target_curated,
+                    target_curated_mask,
                 )
                 tokens = (
                     self.phase_embedding(token_categorical[:, :, 0])
@@ -1925,6 +2080,7 @@ class TorchTrainer:
                     "business": self.business_head(pooled),
                     "objective": self.objective_head(pooled),
                     "future_state": self.future_state_head(pooled),
+                    "curated": self.curated_head(pooled),
                     "latent_loss": None,
                 }
 
@@ -1938,6 +2094,7 @@ class TorchTrainer:
         business_dim = len(_BUSINESS_TARGET_NAMES)
         objective_dim = len(_OBJECTIVE_TARGET_NAMES)
         future_state_dim = len(_FUTURE_STATE_TARGET_NAMES)
+        curated_dim = len(_CURATED_TARGET_NAMES)
         model_dim = 96
 
         class TreatmentTransformerModel(nn.Module):
@@ -1959,6 +2116,7 @@ class TorchTrainer:
                 self.business_head = nn.Linear(model_dim, business_dim)
                 self.objective_head = nn.Linear(model_dim, objective_dim)
                 self.future_state_head = nn.Linear(model_dim, future_state_dim)
+                self.curated_head = nn.Linear(model_dim, curated_dim)
 
             def forward(
                 self,
@@ -1971,6 +2129,8 @@ class TorchTrainer:
                 target_business: Any | None = None,
                 target_objective: Any | None = None,
                 target_future_state: Any | None = None,
+                target_curated: Any | None = None,
+                target_curated_mask: Any | None = None,
             ) -> dict[str, Any]:
                 del (
                     token_categorical,
@@ -1980,6 +2140,8 @@ class TorchTrainer:
                     target_business,
                     target_objective,
                     target_future_state,
+                    target_curated,
+                    target_curated_mask,
                 )
                 summary_token = self.summary_projection(summary).unsqueeze(1)
                 feature_indices = self._indices(action)
@@ -1996,6 +2158,7 @@ class TorchTrainer:
                     "business": self.business_head(pooled),
                     "objective": self.objective_head(pooled),
                     "future_state": self.future_state_head(pooled),
+                    "curated": self.curated_head(pooled),
                     "latent_loss": None,
                 }
 
@@ -2057,6 +2220,8 @@ def _iter_batches(
             or batch_rows[0].business_target is None
             or batch_rows[0].objective_target is None
             or batch_rows[0].future_state_target is None
+            or batch_rows[0].curated_target is None
+            or batch_rows[0].curated_target_mask is None
         ):
             yield _BatchTensors(
                 summary=summary,
@@ -2095,6 +2260,16 @@ def _iter_batches(
                 dtype=torch_module.float32,
                 device=device,
             ),
+            target_curated=torch_module.tensor(
+                np.stack([row.curated_target for row in batch_rows]),
+                dtype=torch_module.float32,
+                device=device,
+            ),
+            target_curated_mask=torch_module.tensor(
+                np.stack([row.curated_target_mask for row in batch_rows]),
+                dtype=torch_module.float32,
+                device=device,
+            ),
         )
 
 
@@ -2109,6 +2284,8 @@ def _model_outputs(model: Any, batch: _BatchTensors) -> dict[str, Any]:
         target_business=batch.target_business,
         target_objective=batch.target_objective,
         target_future_state=batch.target_future_state,
+        target_curated=batch.target_curated,
+        target_curated_mask=batch.target_curated_mask,
     )
 
 
@@ -2131,16 +2308,28 @@ def _training_loss(
         outputs["future_state"],
         batch.target_future_state,
     )
+    curated_loss = _masked_mse_loss(
+        outputs["curated"],
+        batch.target_curated,
+        batch.target_curated_mask,
+    )
     latent_loss = outputs.get("latent_loss")
     supervised_loss = (
         binary_loss
         + (0.5 * regression_loss)
         + business_loss
         + (1.35 * future_state_loss)
+        + curated_loss
     )
     if latent_loss is None:
         return supervised_loss
     return supervised_loss + (0.25 * latent_loss)
+
+
+def _masked_mse_loss(predicted: Any, target: Any, mask: Any) -> Any:
+    error = ((predicted - target) ** 2) * mask
+    denominator = mask.sum().clamp_min(1.0)
+    return error.sum() / denominator
 
 
 def predict_rows(
@@ -2183,6 +2372,11 @@ def predict_rows(
                 if outputs.get("future_state") is not None
                 else None
             )
+            curated = (
+                outputs.get("curated").detach().cpu().numpy()
+                if outputs.get("curated") is not None
+                else None
+            )
             latent = (
                 outputs.get("predicted_latent").detach().cpu().numpy()
                 if outputs.get("predicted_latent") is not None
@@ -2195,6 +2389,7 @@ def predict_rows(
                     business_values=business,
                     objective_values=objective,
                     future_state_values=future_state,
+                    curated_values=curated,
                     latent_values=latent,
                 )
             )
@@ -2231,6 +2426,9 @@ def _compute_observed_metrics(
     future_state_errors: dict[str, list[float]] = {
         name: [] for name in _FUTURE_STATE_TARGET_NAMES
     }
+    curated_errors: dict[str, list[float]] = {
+        name: [] for name in _CURATED_TARGET_NAMES
+    }
 
     flat_predictions = _flatten_prediction_batches(predictions)
     for row, predicted in zip(rows, flat_predictions, strict=False):
@@ -2246,6 +2444,9 @@ def _compute_observed_metrics(
         )
         predicted_future_state = preprocessor.decode_future_state(
             predicted.future_state_values
+        )
+        predicted_curated_targets = preprocessor.decode_curated_targets(
+            predicted.curated_values
         )
         for name in _EVIDENCE_TARGET_NAMES:
             actual_regression[name].append(float(getattr(actual_targets, name)))
@@ -2288,6 +2489,33 @@ def _compute_observed_metrics(
                     - float(getattr(predicted_future_state, name))
                 )
             )
+        actual_curated_values, actual_curated_masks = curated_target_values_and_mask(
+            row.row.curated_targets
+        )
+        for index, name in enumerate(_CURATED_TARGET_NAMES):
+            if actual_curated_masks[index] <= 0.0:
+                continue
+            curated_errors[name].append(
+                abs(
+                    float(actual_curated_values[index])
+                    - float(predicted_curated_targets.get(name, 0.0))
+                )
+            )
+    structural_mae_values = [
+        sum(curated_errors[name]) / len(curated_errors[name])
+        for name in STRUCTURAL_HEAD_NAMES
+        if curated_errors[name]
+    ]
+    semantic_mae_values = [
+        sum(curated_errors[name]) / len(curated_errors[name])
+        for name in _CURATED_TARGET_NAMES
+        if name not in STRUCTURAL_HEAD_NAMES and curated_errors[name]
+    ]
+    proxy_debug_values = [
+        sum(values) / len(values)
+        for values in [*business_errors.values(), *future_state_errors.values()]
+        if values
+    ]
     return WhatIfObservedForecastMetrics(
         auroc_any_external_spread=_auroc(actual_binary, predicted_binary),
         brier_any_external_spread=round(
@@ -2312,6 +2540,37 @@ def _compute_observed_metrics(
         future_state_head_mae={
             key: round(sum(values) / max(len(values), 1), 3)
             for key, values in future_state_errors.items()
+        },
+        curated_target_mae={
+            key: round(sum(values) / len(values), 3)
+            for key, values in curated_errors.items()
+            if values
+        },
+        target_family_mae={
+            "structural": (
+                round(
+                    sum(structural_mae_values) / len(structural_mae_values),
+                    3,
+                )
+                if structural_mae_values
+                else 0.0
+            ),
+            "curated_semantic": (
+                round(
+                    sum(semantic_mae_values) / len(semantic_mae_values),
+                    3,
+                )
+                if semantic_mae_values
+                else 0.0
+            ),
+            "proxy_debug": (
+                round(
+                    sum(proxy_debug_values) / len(proxy_debug_values),
+                    3,
+                )
+                if proxy_debug_values
+                else 0.0
+            ),
         },
     )
 
@@ -2555,6 +2814,8 @@ def _heuristic_predict_rows(
             ).astype(np.float32),
             business_values=None,
             objective_values=None,
+            future_state_values=None,
+            curated_values=None,
         )
     ]
 
@@ -2677,6 +2938,14 @@ def _write_prediction_rows(
                         if prediction.future_state_values is not None
                         else []
                     ),
+                    "curated_values": (
+                        [
+                            round(float(value), 6)
+                            for value in prediction.curated_values.tolist()
+                        ]
+                        if prediction.curated_values is not None
+                        else []
+                    ),
                 }
             )
         )
@@ -2730,6 +2999,11 @@ def _flatten_prediction_batches(
                     future_state_values=(
                         np.asarray(batch.future_state_values[index])
                         if batch.future_state_values is not None
+                        else None
+                    ),
+                    curated_values=(
+                        np.asarray(batch.curated_values[index])
+                        if batch.curated_values is not None
                         else None
                     ),
                     latent_values=(

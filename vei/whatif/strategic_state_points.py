@@ -36,6 +36,13 @@ from .models import (
     WhatIfEvent,
     WhatIfWorld,
 )
+from .target_layer import (
+    CURATED_TARGET_LAYER_VERSION,
+    STRUCTURAL_HEAD_NAMES,
+    curated_target_score,
+    curated_target_score_components,
+    domain_heads_for_tenant,
+)
 
 StrategicProposalMode = Literal["llm", "template"]
 SaturationGuardStatus = Literal["passed", "warning", "failed"]
@@ -44,6 +51,11 @@ OPERATOR_SCORE_FORMULA_VERSION = "balanced_operator_v1"
 OPERATOR_SCORE_FORMULA = (
     "mean(1-enterprise_risk, commercial_position, 1-org_strain, "
     "stakeholder_trust, 1-execution_drag)"
+)
+SUPPORTED_TARGET_SCORE_FORMULA_VERSION = "supported_curated_targets_v0"
+SUPPORTED_TARGET_SCORE_FORMULA = (
+    "mean supported structural and tenant-domain curated target components; "
+    "unsupported heads are excluded"
 )
 _NEAR_TIE_MARGIN = 0.01
 _DELTA_EPSILON = 0.005
@@ -635,6 +647,40 @@ def _score_state_point(
         business = dict(prediction["business_heads"])
         future_state_heads = dict(prediction["future_state_heads"])
         evidence_heads = dict(prediction["evidence_heads"])
+        curated_target_heads = dict(prediction.get("curated_target_heads") or {})
+        supported_curated_heads = _supported_curated_heads(
+            tenant_id=state_point.tenant_id,
+            curated_target_heads=curated_target_heads,
+        )
+        supported_target_components = curated_target_score_components(
+            supported_curated_heads
+        )
+        supported_target_score = curated_target_score(supported_curated_heads)
+        proxy_operator_score = _balanced_operator_score(business)
+        uses_curated_ranking = (
+            bool(prediction.get("curated_targets_available"))
+            and supported_target_score is not None
+        )
+        ranking_score = (
+            float(supported_target_score)
+            if uses_curated_ranking
+            else proxy_operator_score
+        )
+        score_formula_version = (
+            SUPPORTED_TARGET_SCORE_FORMULA_VERSION
+            if uses_curated_ranking
+            else OPERATOR_SCORE_FORMULA_VERSION
+        )
+        score_formula = (
+            SUPPORTED_TARGET_SCORE_FORMULA
+            if uses_curated_ranking
+            else OPERATOR_SCORE_FORMULA
+        )
+        score_output_kind = (
+            "supported_curated_target_readout"
+            if uses_curated_ranking
+            else "operator_utility_readout"
+        )
         observables = _candidate_observables(candidate, state_point.decision.title)
         latent_vector = prediction.get("latent_future_vector") or []
         rows.append(
@@ -671,12 +717,42 @@ def _score_state_point(
                 "latent_future_id": str(prediction.get("latent_future_id", "")),
                 "latent_future_norm": prediction.get("latent_future_norm", ""),
                 "_latent_future_vector": latent_vector,
-                "balanced_operator_score": _balanced_operator_score(business),
-                "score_output_kind": "operator_utility_readout",
-                "operator_score_formula_version": OPERATOR_SCORE_FORMULA_VERSION,
-                "operator_score_formula": OPERATOR_SCORE_FORMULA,
+                "_supported_target_score_components": supported_target_components,
+                "balanced_operator_score": ranking_score,
+                "supported_target_score": (
+                    "" if supported_target_score is None else supported_target_score
+                ),
+                "proxy_global_v1_operator_score": proxy_operator_score,
+                "score_output_kind": score_output_kind,
+                "operator_score_formula_version": score_formula_version,
+                "operator_score_formula": score_formula,
                 "operator_score_is_learned": False,
                 "operator_utility_heads": _operator_utility_heads_string(business),
+                "supported_curated_heads": _curated_target_heads_string(
+                    supported_curated_heads
+                ),
+                "target_layer_version": str(
+                    (prediction.get("target_layer") or {}).get(
+                        "version",
+                        "",
+                    )
+                    or (
+                        CURATED_TARGET_LAYER_VERSION
+                        if prediction.get("curated_targets_available")
+                        else ""
+                    )
+                ),
+                "curated_targets_available": bool(
+                    prediction.get("curated_targets_available")
+                ),
+                "proxy_global_v1_business_heads": json.dumps(
+                    business,
+                    sort_keys=True,
+                ),
+                "proxy_global_v1_future_state_heads": json.dumps(
+                    future_state_heads,
+                    sort_keys=True,
+                ),
                 "domain_risk_heads": _domain_risk_heads_string(future_state_heads),
                 "telemetry_heads": _telemetry_heads_string(
                     evidence_heads=evidence_heads,
@@ -722,8 +798,14 @@ def _score_state_point(
                 "policy_replay_hits": json.dumps([], sort_keys=True),
                 "generation_prompt_sha256": state_point.prompt_hash,
                 "ranking_basis": (
-                    "Pareto frontier over JEPA-predicted operator utility and domain-risk heads; "
-                    "balanced operator score is a non-learned sorting aid"
+                    "Supported structural and curated target heads only; "
+                    "proxy_global_v1 heads are diagnostics"
+                    if uses_curated_ranking
+                    else (
+                        "Pareto frontier over JEPA-predicted operator utility and "
+                        "domain-risk heads; balanced operator score is a non-learned "
+                        "sorting aid"
+                    )
                 ),
                 "pareto_basis_version": PARETO_BASIS_VERSION,
                 "prediction_uncertainty_available": False,
@@ -1007,6 +1089,14 @@ def _saturation_reasons(stats: dict[str, Any]) -> list[str]:
 
 
 def _row_has_zero_prediction_delta(row: dict[str, Any]) -> bool:
+    if row.get("score_output_kind") == "supported_curated_target_readout":
+        try:
+            return (
+                abs(float(row.get("supported_target_score_delta_vs_baseline", "")))
+                <= _SATURATION_SCORE_EPSILON
+            )
+        except (TypeError, ValueError):
+            return False
     for _key, short_name, _higher_is_better in _DELTA_HEADS:
         value = row.get(f"delta_{short_name}_vs_baseline")
         try:
@@ -1052,6 +1142,13 @@ def _dominates(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 
 def _future_axes(row: dict[str, Any]) -> dict[str, float]:
+    supported_components = row.get("_supported_target_score_components")
+    if isinstance(supported_components, dict) and supported_components:
+        return {
+            str(name): float(value)
+            for name, value in supported_components.items()
+            if _is_finite_number(value)
+        }
     return {
         "risk_inverse": 1.0 - float(row["predicted_enterprise_risk"]),
         "commercial": float(row["predicted_commercial_position"]),
@@ -1112,6 +1209,40 @@ def _telemetry_heads_string(
     )
 
 
+def _supported_curated_heads(
+    *,
+    tenant_id: str,
+    curated_target_heads: dict[str, Any],
+) -> dict[str, float]:
+    supported_names = set(STRUCTURAL_HEAD_NAMES) | set(
+        domain_heads_for_tenant(tenant_id)
+    )
+    result: dict[str, float] = {}
+    for name in supported_names:
+        if name not in curated_target_heads:
+            continue
+        try:
+            value = float(curated_target_heads[name])
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(value):
+            result[name] = value
+    return result
+
+
+def _curated_target_heads_string(heads: dict[str, float]) -> str:
+    if not heads:
+        return ""
+    return "; ".join(f"{name} {value:.3f}" for name, value in sorted(heads.items()))
+
+
+def _is_finite_number(value: Any) -> bool:
+    try:
+        return bool(np.isfinite(float(value)))
+    except (TypeError, ValueError):
+        return False
+
+
 def _attach_baseline_deltas(case_rows: list[dict[str, Any]]) -> None:
     baseline = _select_baseline_row(case_rows)
     baseline_vector = _comparison_vector(baseline)
@@ -1130,6 +1261,16 @@ def _attach_baseline_deltas(case_rows: list[dict[str, Any]]) -> None:
             float(row["balanced_operator_score"])
             - float(baseline["balanced_operator_score"]),
             6,
+        )
+        row["supported_target_score_delta_vs_baseline"] = (
+            ""
+            if row.get("supported_target_score") == ""
+            or baseline.get("supported_target_score") == ""
+            else round(
+                float(row["supported_target_score"])
+                - float(baseline["supported_target_score"]),
+                6,
+            )
         )
         row["predicted_delta_vector"] = _delta_vector_string(delta_values)
         row["tradeoff_summary"] = _tradeoff_summary(delta_values)
@@ -1202,6 +1343,7 @@ def _latent_cosine_distance(left: np.ndarray, right: np.ndarray) -> float | str:
 def _drop_internal_fields(rows: Sequence[dict[str, Any]]) -> None:
     for row in rows:
         row.pop("_latent_future_vector", None)
+        row.pop("_supported_target_score_components", None)
 
 
 def _select_baseline_row(case_rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -1878,6 +2020,9 @@ def _write_markdown_result(
         ordered = sorted(case_rows, key=lambda row: int(row["display_rank"]))
         top = ordered[0]
         baseline = top.get("baseline_action_label", "")
+        uses_curated_scores = (
+            top.get("score_output_kind") == "supported_curated_target_readout"
+        )
         group_guard = guard_by_case.get(state_point.branch_event.case_id)
         group_guard_summary = (
             "`unknown`"
@@ -1899,15 +2044,30 @@ def _write_markdown_result(
                 f"- Why proposed: {_md(state_point.decision.why_selected)}",
                 f"- Decision question: {_md(state_point.decision.decision_question)}",
                 f"- Baseline action for deltas: **{_md(str(baseline))}**",
-                "- Frontier basis: Pareto over JEPA-predicted operator utility and "
-                f"domain-risk heads (`{PARETO_BASIS_VERSION}`).",
+                "- Frontier basis: "
+                + (
+                    "Pareto over supported structural and curated target heads "
+                    f"(`{CURATED_TARGET_LAYER_VERSION}`)."
+                    if uses_curated_scores
+                    else (
+                        "Pareto over JEPA-predicted operator utility and "
+                        f"domain-risk heads (`{PARETO_BASIS_VERSION}`)."
+                    )
+                ),
                 "- Score basis: "
-                f"`{OPERATOR_SCORE_FORMULA_VERSION}` is a non-learned operator "
-                "sorting aid over five predicted heads.",
+                + (
+                    f"`{SUPPORTED_TARGET_SCORE_FORMULA_VERSION}` excludes unsupported "
+                    "heads and shows proxy_global_v1 separately."
+                    if uses_curated_scores
+                    else (
+                        f"`{OPERATOR_SCORE_FORMULA_VERSION}` is a non-learned "
+                        "operator sorting aid over five predicted heads."
+                    )
+                ),
                 f"- Scoring guard: {group_guard_summary}",
                 f"- Shortlist lead: **{_md(str(top['candidate_label']))}**",
                 "",
-                "| Display | Frontier | Score rank | Candidate action | Operator score | Predicted future vector | Delta vs baseline | Tradeoff summary | Success observable |",
+                "| Display | Frontier | Score rank | Candidate action | Score | Predicted future vector | Delta vs baseline | Tradeoff summary | Success observable |",
                 "|---:|---|---:|---|---:|---|---|---|---|",
             ]
         )

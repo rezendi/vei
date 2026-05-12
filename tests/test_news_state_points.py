@@ -367,6 +367,105 @@ def test_strategic_state_point_run_scores_template_proposals(
     assert "Shortlist lead" in markdown
 
 
+def test_strategic_state_point_ranks_on_supported_curated_targets_when_available(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    world = _news_world()
+
+    def fake_predict(**kwargs: Any) -> list[dict[str, Any]]:
+        predictions: list[dict[str, Any]] = []
+        for index, _row in enumerate(kwargs["rows"], start=1):
+            predictions.append(
+                {
+                    "model_id": "fixture_jepa",
+                    "jepa_checkpoint_id": "fixture-checkpoint",
+                    "latent_future_vector": [float(index), 1.0, 1.0],
+                    "latent_future_id": f"latent-{index}",
+                    "latent_future_norm": 1.0 + index,
+                    "encoder_versions": {},
+                    "prediction_head_version": "business_future_heads_v1",
+                    "prediction_probe_version": "linear_heads_v1",
+                    "curated_targets_available": True,
+                    "target_layer": {"version": "curated_target_layer_v0"},
+                    "curated_target_heads": {
+                        "cycle_time_ms": 10_000.0,
+                        "handoff_count": 1.0,
+                        "time_to_first_response_ms": 1_000.0,
+                        "reopen_rework_count": 0.0,
+                        "blocked_duration_ms": 0.0,
+                        "participant_fanout": 2.0,
+                        "cross_system_spread": 1.0,
+                        "owner_ambiguity_count": 0.0,
+                        "deadline_sla_miss_count": 0.0,
+                        "evidence_completeness": 1.0,
+                        "onboarding_integrity": 0.7,
+                        "user_trust_confusion": 0.2,
+                        "release_readiness": 0.1 + (index * 0.1),
+                        "product_readiness_proof": 1.0,
+                    },
+                    "evidence_heads": {
+                        "any_external_spread": 0.0,
+                        "participant_fanout": 0,
+                    },
+                    "business_heads": {
+                        "enterprise_risk": 0.0,
+                        "commercial_position_proxy": 1.0,
+                        "org_strain_proxy": 0.0,
+                        "stakeholder_trust": 1.0,
+                        "execution_drag": 0.0,
+                    },
+                    "future_state_heads": {
+                        "regulatory_exposure": 0.0,
+                        "accounting_control_pressure": 0.0,
+                        "liquidity_stress": 0.0,
+                        "governance_response": 0.0,
+                        "evidence_control": 0.0,
+                        "external_confidence_pressure": 0.0,
+                    },
+                    "objective_scores": {},
+                }
+            )
+        return predictions
+
+    monkeypatch.setattr(
+        "vei.whatif.strategic_state_points.run_branch_point_benchmark_predictions",
+        fake_predict,
+    )
+
+    result = run_strategic_state_point_counterfactuals(
+        [
+            StrategicStatePointSource(
+                tenant_id="pyinsights",
+                world=world,
+                display_name="Py Insights Fixture",
+                as_of="1837-09-06",
+            )
+        ],
+        checkpoint_path=tmp_path / "model.pt",
+        artifacts_root=tmp_path / "strategic_curated",
+        label="strategic_curated_fixture",
+        decisions_per_source=1,
+        candidates_per_decision=8,
+        proposal_mode="template",
+        proposal_model="template-fixture",
+    )
+
+    payload = json.loads(result.artifacts.result_json_path.read_text(encoding="utf-8"))
+    first = payload["candidates"][0]
+
+    assert first["score_output_kind"] == "supported_curated_target_readout"
+    assert first["operator_score_formula_version"] == "supported_curated_targets_v0"
+    assert first["curated_targets_available"] is True
+    assert first["target_layer_version"] == "curated_target_layer_v0"
+    assert "release_readiness" in first["supported_curated_heads"]
+    assert "product_readiness_proof" not in first["supported_curated_heads"]
+    assert first["proxy_global_v1_operator_score"] == 1.0
+    assert first["saturation_guard_status"] == "passed"
+    assert payload["saturation_guard"]["status"] == "passed"
+    assert "proxy_global_v1" in first["ranking_basis"]
+
+
 def test_strategic_state_point_run_marks_saturated_scores_untrusted(
     tmp_path: Path,
     monkeypatch,

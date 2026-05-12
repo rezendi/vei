@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ._base import (
     WhatIfAttachmentPolicy,
@@ -98,6 +98,65 @@ class WhatIfFutureStateHeads(BaseModel):
     governance_response: float = 0.0
     evidence_control: float = 0.0
     external_confidence_pressure: float = 0.0
+
+
+WhatIfTargetHeadStatus = Literal[
+    "supported",
+    "experimental",
+    "unsupported",
+    "proxy_debug",
+]
+
+
+class WhatIfSemanticTargetLabel(BaseModel):
+    target_id: str
+    value: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    horizon: str = "future_tail"
+    evidence_event_ids: list[str] = Field(default_factory=list)
+    supporting_spans: list[str] = Field(default_factory=list)
+    negative_evidence: list[str] = Field(default_factory=list)
+    label_source: str = "llm_semantic_v1"
+
+    @field_validator("evidence_event_ids", "supporting_spans")
+    @classmethod
+    def _requires_citations(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item.strip()]
+        if not cleaned:
+            raise ValueError("semantic target labels require cited future evidence")
+        return cleaned
+
+
+class WhatIfCuratedTargetSet(BaseModel):
+    version: str = "curated_target_layer_v0"
+    tenant_id: str = ""
+    domain_pack_id: str = ""
+    structural_heads: dict[str, float] = Field(default_factory=dict)
+    domain_heads: dict[str, float] = Field(default_factory=dict)
+    head_masks: dict[str, bool] = Field(default_factory=dict)
+    head_confidence: dict[str, float] = Field(default_factory=dict)
+    head_status: dict[str, WhatIfTargetHeadStatus] = Field(default_factory=dict)
+    semantic_labels: list[WhatIfSemanticTargetLabel] = Field(default_factory=list)
+    label_functions: list[str] = Field(default_factory=list)
+    proxy_head_version: str = "proxy_global_v1"
+
+
+class WhatIfTargetManifest(BaseModel):
+    version: str = "target_manifest_v0"
+    target_layer_version: str = "curated_target_layer_v0"
+    tenant_id: str = ""
+    domain_pack_id: str = ""
+    row_count: int = 0
+    supported_heads: list[str] = Field(default_factory=list)
+    experimental_heads: list[str] = Field(default_factory=list)
+    unsupported_heads: list[str] = Field(default_factory=list)
+    proxy_debug_heads: list[str] = Field(default_factory=list)
+    label_functions_used: list[str] = Field(default_factory=list)
+    coverage: dict[str, float] = Field(default_factory=dict)
+    confidence: dict[str, float] = Field(default_factory=dict)
+    reviewed_examples: list[dict[str, Any]] = Field(default_factory=list)
+    known_blind_spots: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class WhatIfBusinessObjectivePack(BaseModel):
@@ -196,6 +255,9 @@ class WhatIfBenchmarkDatasetRow(BaseModel):
     observed_outcome_signals: WhatIfOutcomeSignals = Field(
         default_factory=WhatIfOutcomeSignals
     )
+    curated_targets: WhatIfCuratedTargetSet = Field(
+        default_factory=WhatIfCuratedTargetSet
+    )
 
 
 class WhatIfBenchmarkCandidate(BaseModel):
@@ -272,6 +334,8 @@ class WhatIfObservedForecastMetrics(BaseModel):
     business_head_mae: dict[str, float] = Field(default_factory=dict)
     objective_score_mae: dict[str, float] = Field(default_factory=dict)
     future_state_head_mae: dict[str, float] = Field(default_factory=dict)
+    curated_target_mae: dict[str, float] = Field(default_factory=dict)
+    target_family_mae: dict[str, float] = Field(default_factory=dict)
 
 
 class WhatIfBenchmarkTrainArtifacts(BaseModel):
@@ -513,6 +577,7 @@ __all__ = [
     "WhatIfCoordinationBreadth",
     "WhatIfCounterfactualCandidatePrediction",
     "WhatIfCounterfactualObjectiveEvaluation",
+    "WhatIfCuratedTargetSet",
     "WhatIfDecisionPosture",
     "WhatIfDominanceSummary",
     "WhatIfEscalationLevel",
@@ -532,4 +597,7 @@ __all__ = [
     "WhatIfReassuranceStyle",
     "WhatIfReviewPath",
     "WhatIfRolloutStressSummary",
+    "WhatIfSemanticTargetLabel",
+    "WhatIfTargetHeadStatus",
+    "WhatIfTargetManifest",
 ]

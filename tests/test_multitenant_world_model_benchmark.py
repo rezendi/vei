@@ -109,6 +109,22 @@ def test_multitenant_benchmark_uses_temporal_holdouts_without_prompt_leakage(
     assert "doctrine_relevance_score" in first_train_features
     assert train_rows[0]["contract"]["doctrine_context"]
     assert any(tag.startswith("objective_policy:") for tag in first_train_tags)
+    assert result.dataset.metadata["target_layer"]["version"] == (
+        "curated_target_layer_v0"
+    )
+    assert (
+        result.dataset.metadata["target_layer"]["proxy_debug_head_version"]
+        == "proxy_global_v1"
+    )
+    assert train_rows[0]["curated_targets"]["head_masks"]["cycle_time_ms"] is True
+    dispatch_manifest_path = Path(
+        result.dataset.metadata["target_layer"]["target_manifest_paths"]["dispatch"]
+    )
+    dispatch_manifest = json.loads(dispatch_manifest_path.read_text(encoding="utf-8"))
+    assert "cycle_time_ms" in dispatch_manifest["supported_heads"]
+    assert "product_readiness_proof" in dispatch_manifest["experimental_heads"]
+    assert "onboarding_integrity" in dispatch_manifest["unsupported_heads"]
+    assert "enterprise_risk" in dispatch_manifest["proxy_debug_heads"]
     assert {row["thread_id"] for row in train_rows}.isdisjoint(
         {row["thread_id"] for row in heldout_rows}
     )
@@ -160,6 +176,20 @@ def test_multitenant_benchmark_uses_temporal_holdouts_without_prompt_leakage(
         assert "recorded future" in prompt
         assert "future tail marker" not in prompt
         assert item["pre_branch_evidence_sha256"]
+
+    semantic_batch = json.loads(
+        Path(result.dataset.metadata["semantic_labeling_batch_path"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert semantic_batch["version"] == "semantic_labeling_batch_v0"
+    assert semantic_batch["manual_review_sample_size"] <= 20
+    assert semantic_batch["windows"]
+    assert all(window["target_ids"] for window in semantic_batch["windows"])
+    assert all(
+        "cite at least one future event id" in " ".join(window["requirements"])
+        for window in semantic_batch["windows"]
+    )
 
     provenance_report = json.loads(
         Path(result.dataset.metadata["data_provenance_report_path"]).read_text(
