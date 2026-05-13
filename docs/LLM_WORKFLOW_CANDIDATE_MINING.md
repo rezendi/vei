@@ -9,6 +9,7 @@ The current product path is therefore:
 ```text
 canonical events
   -> LLM-derived company skill map with cited evidence
+  -> world-model skill opportunities from counterfactual action gaps
   -> semantic workflow candidates
   -> optional world-model alignment
   -> workflow_candidates.json for review/promotion
@@ -49,11 +50,20 @@ Semantic workflow rank is a weighted quality score over:
 - deployment readiness
 - optional alignment with the latest strategic/world-model report
 
-If a `strategic_state_point_results.csv` or JSON report is supplied, the miner
-matches workflow language against current counterfactual actions and records the
-top matches in `metadata.world_model_alignment`. This does not make the world
-model a workflow miner; it lets the review queue prioritize workflows that line
-up with the current action landscape.
+If a `strategic_state_point_results.csv` or JSON report is supplied, the skill
+map can first add a cited opportunity layer:
+
+- high-value trusted counterfactual rows become skill-upgrade notes when an
+  existing skill already covers the area
+- weakly covered rows become `World-model opportunity` gaps only when canonical
+  event evidence supports the action area
+- uncited or untrusted rows are skipped
+
+The workflow miner then publishes skill-backed workflows plus cited
+world-model opportunity candidates. It also still records
+`metadata.world_model_alignment` for existing skills. The world model therefore
+acts as a search prior over "what capability would change the predicted future,"
+while canonical events remain the citation boundary.
 
 ## Outputs
 
@@ -97,6 +107,7 @@ A daily workflow list is good enough to review when:
 - credential-like snippets are redacted in workflow evidence surfaces
 - unsupported structural clusters are written separately, not silently mixed in
 - world-model alignment is present when a strategic report is supplied
+- world-model skill opportunities are cited or skipped
 - old human labels survive `vei workflow refresh`
 
 The miner still does not activate anything by itself. Candidates become labeled,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import hashlib
 import json
 import os
@@ -52,6 +53,42 @@ from vei.skillmap.models import (
 )
 
 ProgressReporter = Callable[[str], None]
+
+_WORLD_MODEL_SKILL_OPPORTUNITY_VERSION = "world_model_skill_opportunity_v1"
+
+_WORLD_MODEL_OPPORTUNITY_STOPWORDS = {
+    "about",
+    "action",
+    "actions",
+    "after",
+    "again",
+    "also",
+    "before",
+    "being",
+    "candidate",
+    "check",
+    "could",
+    "daily",
+    "decision",
+    "from",
+    "have",
+    "into",
+    "more",
+    "only",
+    "over",
+    "point",
+    "should",
+    "signal",
+    "state",
+    "than",
+    "that",
+    "their",
+    "there",
+    "this",
+    "through",
+    "with",
+    "would",
+}
 
 
 def build_company_skill_map_from_context_path(
@@ -198,6 +235,56 @@ def build_company_skill_map_from_workspace(
     if previous_map is not None:
         _apply_previous_skill_map(skill_map, previous_map)
     return _finalize_skill_map(skill_map)
+
+
+def enrich_skill_map_with_world_model_opportunities(
+    skill_map: CompanySkillMap,
+    *,
+    context_path: str | Path,
+    world_model_report_path: str | Path,
+    max_opportunities: int = 8,
+    require_trusted_ranking: bool = True,
+) -> CompanySkillMap:
+    """Attach cited skill gaps/upgrades suggested by counterfactual search rows."""
+
+    snapshot_path = _resolve_snapshot_path(context_path)
+    snapshot = ContextSnapshot.model_validate_json(
+        snapshot_path.read_text(encoding="utf-8")
+    )
+    bundle = load_canonical_history_bundle(snapshot_path)
+    if bundle is None:
+        bundle = build_canonical_history_bundle(snapshot)
+    event_index = {
+        row.event_id: row.model_dump(mode="json") for row in bundle.index.rows
+    }
+    structure_view = build_structure_view_from_canonical_events(
+        bundle.events,
+        source_mode="canonical_history",
+    )
+    blueprint = hydrate_blueprint(
+        snapshot,
+        scenario_name="multi_channel",
+        workflow_name="company_skill_map",
+    )
+    evidence_catalog = _build_skill_evidence_catalog(
+        structure_payload=_model_dump(structure_view),
+        graphs_payload=_model_dump(blueprint.capability_graphs),
+        event_index=event_index,
+        limit=None,
+    )
+    world_model_path = Path(world_model_report_path).expanduser().resolve()
+    world_model_rows = _read_world_model_report_rows(world_model_path)
+    enriched = skill_map.model_copy(deep=True)
+    metadata = _apply_world_model_skill_opportunities(
+        enriched,
+        world_model_rows=world_model_rows,
+        evidence_catalog=evidence_catalog,
+        world_model_report_path=world_model_path,
+        max_opportunities=max_opportunities,
+        require_trusted_ranking=require_trusted_ranking,
+    )
+    enriched.metadata["world_model_skill_opportunities"] = metadata
+    return _finalize_skill_map(enriched)
 
 
 def _build_company_skill_map_from_bundle(
@@ -975,6 +1062,408 @@ def render_skill_refresh_report(skill_map: CompanySkillMap) -> str:
             lines.append(f"- `{skill.skill_id}` {skill.title}{suffix}")
         lines.append("")
     return "\n".join(lines).strip() + "\n"
+
+
+def _read_world_model_report_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    if path.suffix.lower() == ".csv":
+        with path.open(encoding="utf-8", newline="") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("rows", "candidates", "results"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _apply_world_model_skill_opportunities(
+    skill_map: CompanySkillMap,
+    *,
+    world_model_rows: list[dict[str, Any]],
+    evidence_catalog: list[dict[str, Any]],
+    world_model_report_path: Path,
+    max_opportunities: int,
+    require_trusted_ranking: bool,
+) -> dict[str, Any]:
+    _clear_existing_world_model_opportunities(skill_map)
+    metadata: dict[str, Any] = {
+        "version": _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION,
+        "report_path": str(world_model_report_path),
+        "rows_seen": len(world_model_rows),
+        "rows_considered": 0,
+        "rows_skipped_untrusted": 0,
+        "rows_skipped_uncited": 0,
+        "missing_skill_gap_count": 0,
+        "skill_upgrade_count": 0,
+        "opportunities_added": 0,
+        "require_trusted_ranking": require_trusted_ranking,
+    }
+    if max_opportunities <= 0:
+        return metadata
+
+    proposals: list[dict[str, Any]] = []
+    for row_index, row in enumerate(world_model_rows):
+        if require_trusted_ranking and not _world_model_row_is_trusted(row):
+            metadata["rows_skipped_untrusted"] += 1
+            continue
+        row_tokens = _world_model_opportunity_tokens(_world_model_row_text(row))
+        if len(row_tokens) < 3:
+            continue
+        evidence_matches = _world_model_evidence_matches(
+            row_tokens,
+            evidence_catalog,
+            limit=4,
+        )
+        if not evidence_matches:
+            metadata["rows_skipped_uncited"] += 1
+            continue
+        metadata["rows_considered"] += 1
+        best_skill, best_skill_score, overlap_terms = _best_world_model_skill_match(
+            row_tokens, skill_map.skills
+        )
+        proposals.append(
+            {
+                "row_index": row_index,
+                "row": row,
+                "row_tokens": row_tokens,
+                "evidence_matches": evidence_matches,
+                "best_skill": best_skill,
+                "best_skill_score": best_skill_score,
+                "overlap_terms": overlap_terms,
+                "priority_score": _world_model_priority_score(row),
+            }
+        )
+
+    proposals.sort(
+        key=lambda item: (
+            float(item["priority_score"]),
+            float(item["best_skill_score"]),
+            str(item["row"].get("candidate_label") or ""),
+        ),
+        reverse=True,
+    )
+    seen_gap_ids: set[str] = set()
+    for proposal in proposals[:max_opportunities]:
+        row = proposal["row"]
+        evidence_refs = [item["evidence_ref"] for item in proposal["evidence_matches"]]
+        payload = _world_model_opportunity_payload(
+            row=row,
+            row_index=int(proposal["row_index"]),
+            priority_score=float(proposal["priority_score"]),
+            coverage_score=float(proposal["best_skill_score"]),
+            overlap_terms=list(proposal["overlap_terms"]),
+            evidence_refs=evidence_refs,
+            world_model_report_path=world_model_report_path,
+        )
+        best_skill = proposal["best_skill"]
+        if (
+            best_skill is not None
+            and float(proposal["best_skill_score"]) >= 0.28
+            and len(proposal["overlap_terms"]) >= 3
+        ):
+            _attach_world_model_skill_upgrade(best_skill, payload)
+            metadata["skill_upgrade_count"] += 1
+            metadata["opportunities_added"] += 1
+            continue
+
+        gap_id = _stable_id(
+            "gap",
+            _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION,
+            row.get("decision_point", ""),
+            row.get("candidate_label", ""),
+            row.get("counterfactual_action", ""),
+            ",".join(payload["supporting_evidence_ids"]),
+        )
+        if gap_id in seen_gap_ids:
+            continue
+        seen_gap_ids.add(gap_id)
+        skill_map.gaps.append(
+            SkillMapGap(
+                gap_id=gap_id,
+                title=f"World-model opportunity: {_world_model_label(row)}",
+                severity="warning",
+                reason=(
+                    "Counterfactual search highlights this action area, but no "
+                    "existing skill strongly covers it with cited evidence."
+                ),
+                recommendation=_world_model_gap_recommendation(row),
+                evidence_refs=evidence_refs,
+                metadata={
+                    **payload,
+                    "opportunity_kind": "missing_skill",
+                    "opportunity_source": _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION,
+                },
+            )
+        )
+        metadata["missing_skill_gap_count"] += 1
+        metadata["opportunities_added"] += 1
+    return metadata
+
+
+def _clear_existing_world_model_opportunities(skill_map: CompanySkillMap) -> None:
+    skill_map.gaps = [
+        gap
+        for gap in skill_map.gaps
+        if gap.metadata.get("opportunity_source")
+        != _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION
+    ]
+    for skill in skill_map.skills:
+        existing = skill.metadata.get("world_model_upgrade_opportunities")
+        if not isinstance(existing, list):
+            continue
+        skill.metadata["world_model_upgrade_opportunities"] = [
+            item
+            for item in existing
+            if not isinstance(item, dict)
+            or item.get("opportunity_source") != _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION
+        ]
+        skill.metadata["world_model_upgrade_opportunity_count"] = len(
+            skill.metadata["world_model_upgrade_opportunities"]
+        )
+
+
+def _world_model_row_is_trusted(row: dict[str, Any]) -> bool:
+    basis = str(row.get("ranking_basis") or "").lower()
+    if "proxy" in basis and "supported" not in basis:
+        return False
+    raw = row.get("saturation_guard_trusted_for_ranking")
+    if raw in (None, ""):
+        return True
+    return str(raw).strip().lower() in {"1", "true", "yes"}
+
+
+def _world_model_row_text(row: dict[str, Any]) -> str:
+    return " ".join(
+        str(row.get(key, "") or "")
+        for key in (
+            "decision_point",
+            "decision_question",
+            "why_this_decision_was_proposed",
+            "counterfactual_action",
+            "candidate_label",
+            "candidate_type",
+            "success_observable",
+            "failure_observable",
+            "next_decision_trigger",
+            "falsifying_evidence",
+            "supported_curated_heads",
+        )
+    )
+
+
+def _world_model_opportunity_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", text.lower())
+        if len(token) > 2 and token not in _WORLD_MODEL_OPPORTUNITY_STOPWORDS
+    }
+
+
+def _world_model_evidence_matches(
+    row_tokens: set[str],
+    evidence_catalog: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for item in evidence_catalog:
+        if item.get("ref_type") != "event":
+            continue
+        evidence_ref_payload = _model_dump(item.get("evidence_ref"))
+        if not evidence_ref_payload.get("ref_id"):
+            continue
+        text = " ".join(
+            [
+                str(item.get("title") or ""),
+                str(item.get("summary") or ""),
+                str(item.get("snippet") or ""),
+                " ".join(
+                    _safe_str_list(_model_dump(item.get("facts")).get("search_terms"))
+                ),
+            ]
+        )
+        evidence_tokens = _world_model_opportunity_tokens(text)
+        overlap = row_tokens & evidence_tokens
+        if len(overlap) < 2:
+            continue
+        score = len(overlap) / max(8, min(len(row_tokens), len(evidence_tokens)))
+        if score < 0.12:
+            continue
+        evidence_ref = SkillEvidenceRef.model_validate(evidence_ref_payload)
+        evidence_ref.metadata = {
+            **evidence_ref.metadata,
+            "world_model_overlap_terms": sorted(overlap)[:12],
+            "world_model_evidence_score": round(min(1.0, score), 4),
+        }
+        matches.append(
+            {
+                "score": round(min(1.0, score), 4),
+                "overlap_terms": sorted(overlap)[:12],
+                "evidence_ref": evidence_ref,
+            }
+        )
+    matches.sort(
+        key=lambda item: (
+            float(item["score"]),
+            str(item["evidence_ref"].timestamp),
+            str(item["evidence_ref"].ref_id),
+        ),
+        reverse=True,
+    )
+    return matches[:limit]
+
+
+def _best_world_model_skill_match(
+    row_tokens: set[str], skills: list[CompanySkill]
+) -> tuple[CompanySkill | None, float, list[str]]:
+    best_skill: CompanySkill | None = None
+    best_score = 0.0
+    best_overlap: list[str] = []
+    for skill in skills:
+        skill_tokens = _world_model_opportunity_tokens(_skill_match_text(skill))
+        if not skill_tokens:
+            continue
+        overlap = row_tokens & skill_tokens
+        if not overlap:
+            continue
+        score = len(overlap) / max(6, min(len(row_tokens), len(skill_tokens)))
+        if score > best_score:
+            best_skill = skill
+            best_score = min(1.0, score)
+            best_overlap = sorted(overlap)[:12]
+    return best_skill, round(best_score, 4), best_overlap
+
+
+def _skill_match_text(skill: CompanySkill) -> str:
+    trigger = skill.trigger
+    return " ".join(
+        [
+            skill.title,
+            skill.summary,
+            skill.goal,
+            skill.domain,
+            skill.usefulness_rationale,
+            trigger.description if trigger is not None else "",
+            " ".join(trigger.signals if trigger is not None else []),
+            " ".join(skill.negative_triggers),
+            " ".join(step.instruction for step in skill.steps),
+            " ".join(artifact.title for artifact in skill.output_artifacts),
+            " ".join(skill.tags),
+        ]
+    )
+
+
+def _world_model_priority_score(row: dict[str, Any]) -> float:
+    score_candidates = [
+        _maybe_float(row.get("supported_target_score")),
+        _maybe_float(row.get("balanced_operator_score")),
+    ]
+    score = max([value for value in score_candidates if value is not None] or [0.5])
+    delta = _maybe_float(row.get("supported_target_score_delta_vs_baseline"))
+    if delta is not None and delta > 0:
+        score += min(0.25, delta * 0.4)
+    rank = _maybe_float(row.get("frontier_rank")) or _maybe_float(
+        row.get("display_rank")
+    )
+    if rank is not None and rank <= 1:
+        score += 0.08
+    return round(min(max(score, 0.0), 1.0), 4)
+
+
+def _maybe_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _world_model_opportunity_payload(
+    *,
+    row: dict[str, Any],
+    row_index: int,
+    priority_score: float,
+    coverage_score: float,
+    overlap_terms: list[str],
+    evidence_refs: list[SkillEvidenceRef],
+    world_model_report_path: Path,
+) -> dict[str, Any]:
+    return {
+        "version": _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION,
+        "opportunity_source": _WORLD_MODEL_SKILL_OPPORTUNITY_VERSION,
+        "source_report": str(world_model_report_path),
+        "source_row_index": row_index,
+        "decision_point": str(row.get("decision_point") or ""),
+        "decision_question": str(row.get("decision_question") or ""),
+        "candidate_label": str(row.get("candidate_label") or ""),
+        "candidate_type": str(row.get("candidate_type") or ""),
+        "counterfactual_action": str(row.get("counterfactual_action") or ""),
+        "success_observable": str(row.get("success_observable") or ""),
+        "failure_observable": str(row.get("failure_observable") or ""),
+        "next_decision_trigger": str(row.get("next_decision_trigger") or ""),
+        "ranking_basis": str(row.get("ranking_basis") or ""),
+        "supported_target_score": str(row.get("supported_target_score") or ""),
+        "priority_score": round(priority_score, 4),
+        "existing_skill_coverage_score": round(coverage_score, 4),
+        "existing_skill_overlap_terms": overlap_terms,
+        "supporting_evidence_ids": [_evidence_id(ref) for ref in evidence_refs],
+        "supporting_evidence_refs": [
+            ref.model_dump(mode="json") for ref in evidence_refs
+        ],
+    }
+
+
+def _attach_world_model_skill_upgrade(
+    skill: CompanySkill, payload: dict[str, Any]
+) -> None:
+    upgrades = skill.metadata.get("world_model_upgrade_opportunities")
+    if not isinstance(upgrades, list):
+        upgrades = []
+    upgrades.append(
+        {
+            **payload,
+            "opportunity_kind": "skill_upgrade",
+            "matched_skill_id": skill.skill_id,
+            "recommendation": _world_model_gap_recommendation(payload),
+        }
+    )
+    upgrades.sort(
+        key=lambda item: float(item.get("priority_score") or 0.0), reverse=True
+    )
+    skill.metadata["world_model_upgrade_opportunities"] = upgrades[:5]
+    skill.metadata["world_model_upgrade_opportunity_count"] = len(
+        skill.metadata["world_model_upgrade_opportunities"]
+    )
+    if "world_model_upgrade" not in skill.tags:
+        skill.tags.append("world_model_upgrade")
+
+
+def _world_model_label(row: dict[str, Any]) -> str:
+    return (
+        _clean_llm_text(row.get("candidate_label"), max_len=90)
+        or _clean_llm_text(row.get("candidate_type"), max_len=90)
+        or _clean_llm_text(row.get("decision_point"), max_len=90)
+        or "Skill opportunity"
+    )
+
+
+def _world_model_gap_recommendation(row: dict[str, Any]) -> str:
+    action = _clean_llm_text(row.get("counterfactual_action"), max_len=240)
+    success = _clean_llm_text(row.get("success_observable"), max_len=200)
+    recommendation = (
+        f"Draft or upgrade a cited skill/workflow for: {action}."
+        if action
+        else "Draft or upgrade a cited skill/workflow for this counterfactual action area."
+    )
+    if success:
+        recommendation += f" Use this success observable during review: {success}."
+    return recommendation
 
 
 def _build_skill_evidence_catalog(

@@ -22,6 +22,7 @@ from vei.skillmap.models import (
 )
 
 from vei.skillmap.skill_pipeline import (
+    enrich_skill_map_with_world_model_opportunities,
     render_company_skill_map_markdown,
     render_skill_evidence_report,
     render_skill_gap_report,
@@ -120,6 +121,7 @@ __all__ = [
     "build_company_skill_map_from_context_path",
     "build_company_skill_map_from_workspace",
     "build_company_skill_map_from_session",
+    "enrich_skill_map_with_world_model_opportunities",
     "render_company_skill_map_markdown",
     "render_skill_evidence_report",
     "render_skill_gap_report",

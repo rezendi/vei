@@ -56,6 +56,8 @@ flowchart TD
     K["LLM or human proposes<br/>as-of decision points and actions"] --> J
     J --> L["Saturation Guard<br/>checks score spread, duplicate scores,<br/>boundary collapse, rank trust"]
     L --> M["CEO / Operator Report<br/>recommended actions, optional futures,<br/>scores, observables, caveats"]
+    L --> N["Skill / Workflow Opportunity Layer<br/>cited missing skills, skill upgrades,<br/>review candidates"]
+    N --> M
 ```
 
 ## Trust Boundaries
@@ -207,6 +209,12 @@ Strategic state-point runs are separate from training:
 If the saturation guard fails, the output is still useful as a structured
 decision aid, but the exact rank order should not be treated as advice.
 
+The same strategic rows feed the skill/workflow refresh. Trusted high-value
+counterfactual rows are treated as search hints: if an existing skill covers the
+area, the skill gets a cited upgrade opportunity; if no skill covers it, the
+system emits a cited skill gap/workflow candidate. Rows without canonical event
+citations, or rows blocked by the trust guard, are skipped.
+
 ## Daily Update Path
 
 A daily loop should be incremental and explicit:
@@ -218,6 +226,7 @@ new connector snapshots
 -> refresh or fine-tune the checkpoint
 -> evaluate held-out factual futures
 -> run strategic state points for each active tenant
+-> refresh skills/workflows from cited world-model opportunities
 -> publish CEO/operator reports with saturation and coverage caveats
 ```
 

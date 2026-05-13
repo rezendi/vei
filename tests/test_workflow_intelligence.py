@@ -501,6 +501,73 @@ def test_mining_annotates_skill_workflows_with_world_model_alignment(
     assert alignment["matches"][0]["candidate_label"] == "QA handoff"
 
 
+def test_mining_surfaces_cited_world_model_skill_opportunities(
+    tmp_path: Path,
+) -> None:
+    root, context_path, event_ids = _source_root(tmp_path)
+    skill_map_path = _write_company_skill_map(root, event_ids)
+    payload = json.loads(skill_map_path.read_text(encoding="utf-8"))
+    payload["gaps"] = [
+        {
+            "gap_id": "gap:finance-confirmation",
+            "title": "World-model opportunity: Finance confirmation gate",
+            "severity": "warning",
+            "reason": "Counterfactual search highlights finance confirmation.",
+            "recommendation": (
+                "Draft a skill that requires finance confirmation before an "
+                "external customer reply."
+            ),
+            "evidence_refs": [
+                {
+                    "ref_type": "event",
+                    "ref_id": event_ids[0],
+                    "title": "Pilot proposal from Acme",
+                    "snippet": (
+                        "Customer proposal needs approval and finance "
+                        "confirmation before external reply."
+                    ),
+                }
+            ],
+            "metadata": {
+                "opportunity_source": "world_model_skill_opportunity_v1",
+                "priority_score": 0.93,
+                "existing_skill_coverage_score": 0.04,
+                "candidate_label": "Finance confirmation gate",
+                "candidate_type": "focused_pilot",
+                "counterfactual_action": (
+                    "Require finance confirmation before any external customer reply."
+                ),
+                "decision_point": "Renewal finance decision",
+                "success_observable": "Finance confirms before reply.",
+                "supporting_evidence_ids": [f"event:{event_ids[0]}"],
+            },
+        }
+    ]
+    skill_map_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    output = tmp_path / "semantic_workflow"
+
+    result = mine_workflows(
+        context_path,
+        output=output,
+        limit=5,
+        skill_map_path=skill_map_path,
+    )
+
+    opportunity = next(
+        candidate
+        for candidate in result.candidates
+        if candidate.metadata.get("generated_by") == "world_model_skill_opportunity_v1"
+    )
+    assert opportunity.source_event_ids == [event_ids[0]]
+    assert opportunity.rank_score > 90
+    assert (
+        opportunity.draft_task_spec.evaluation_level == EvaluationLevel.RUBRIC_EVALUABLE
+    )
+    assert "Finance confirmation gate" in opportunity.title
+    manifest = json.loads((output / "workflow_mining_manifest.json").read_text())
+    assert manifest["world_model_opportunity_candidate_count"] == 1
+
+
 def test_workflow_cli_mines_labels_and_promotes_specs(tmp_path: Path) -> None:
     _root, context_path, event_ids = _source_root(tmp_path)
     output = tmp_path / "workflow_cli"

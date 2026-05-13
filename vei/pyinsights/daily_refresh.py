@@ -13,6 +13,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from vei.skillmap.api import (
+    CompanySkillMap,
+    enrich_skill_map_with_world_model_opportunities,
+    write_company_skill_map_outputs,
+)
 from vei.workflow.api import mine_workflows
 
 RefreshMode = Literal["incremental-validated", "full-validated"]
@@ -126,6 +131,8 @@ def run_validated_daily_refresh(
     train_result_path = model_root / "model_runs" / "jepa_latent" / "train_result.json"
     eval_result_path = model_root / "model_runs" / "jepa_latent" / "eval_result.json"
     target_manifest_path = model_root / "target_manifests" / f"{DEFAULT_TENANT_ID}.json"
+    effective_skill_path = skill_path
+    skill_output_root = run_root / "skill_map"
     workflow_root = (
         Path(workflow_output).expanduser().resolve()
         if workflow_output is not None
@@ -194,12 +201,42 @@ def run_validated_daily_refresh(
     )
 
     if refresh_workflows and skill_path.is_file() and strategic_csv_path.is_file():
+        try:
+            base_skill_map = CompanySkillMap.model_validate_json(
+                skill_path.read_text(encoding="utf-8")
+            )
+            enriched_skill_map = enrich_skill_map_with_world_model_opportunities(
+                base_skill_map,
+                context_path=context_path,
+                world_model_report_path=strategic_csv_path,
+                max_opportunities=8,
+                require_trusted_ranking=True,
+            )
+            skill_outputs = write_company_skill_map_outputs(
+                enriched_skill_map, skill_output_root
+            )
+            effective_skill_path = skill_outputs["json"]
+            checks.append(
+                DailyRefreshCheck(
+                    code="skillmap.world_model_opportunity_refresh_ran",
+                    passed=True,
+                    detail=str(effective_skill_path),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            checks.append(
+                DailyRefreshCheck(
+                    code="skillmap.world_model_opportunity_refresh_ran",
+                    passed=False,
+                    detail=str(exc),
+                )
+            )
         mine_workflows(
             context_path,
             output=workflow_root,
             limit=25,
             backend="auto",
-            skill_map_path=skill_path,
+            skill_map_path=effective_skill_path,
             world_model_report_path=strategic_csv_path,
             include_structural_fallback=False,
         )
@@ -215,7 +252,7 @@ def run_validated_daily_refresh(
     workflow_result_path = workflow_root / "workflow_candidates.json"
     workflow_manifest_path = workflow_root / "workflow_mining_manifest.json"
     workflows_payload = _read_json_or_empty(workflow_result_path)
-    skill_payload = _read_json_or_empty(skill_path)
+    skill_payload = _read_json_or_empty(effective_skill_path)
     _validate_workflows(
         checks,
         workflows_payload=workflows_payload,
@@ -256,13 +293,15 @@ def run_validated_daily_refresh(
     artifacts: dict[str, str] = {
         "validation_manifest": str(run_root / "validation_manifest.json"),
         "workflow_skill_summary": str(run_root / "workflow_skill_refresh_summary.md"),
+        "skill_map": str(effective_skill_path),
     }
     references = {
         "context_bundle": str(context_path),
         "canonical_event_index": str(event_index_path),
         "canonical_events": str(canonical_events_path),
         "context_verify": str(verify_path),
-        "skill_map": str(skill_path),
+        "source_skill_map": str(skill_path),
+        "skill_map": str(effective_skill_path),
         "workflow_candidates": str(workflow_result_path),
         "workflow_mining_manifest": str(workflow_manifest_path),
         "dataset_manifest": str(dataset_manifest_path),
@@ -722,6 +761,47 @@ def _validate_skill_map(
             detail=f"invalid_refs={invalid_refs[:5]}",
         )
     )
+    metadata = (
+        skill_payload.get("metadata", {}) if isinstance(skill_payload, dict) else {}
+    )
+    opportunity_meta = metadata.get("world_model_skill_opportunities", {})
+    opportunity_gaps = [
+        gap
+        for gap in skill_payload.get("gaps", []) or []
+        if isinstance(gap, dict)
+        and gap.get("metadata", {}).get("opportunity_source")
+        == "world_model_skill_opportunity_v1"
+    ]
+    uncited_opportunity_gaps = [
+        str(gap.get("gap_id", ""))
+        for gap in opportunity_gaps
+        if not gap.get("evidence_refs")
+    ]
+    uncited_upgrades: list[str] = []
+    for skill in accepted:
+        for opportunity in (
+            skill.get("metadata", {}).get("world_model_upgrade_opportunities", []) or []
+        ):
+            if not isinstance(opportunity, dict):
+                continue
+            if (
+                opportunity.get("opportunity_source")
+                != "world_model_skill_opportunity_v1"
+            ):
+                continue
+            if not opportunity.get("supporting_evidence_ids"):
+                uncited_upgrades.append(str(skill.get("skill_id", "")))
+    checks.append(
+        DailyRefreshCheck(
+            code="skillmap.world_model_opportunities_are_cited",
+            passed=not uncited_opportunity_gaps and not uncited_upgrades,
+            detail=(
+                f"opportunities={opportunity_meta.get('opportunities_added', 0)} "
+                f"uncited_gaps={uncited_opportunity_gaps[:5]} "
+                f"uncited_upgrades={uncited_upgrades[:5]}"
+            ),
+        )
+    )
     activations_without_owner = [
         str(skill.get("skill_id", ""))
         for skill in accepted
@@ -1044,11 +1124,33 @@ def _render_workflow_skill_summary(
 ) -> str:
     candidates = workflows_payload.get("candidates", []) or []
     skills = skill_payload.get("skills", []) or []
+    opportunity_meta = (
+        skill_payload.get("metadata", {}).get("world_model_skill_opportunities", {})
+        if isinstance(skill_payload, dict)
+        else {}
+    )
+    opportunity_gaps = [
+        gap
+        for gap in skill_payload.get("gaps", []) or []
+        if isinstance(gap, dict)
+        and gap.get("metadata", {}).get("opportunity_source")
+        == "world_model_skill_opportunity_v1"
+    ]
+    upgrade_skills = [
+        skill
+        for skill in skills
+        if isinstance(skill, dict)
+        and skill.get("metadata", {}).get("world_model_upgrade_opportunities")
+    ]
     lines = [
         f"# Py Insights Workflow/Skill Daily Summary - {as_of_date.isoformat()}",
         "",
         f"- Published workflow candidates: `{len(candidates)}`",
         f"- Skill count: `{len(skills)}`",
+        f"- World-model skill opportunities: `{opportunity_meta.get('opportunities_added', 0)}`",
+        f"- Missing-skill opportunities: `{opportunity_meta.get('missing_skill_gap_count', 0)}`",
+        f"- Skill-upgrade opportunities: `{opportunity_meta.get('skill_upgrade_count', 0)}`",
+        f"- Untrusted strategic rows skipped: `{opportunity_meta.get('rows_skipped_untrusted', 0)}`",
         f"- Semantic candidate count: `{workflow_manifest.get('semantic_candidate_count', '')}`",
         f"- Structural diagnostic cluster count: `{workflow_manifest.get('structural_candidate_count', '')}`",
         "",
@@ -1063,6 +1165,18 @@ def _render_workflow_skill_summary(
             f"(score={candidate.get('rank_score', '')}, "
             f"readiness={candidate.get('metadata', {}).get('deployment_readiness', '')})"
         )
+    if opportunity_gaps or upgrade_skills:
+        lines.extend(["", "## World-Model Skill Opportunities", ""])
+        for gap in opportunity_gaps[:10]:
+            lines.append(
+                f"- Missing: {gap.get('title', '')} "
+                f"(evidence={len(gap.get('evidence_refs', []) or [])})"
+            )
+        for skill in upgrade_skills[:10]:
+            lines.append(
+                f"- Upgrade: {skill.get('title', '')} "
+                f"(opportunities={skill.get('metadata', {}).get('world_model_upgrade_opportunity_count', '')})"
+            )
     return "\n".join(lines) + "\n"
 
 

@@ -184,6 +184,7 @@ _ACCOUNT_ID_RE = re.compile(
 )
 
 _SKILLMAP_GENERATOR = "skillmap_semantic_v1"
+_WORLD_MODEL_OPPORTUNITY_GENERATOR = "world_model_skill_opportunity_v1"
 _STRUCTURAL_GENERATOR = "workflow_mining_v1"
 
 
@@ -1233,6 +1234,228 @@ def _candidate_from_skill(
     )
 
 
+def _gap_evidence_event_ids(gap: Any) -> list[str]:
+    ids: list[str] = []
+    seen: set[str] = set()
+    for ref in getattr(gap, "evidence_refs", []) or []:
+        ref_type = str(getattr(ref, "ref_type", "") or "")
+        ref_id = str(getattr(ref, "ref_id", "") or "")
+        if ref_type == "event" and ref_id and ref_id not in seen:
+            ids.append(ref_id)
+            seen.add(ref_id)
+        metadata = getattr(ref, "metadata", {}) or {}
+        if isinstance(metadata, dict):
+            for event_id in metadata.get("event_ids") or []:
+                text_id = str(event_id)
+                if text_id and text_id not in seen:
+                    ids.append(text_id)
+                    seen.add(text_id)
+    return ids
+
+
+def _candidate_from_world_model_gap(
+    *,
+    gap: Any,
+    events_by_id: dict[str, CanonicalEvent],
+    company_name: str,
+    company_domain: str,
+) -> WorkflowCandidate | None:
+    metadata = getattr(gap, "metadata", {}) or {}
+    if metadata.get("opportunity_source") != _WORLD_MODEL_OPPORTUNITY_GENERATOR:
+        return None
+    evidence_ids = _gap_evidence_event_ids(gap)
+    events = [
+        events_by_id[event_id] for event_id in evidence_ids if event_id in events_by_id
+    ]
+    if not events:
+        return None
+    events.sort(key=lambda event: (event.ts_ms or 0, event.event_id))
+    title = str(getattr(gap, "title", "") or "World-model skill opportunity").strip()
+    group_key = f"world_model_gap:{getattr(gap, 'gap_id', title)}"
+    candidate_id = _stable_id(company_domain, group_key, title, prefix="wfc")
+    event_ids = _event_ids(events)
+    case_ids = _case_ids(events)
+    surfaces = sorted({_surface(event) for event in events if _surface(event)})
+    kinds = sorted({event.kind for event in events if event.kind})
+    priority_score = _safe_float(metadata.get("priority_score"), default=0.5)
+    coverage_score = _safe_float(
+        metadata.get("existing_skill_coverage_score"), default=0.0
+    )
+    snippets = _gap_evidence_texts(gap, events)
+    summary = " ".join(
+        str(item).strip()
+        for item in [
+            getattr(gap, "reason", ""),
+            getattr(gap, "recommendation", ""),
+        ]
+        if str(item).strip()
+    )
+    observed = WorkflowObservedExample(
+        example_id=_stable_id(candidate_id, "world-model-gap-example", prefix="wex"),
+        case_id=case_ids[0] if case_ids else None,
+        thread_ref=_thread_ref(events[0]) if events else "",
+        summary=summary or title,
+        event_ids=event_ids,
+        surfaces=surfaces,
+        actor_ids=_actor_ids(events),
+        object_refs=_object_refs(events),
+        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
+        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
+    )
+    reference_path = WorkflowReferencePath(
+        path_id=_stable_id(candidate_id, "world-model-gap-reference", prefix="wrp"),
+        title=f"Cited evidence for {title}",
+        description=(
+            "World-model counterfactual opportunity grounded by canonical events."
+        ),
+        event_ids=event_ids,
+        case_ids=case_ids,
+        evidence_refs=_evidence_refs(events, limit=10, redact=True),
+        metadata={
+            "source_gap_id": getattr(gap, "gap_id", ""),
+            "source": _WORLD_MODEL_OPPORTUNITY_GENERATOR,
+        },
+    )
+    draft_spec = BusinessTaskSpec(
+        task_id=_stable_id(company_domain, group_key, title, prefix="bts"),
+        title=title,
+        company_name=company_name,
+        company_domain=company_domain,
+        objective=str(
+            metadata.get("counterfactual_action")
+            or getattr(gap, "recommendation", "")
+            or title
+        ),
+        business_context=summary,
+        context_requirements=[
+            item
+            for item in [
+                str(metadata.get("decision_point") or ""),
+                str(metadata.get("next_decision_trigger") or ""),
+            ]
+            if item
+        ],
+        required_evidence=snippets[:8]
+        or ["Cited canonical events supporting the opportunity."],
+        policies=[
+            "Draft/review only until a human owner promotes this opportunity.",
+            "Do not activate without cited examples, owner, reviewer, and replay checks.",
+        ],
+        acceptable_outputs=[
+            "Draft skill or workflow spec with cited evidence and review owner"
+        ],
+        accept_reject_criteria=[
+            "Every proposed skill/workflow cites canonical event evidence.",
+            "The proposed output directly addresses the world-model counterfactual action.",
+            "A reviewer can reject it if cited evidence does not support the action area.",
+        ],
+        evaluation_rubric=[
+            "citation_coverage",
+            "counterfactual_action_alignment",
+            "human_review_readiness",
+        ],
+        observed_examples=[observed],
+        reference_paths=[reference_path],
+        source_event_ids=event_ids,
+        source_case_ids=case_ids,
+        open_questions=[
+            "Should this become a new skill, an upgrade to an existing skill, or a workflow review item?",
+            "Who owns and reviews the capability before activation?",
+        ],
+        spec_confidence=min(
+            1.0, (0.65 * priority_score) + (0.35 * (1 - coverage_score))
+        ),
+        status=BusinessTaskStatus.DRAFT,
+        evaluation_level=EvaluationLevel.RUBRIC_EVALUABLE,
+        metadata={
+            "candidate_id": candidate_id,
+            "group_key": group_key,
+            "generated_by": _WORLD_MODEL_OPPORTUNITY_GENERATOR,
+            "source_gap_id": getattr(gap, "gap_id", ""),
+            "claim_boundary": (
+                "world-model counterfactual opportunity grounded in cited events; "
+                "requires human review before becoming a skill or workflow"
+            ),
+            "world_model_opportunity": metadata,
+        },
+    )
+    return WorkflowCandidate(
+        candidate_id=candidate_id,
+        title=title,
+        company_name=company_name,
+        company_domain=company_domain,
+        group_key=group_key,
+        source_case_ids=case_ids,
+        source_event_ids=event_ids,
+        thread_refs=sorted(
+            {_thread_ref(event) for event in events if _thread_ref(event)}
+        ),
+        surfaces=surfaces,
+        event_kinds=kinds,
+        actor_ids=_actor_ids(events),
+        object_refs=_object_refs(events),
+        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
+        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
+        repetition_count=max(1, len(case_ids)),
+        evidence_density=min(1.0, len(events) / 5.0),
+        cross_surface_score=min(1.0, len(surfaces) / 3.0) if surfaces else 0.0,
+        escalation_score=priority_score,
+        labelability_score=min(1.0, 0.65 + (0.35 * len(event_ids) / 4.0)),
+        rank_score=round(min(1.0, (0.8 * priority_score) + 0.2) * 100.0, 4),
+        summary=summary,
+        snippets=snippets,
+        draft_task_spec=draft_spec,
+        metadata={
+            "generated_by": _WORLD_MODEL_OPPORTUNITY_GENERATOR,
+            "source_gap_id": getattr(gap, "gap_id", ""),
+            "opportunity_kind": "missing_skill",
+            "deployment_readiness": "needs_review",
+            "priority_score": priority_score,
+            "existing_skill_coverage_score": coverage_score,
+            "event_count": len(events),
+            "evidence_ref_count": len(getattr(gap, "evidence_refs", []) or []),
+            "world_model_opportunity": metadata,
+        },
+    )
+
+
+def _gap_evidence_texts(
+    gap: Any, events: list[CanonicalEvent], *, limit: int = 8
+) -> list[str]:
+    reference_tokens = _tokens_for_match(
+        " ".join(
+            str(item)
+            for item in [
+                getattr(gap, "title", ""),
+                getattr(gap, "reason", ""),
+                getattr(gap, "recommendation", ""),
+                getattr(gap, "metadata", {}),
+            ]
+        )
+    )
+    raw_texts = [
+        _skill_ref_text(ref) for ref in getattr(gap, "evidence_refs", []) or []
+    ]
+    raw_texts.extend(_event_snippet(event) for event in events)
+    seen: set[str] = set()
+    scored: list[tuple[float, int, str]] = []
+    for raw_text in raw_texts:
+        text = _clean_text(_redact_workflow_text(raw_text), limit=240)
+        if _is_low_signal_evidence(text) or text in seen:
+            continue
+        seen.add(text)
+        scored.append(_evidence_text_score(text, reference_tokens))
+    scored.sort(reverse=True)
+    return [text for _score, _token_count, text in scored[:limit]]
+
+
+def _safe_float(value: Any, *, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _semantic_candidates_from_skill_map(
     *,
     skill_map: Any | None,
@@ -1252,6 +1475,15 @@ def _semantic_candidates_from_skill_map(
             company_name=company_name,
             company_domain=company_domain,
             world_model_rows=world_model_rows,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    for gap in getattr(skill_map, "gaps", []) or []:
+        candidate = _candidate_from_world_model_gap(
+            gap=gap,
+            events_by_id=events_by_id,
+            company_name=company_name,
+            company_domain=company_domain,
         )
         if candidate is not None:
             candidates.append(candidate)
@@ -1374,6 +1606,8 @@ def mine_workflows(
                 (
                     1
                     if candidate.metadata.get("generated_by") == _SKILLMAP_GENERATOR
+                    or candidate.metadata.get("generated_by")
+                    == _WORLD_MODEL_OPPORTUNITY_GENERATOR
                     else 0
                 ),
                 candidate.rank_score,
@@ -1405,13 +1639,20 @@ def mine_workflows(
                 else ""
             ),
             "semantic_candidate_count": len(semantic_candidates),
+            "world_model_opportunity_candidate_count": sum(
+                1
+                for candidate in semantic_candidates
+                if candidate.metadata.get("generated_by")
+                == _WORLD_MODEL_OPPORTUNITY_GENERATOR
+            ),
             "structural_candidate_count": len(structural_candidates),
             "structural_fallback_included": bool(
                 include_structural_fallback or backend == "merged"
             ),
             "candidate_policy": (
-                "skill-backed semantic workflows are primary; structural "
-                "clusters are diagnostics/fallback only"
+                "skill-backed semantic workflows and cited world-model "
+                "opportunities are primary; structural clusters are "
+                "diagnostics/fallback only"
             ),
             "generated_at": _now_iso(),
         },
@@ -1444,6 +1685,9 @@ def mine_workflows(
             "skill_map_path": result.metadata["skill_map_path"],
             "world_model_report_path": result.metadata["world_model_report_path"],
             "semantic_candidate_count": len(semantic_candidates),
+            "world_model_opportunity_candidate_count": result.metadata[
+                "world_model_opportunity_candidate_count"
+            ],
             "structural_candidate_count": len(structural_candidates),
             "published_candidate_count": result.candidate_count,
             "raw_structural_clusters_are_diagnostics": bool(semantic_candidates),

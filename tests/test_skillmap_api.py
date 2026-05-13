@@ -20,6 +20,7 @@ from vei.skillmap.api import (
     SkillTrigger,
     build_company_skill_map_from_context_path,
     build_company_skill_map_from_workspace,
+    enrich_skill_map_with_world_model_opportunities,
     render_company_skill_map_markdown,
     render_skill_refresh_report,
     validate_company_skill_map,
@@ -133,6 +134,94 @@ def test_skill_map_requires_llm_credentials_when_building_context_bundle(
         RuntimeError, match="deterministic skill extraction is disabled"
     ):
         build_company_skill_map_from_context_path(snapshot_path, limit=4)
+
+
+def test_skill_map_adds_cited_world_model_opportunities(
+    tmp_path: Path,
+) -> None:
+    snapshot_path = _write_skillmap_snapshot(tmp_path)
+    strategic_path = tmp_path / "strategic_state_point_results.csv"
+    strategic_path.write_text(
+        "\n".join(
+            [
+                (
+                    "decision_point,candidate_label,candidate_type,"
+                    "counterfactual_action,supported_target_score,"
+                    "ranking_basis,saturation_guard_trusted_for_ranking,"
+                    "success_observable,failure_observable"
+                ),
+                (
+                    "Renewal legal decision,Legal review gate,focused_pilot,"
+                    "Run legal review before the renewal customer reply,0.82,"
+                    "supported_curated_targets,true,"
+                    "Legal review is complete before reply,"
+                    "Customer reply is sent before legal review"
+                ),
+                (
+                    "Renewal finance decision,Finance confirmation gate,focused_pilot,"
+                    "Require finance confirmation before any external customer reply,0.78,"
+                    "supported_curated_targets,true,"
+                    "Finance confirms before external reply,"
+                    "External reply goes out before finance confirms"
+                ),
+                (
+                    "Uncited narrative decision,Narrative reset,commercial_reset,"
+                    "Rewrite the market narrative around category leadership,0.9,"
+                    "supported_curated_targets,true,"
+                    "Narrative is clearer,"
+                    "Narrative remains vague"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    skill_map = CompanySkillMap(
+        organization_name="Acme Ops",
+        organization_domain="acme.example",
+        generated_at="2026-01-03T00:00:00Z",
+        source_ref=str(snapshot_path),
+        skills=[
+            CompanySkill(
+                skill_id="skill:legal-review",
+                title="Renewal legal review gate",
+                summary="Use legal review for renewal risk before customer replies.",
+                trigger=SkillTrigger(description="Renewal risk needs legal review."),
+                goal="Prevent customer replies before legal review is complete.",
+                steps=[
+                    SkillStep(
+                        step_id="collect",
+                        instruction="Collect renewal risk and legal review evidence.",
+                    )
+                ],
+                confidence=0.7,
+            )
+        ],
+    )
+
+    enriched = enrich_skill_map_with_world_model_opportunities(
+        skill_map,
+        context_path=snapshot_path,
+        world_model_report_path=strategic_path,
+        max_opportunities=4,
+    )
+
+    meta = enriched.metadata["world_model_skill_opportunities"]
+    assert meta["opportunities_added"] == 2
+    assert meta["skill_upgrade_count"] == 1
+    assert meta["missing_skill_gap_count"] == 1
+    assert meta["rows_skipped_uncited"] == 1
+    gap = next(
+        gap
+        for gap in enriched.gaps
+        if gap.metadata.get("opportunity_source") == "world_model_skill_opportunity_v1"
+    )
+    assert "Finance confirmation gate" in gap.title
+    assert gap.evidence_refs
+    assert all(ref.ref_type == "event" for ref in gap.evidence_refs)
+    upgrades = enriched.skills[0].metadata["world_model_upgrade_opportunities"]
+    assert upgrades[0]["candidate_label"] == "Legal review gate"
+    assert upgrades[0]["supporting_evidence_ids"]
 
 
 def test_skill_map_processes_entire_evidence_catalog_across_shards(

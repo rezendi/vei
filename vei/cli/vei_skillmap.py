@@ -10,6 +10,7 @@ from vei.skillmap.api import (
     CompanySkillMap,
     build_company_skill_map_from_context_path,
     build_company_skill_map_from_workspace,
+    enrich_skill_map_with_world_model_opportunities,
     validate_company_skill_map,
     write_company_skill_map_outputs,
 )
@@ -79,6 +80,17 @@ def build(
         help="Evidence items per LLM call. All shards are processed; use 0 to send one full catalog.",
         min=0,
     ),
+    world_model_report: str | None = typer.Option(
+        None,
+        "--world-model-report",
+        help="Optional strategic-state results CSV/JSON used to add cited skill gaps/upgrades.",
+    ),
+    max_world_model_opportunities: int = typer.Option(
+        8,
+        "--max-world-model-opportunities",
+        help="Maximum cited world-model skill opportunities to attach.",
+        min=0,
+    ),
     progress: bool = typer.Option(
         True,
         "--progress/--no-progress",
@@ -99,6 +111,13 @@ def build(
             catalog_shard_size=catalog_shard_size,
             progress=_progress_reporter if progress else None,
         )
+        if world_model_report:
+            skill_map = enrich_skill_map_with_world_model_opportunities(
+                skill_map,
+                context_path=source_dir,
+                world_model_report_path=world_model_report,
+                max_opportunities=max_world_model_opportunities,
+            )
     except Exception as exc:  # noqa: BLE001
         _exit_skillmap_failure("build", exc)
     paths = write_company_skill_map_outputs(skill_map, output)
@@ -170,6 +189,17 @@ def refresh(
         help="Evidence items per LLM call. All shards are processed; use 0 to send one full catalog.",
         min=0,
     ),
+    world_model_report: str | None = typer.Option(
+        None,
+        "--world-model-report",
+        help="Optional strategic-state results CSV/JSON used to add cited skill gaps/upgrades.",
+    ),
+    max_world_model_opportunities: int = typer.Option(
+        8,
+        "--max-world-model-opportunities",
+        help="Maximum cited world-model skill opportunities to attach.",
+        min=0,
+    ),
     progress: bool = typer.Option(
         True,
         "--progress/--no-progress",
@@ -196,6 +226,13 @@ def refresh(
             catalog_shard_size=catalog_shard_size,
             progress=_progress_reporter if progress else None,
         )
+        if world_model_report:
+            skill_map = enrich_skill_map_with_world_model_opportunities(
+                skill_map,
+                context_path=context or workspace_path,
+                world_model_report_path=world_model_report,
+                max_opportunities=max_world_model_opportunities,
+            )
     except Exception as exc:  # noqa: BLE001
         _exit_skillmap_failure("refresh", exc)
     paths = write_company_skill_map_outputs(skill_map, output_dir)
