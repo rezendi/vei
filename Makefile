@@ -1,25 +1,36 @@
 SHELL := /bin/bash
 PYTHON ?= python3.11
+UV ?=
 VENV ?= .venv
 MODE ?= $(or $(AGENT_MODE),baseline)
 AGENTS_FILE := .agents.yml
 SETUP_STAMP := $(VENV)/.setup-complete
 SETUP_FULL_STAMP := $(VENV)/.setup-full-complete
 VENV_BIN := $(VENV)/bin
+VENV_PYTHON := $(VENV_BIN)/python
 SETUP_EXTRAS := dev,sse,ui
 SETUP_FULL_EXTRAS := dev,llm,sse,ui,test,rl,browser,worldmodel,jepa
 COVERAGE_FAIL_UNDER ?= $(or $(shell awk 'BEGIN { section = 0 } $$1 == "coverage:" { section = 1; next } section && $$1 == "global:" { print int($$2 * 100); exit }' $(AGENTS_FILE) 2>/dev/null),80)
 PIPAPI_PYTHON := $(abspath $(VENV_BIN)/python)
 
+ifeq ($(strip $(UV)),)
+CREATE_VENV := $(PYTHON) -m venv $(VENV)
+BOOTSTRAP_PIP := $(VENV_PYTHON) -m pip install --upgrade pip "setuptools<82" wheel
+INSTALL_PYTHON_PACKAGE := $(VENV_PYTHON) -m pip install
+else
+CREATE_VENV := $(UV) venv --python $(PYTHON) $(VENV)
+BOOTSTRAP_PIP := true
+INSTALL_PYTHON_PACKAGE := $(UV) pip install --python $(VENV_PYTHON)
+endif
+
 .PHONY: setup bootstrap setup-full check check-full test test-full dynamics-eval codex-live-smoke worldmodel-smoke public-demo-smoke workflow-intel-smoke fetch-public-history-fixture-shrink llm-live deps-audit enron-example service-ops-example dispatch-local-example enron-screens fetch-enron-full package-enron-full all clean clean-workspace clean-workspace-dry-run clean-workspace-hard clean-workspace-hard-dry-run
 
 $(VENV)/bin/activate:
-	$(PYTHON) -m venv $(VENV)
+	$(CREATE_VENV)
 
 $(SETUP_STAMP): $(VENV)/bin/activate pyproject.toml
-	. $(VENV)/bin/activate && \
-		pip install --upgrade pip "setuptools<82" wheel && \
-		pip install -e ".[$(SETUP_EXTRAS)]"
+	$(BOOTSTRAP_PIP)
+	$(INSTALL_PYTHON_PACKAGE) -e ".[$(SETUP_EXTRAS)]"
 	@if [ -f .pre-commit-config.yaml ]; then \
 		$(VENV_BIN)/pre-commit install --install-hooks || \
 			echo "Skipping pre-commit install; hooks are managed elsewhere."; \
@@ -30,8 +41,7 @@ setup bootstrap: $(SETUP_STAMP)
 	@echo "Virtual environment ready at $(VENV)"
 
 $(SETUP_FULL_STAMP): $(SETUP_STAMP) pyproject.toml
-	. $(VENV)/bin/activate && \
-		pip install -e ".[$(SETUP_FULL_EXTRAS)]"
+	$(INSTALL_PYTHON_PACKAGE) -e ".[$(SETUP_FULL_EXTRAS)]"
 	@touch $(SETUP_FULL_STAMP)
 
 setup-full: $(SETUP_FULL_STAMP)
