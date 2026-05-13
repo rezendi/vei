@@ -4,7 +4,66 @@ This document describes a plan to remove the hardcoded keyword bags that feed VE
 
 This is not a blanket ban on every string-matching helper in the repository. Some keyword lists are demo topic lenses, ingestion classifiers, benchmark fixtures, or deterministic search affordances. Those need their own treatment and are explicitly inventoried below.
 
-## Why this versus the status quo
+## The harness today (Stage 0 — vibecheck scaffolding)
+
+The full methodology above is the shipping target. The repo currently carries a much smaller scaffold whose only job is to make the plan testable cheaply against real corpora before any of Stages 6 and 7 are wired up. None of what follows is the production pipeline; this is the smallest viable rig for eyeballing what corpus-derived vocabulary looks like and comparing it to the handwritten fixture.
+
+What ships today:
+
+- `vei.whatif.measurement_manifest` — Pydantic schema (`TenantMeasurementManifest`, `ManifestHead`, `ManifestTerm`) plus JSON load/save. This is the on-disk contract used by every other piece.
+- `vei.whatif.measurement_fixtures.extract_fixture_manifest(tenant_id)` — freezes the current handwritten keyword bags (`_REWORK_TERMS`, `_DomainLabelSpec.positive_terms` / `risk_terms`, the proxy-debug term bags in `benchmark_business.py`) into a manifest. This is the regression oracle and the comparison fixture, not a production artifact.
+- `vei.whatif.measurement_samples.sample_enron_events()` — pulls a breadth-stratified Enron event sample from the in-tree fixtures (`enron_record_history`, `enron_credit_history`, `enron_ferc_history`, `enron_public_context`).
+- `vei.whatif.measurement_proposer.propose_manifest` — single-pass black-box LLM call that consumes the event sample plus org context and emits a manifest in schema. Calls the OpenAI SDK directly; defaults to `gpt-5-mini`. Term normalization (lowercase, ASCII-hyphen, slash-split, dedupe) happens at coerce time.
+- `vei.whatif.measurement_diff` — per-head, per-polarity Jaccard plus only-in-A / only-in-B sets. Output is descriptive markdown; there is intentionally no overall similarity score (see "Discipline" below).
+- `vei mcm` CLI — `extract`, `sample-events`, `propose`, `diff`, `list-tenants`.
+
+How to run the Enron eyeball end-to-end:
+
+```
+# 1. Freeze the handwritten vocabulary as a comparison fixture.
+vei mcm extract --tenant enron -o enron.fixture.json
+
+# 2. Pull a breadth-stratified event sample from the in-tree Enron fixtures.
+vei mcm sample-events --corpus enron -o enron_events.json
+
+# 3. Run the single-pass LLM proposer. Requires OPENAI_API_KEY in .env.
+vei mcm propose --tenant enron \
+  --events-json enron_events.json \
+  --org-context-file enron_org_context.json \
+  --model gpt-5-mini \
+  -o enron.llm.json
+
+# 4. Diff fixture vs proposed manifest as markdown.
+vei mcm diff enron.fixture.json enron.llm.json -o enron.diff.md
+```
+
+`enron_org_context.json` is any small JSON object describing industry, regulatory regime, and time period; the proposer feeds it verbatim into the prompt. There is no schema for it yet — keep it short and concrete.
+
+The first useful read from the diff is which fixture heads come back "only in A" — those are the heads the LLM declined to propose vocabulary for because the sample contains none of the matching language. On Enron, the structural-vocab heads (`reopen_rework_count`, `blocked_duration_ms`, `owner_ambiguity_count`, `deadline_sla_miss_count`) all fall out this way, because the Enron corpus is corporate disclosures and credit-agency actions, not operational chat. That is precisely the implicit-tenant-tuning problem the plan exists to surface.
+
+### Why this is single-pass and not yet the production pipeline
+
+The production methodology above is two-pass with a human review in the middle:
+
+- **Pass 1** proposes candidate concepts and maps them to the fixed runtime registry.
+- A reviewer accepts, rejects, or maps each concept; concepts that do not fit the runtime registry are filed as future-migration candidates rather than runtime heads.
+- **Pass 2** populates a citation-grounded lexicon per accepted head.
+
+The harness today collapses all of that into one LLM call that returns concepts and lexicons together. That is deliberate for Stage 0 — there is no point splitting passes before we know whether the corpus-derived vocabulary is even useful, and there is no review surface to put between them yet. Before shipping, the single-pass `propose_manifest` is replaced with: a discovery prompt (Stage 3), a reviewer surface (Stage 4), and a lexicon prompt (Stage 5) that enforces verbatim citation per term.
+
+Implications worth being explicit about so this is not mistaken for a production pipeline:
+
+- **No human in the loop.** Today's manifest is whatever one `gpt-5-mini` call returned. Treat any output as a hypothesis to inspect, not as a measurement contract.
+- **Citations are produced but not enforced.** The prompt asks for `cited_event_ids` per term; the runtime today does not re-check that the term appears verbatim in the cited event's text. Stage 5's validator is the part that makes citations load-bearing.
+- **Term normalization is best-effort.** Lowercase, ASCII-hyphen, slash-split, dedupe happen at coerce time, but the proposer can still emit descriptive multi-word phrases ("form 10-k" rather than "10-k") that a substring matcher will miss in real event text. Tightening this is a Pass 2 concern.
+- **No runtime wiring.** Nothing in `target_layer.py` reads the manifest today. The runtime still consults the hardcoded tuples. Stage 6 is the wiring step; the harness is purely for evaluation until then.
+- **No fixture for the other tenants.** `vei mcm sample-events` only supports `--corpus enron` today. Sampling pyinsights / powrofyou / dispatch requires deciding how those tenants' canonical events get loaded into a `WhatIfEvent` list, which is a separate small task.
+
+### Discipline
+
+The temptation, once a fixture-vs-LLM diff CLI exists, is to add an aggregate similarity score and start tuning the prompt until the score climbs. That collapses the experiment into "reproduce the prior" — the exact failure mode the migration exists to fix. The diff output is intentionally descriptive only (per-head Jaccard, only-in sets) with no overall pass/fail. Use it for reading, not for hill-climbing.
+
+## Why this versus the previous status quo
 
 VEI today computes a number of curated target metrics — `reopen_rework_count`, `blocked_duration_ms`, `owner_ambiguity_count`, `deadline_sla_miss_count` — and a number of semantic head scores — `onboarding_integrity`, `release_readiness`, others — by counting events that contain words drawn from hand-curated keyword bags. The bags live in source. `_REWORK_TERMS` is a tuple in `vei/whatif/target_layer.py`. The per-tenant `_DomainLabelSpec` entries in `target_layer.py` carry their own `positive_terms` and `risk_terms` lists, baked in source per tenant.
 
