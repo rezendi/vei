@@ -87,7 +87,7 @@ def propose_cmd(
     provider: str = typer.Option(
         "auto",
         "--provider",
-        help="LLM provider (auto, openai, anthropic, google, openrouter).",
+        help="LLM provider (auto or openai).",
     ),
     model: str = typer.Option("gpt-5-mini", "--model", help="LLM model id."),
     max_events: int = typer.Option(
