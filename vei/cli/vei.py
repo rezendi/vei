@@ -67,6 +67,10 @@ class VEILazyGroup(LazyTyperGroup):
             module_path="vei.cli.vei_admin",
             help="Run operator, release, reporting, and platform maintenance commands.",
         ),
+        "mcm": LazyCommandSpec(
+            module_path="vei.cli.vei_mcm",
+            help="Build and compare tenant measurement manifests (kill-hardcoded-keywords).",
+        ),
         # Backward-compatible aliases (hidden in `vei --help`).
         "project": LazyCommandSpec(
             module_path="vei.cli.vei_project",
