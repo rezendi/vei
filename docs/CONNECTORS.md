@@ -250,11 +250,10 @@ vei workflow promote \
   --output _vei_out/yourco-teams/workflows/task_spec.json
 ```
 
-When a skill map is present, `vei workflow mine --backend auto` publishes the
-semantic skill-backed workflow list and writes raw case/thread clusters to
-`workflow_structural_candidates.json` as diagnostics. Add `--world-model-report
-<strategic_state_point_results.csv>` to annotate candidates against the latest
-counterfactual action landscape.
+`vei workflow mine` publishes a semantic, skill-backed workflow list. A
+company skill map is required — build one with `vei knowledge skillmap build`
+first. Add `--world-model-report <strategic_state_point_results.csv>` to
+annotate candidates against the latest counterfactual action landscape.
 
 For a checked-in end-to-end example of the workflow-intelligence ladder, see
 [docs/examples/workflow-intelligence-walkthrough](examples/workflow-intelligence-walkthrough/).

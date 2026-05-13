@@ -4,7 +4,6 @@ import csv
 import hashlib
 import json
 import re
-from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -34,7 +33,6 @@ from .models import (
 )
 
 MINING_RESULT_FILE = "workflow_candidates.json"
-STRUCTURAL_MINING_RESULT_FILE = "workflow_structural_candidates.json"
 MINING_MANIFEST_FILE = "workflow_mining_manifest.json"
 LABELS_FILE = "workflow_labels.json"
 REFRESH_REPORT_FILE = "workflow_refresh_report.json"
@@ -46,37 +44,9 @@ _BOUNDARY_EXPORTS = (
     WorkflowMiningResult,
 )
 
-_ESCALATION_TERMS = {
-    "approval",
-    "approve",
-    "blocked",
-    "blocker",
-    "customer",
-    "deadline",
-    "escalate",
-    "escalation",
-    "legal",
-    "risk",
-    "urgent",
-}
-
-_BUSINESS_TERMS = {
-    "application",
-    "contract",
-    "customer",
-    "deal",
-    "demo",
-    "intro",
-    "introduction",
-    "invoice",
-    "partner",
-    "pilot",
-    "proposal",
-    "sales",
-    "vendor",
-}
-
-_PATTERN_STOPWORDS = {
+# English stopwords used when tokenizing event text for skill/world-model
+# matching. Not a vocabulary signal — just filler-word filtering.
+_WORKFLOW_TEXT_STOPWORDS = {
     "about",
     "after",
     "also",
@@ -95,9 +65,6 @@ _PATTERN_STOPWORDS = {
     "this",
     "with",
     "your",
-}
-
-_WORKFLOW_TEXT_STOPWORDS = _PATTERN_STOPWORDS | {
     "able",
     "action",
     "actions",
@@ -185,7 +152,6 @@ _ACCOUNT_ID_RE = re.compile(
 
 _SKILLMAP_GENERATOR = "skillmap_semantic_v1"
 _WORLD_MODEL_OPPORTUNITY_GENERATOR = "world_model_skill_opportunity_v1"
-_STRUCTURAL_GENERATOR = "workflow_mining_v1"
 
 
 def _now_iso() -> str:
@@ -318,20 +284,6 @@ def _thread_ref(event: CanonicalEvent) -> str:
     if event.object_refs:
         return str(event.object_refs[0].object_id)
     return event.case_id or event.event_id
-
-
-def _group_key(event: CanonicalEvent) -> str:
-    if event.case_id:
-        return str(event.case_id)
-    data = _delta_data(event)
-    for key in ("thread_ref", "conversation_anchor", "thread_id", "case_ref"):
-        value = data.get(key)
-        if value:
-            return f"{_surface(event)}:{value}"
-    if event.object_refs:
-        ref = event.object_refs[0]
-        return f"{ref.domain}:{ref.kind}:{ref.object_id}"
-    return f"{event.domain.value}:{event.kind}:{event.actor_ref.actor_id if event.actor_ref else ''}"
 
 
 def _clean_text(value: object, *, limit: int = 220) -> str:
@@ -719,258 +671,6 @@ def _semantic_workflow_quality(
         "world_model_alignment": round(world_model_alignment_score, 4),
         "quality": round(min(1.0, total), 4),
     }
-
-
-def _title_from_events(events: list[CanonicalEvent]) -> str:
-    titles = [_event_title(event) for event in events if _event_title(event)]
-    if not titles:
-        return "Recurring work pattern"
-    counts = Counter(titles)
-    return counts.most_common(1)[0][0]
-
-
-def _pattern_tokens(text: str) -> list[str]:
-    tokens = [
-        token
-        for token in re.findall(r"[a-z0-9]+", text.lower())
-        if len(token) > 2 and token not in _PATTERN_STOPWORDS
-    ]
-    business_tokens = sorted({token for token in tokens if token in _BUSINESS_TERMS})
-    if business_tokens:
-        return business_tokens[:5]
-    counts = Counter(tokens)
-    return [token for token, _count in counts.most_common(5)]
-
-
-def _event_kind_family(kind: str) -> str:
-    parts = [part for part in kind.lower().split(".") if part]
-    return parts[0] if parts else kind.lower()
-
-
-def _candidate_pattern_key(candidate: WorkflowCandidate) -> str:
-    text = " ".join([candidate.title, *candidate.snippets])
-    surfaces = ",".join(candidate.surfaces[:4]) or "unknown"
-    kind_families = ",".join(
-        sorted({_event_kind_family(kind) for kind in candidate.event_kinds})[:4]
-    )
-    tokens = ",".join(_pattern_tokens(text)) or "generic"
-    return f"surfaces={surfaces}|kinds={kind_families}|tokens={tokens}"
-
-
-def _annotate_repetition(
-    candidates: list[WorkflowCandidate],
-) -> list[WorkflowCandidate]:
-    pattern_keys = {
-        candidate.candidate_id: _candidate_pattern_key(candidate)
-        for candidate in candidates
-    }
-    pattern_counts = Counter(pattern_keys.values())
-    annotated: list[WorkflowCandidate] = []
-    for candidate in candidates:
-        pattern_key = pattern_keys[candidate.candidate_id]
-        similar_group_count = pattern_counts[pattern_key]
-        updated_metadata = {
-            **candidate.metadata,
-            "event_count": len(candidate.source_event_ids),
-            "pattern_key": pattern_key,
-            "similar_group_count": similar_group_count,
-        }
-        repetition_bonus = min(2.0, max(0, similar_group_count - 1) * 0.4)
-        annotated.append(
-            candidate.model_copy(
-                update={
-                    "repetition_count": similar_group_count,
-                    "rank_score": round(candidate.rank_score + repetition_bonus, 4),
-                    "metadata": updated_metadata,
-                },
-                deep=True,
-            )
-        )
-    return annotated
-
-
-def _pattern_summary(
-    title: str, events: list[CanonicalEvent], surfaces: list[str]
-) -> str:
-    surface_text = ", ".join(surfaces) if surfaces else "canonical events"
-    return (
-        f"{title} appears across {len(events)} event"
-        f"{'' if len(events) == 1 else 's'} on {surface_text}."
-    )
-
-
-def _candidate_scores(
-    events: list[CanonicalEvent], snippets: list[str]
-) -> dict[str, float]:
-    surfaces = {_surface(event) for event in events}
-    actor_count = len(_actor_ids(events))
-    object_count = len(_object_refs(events))
-    text = " ".join(snippets).lower()
-    escalation_hits = sum(1 for term in _ESCALATION_TERMS if term in text)
-    business_hits = sum(1 for term in _BUSINESS_TERMS if term in text)
-    evidence_density = min(1.0, (len(events) + actor_count + object_count) / 20.0)
-    cross_surface_score = min(1.0, len(surfaces) / 3.0)
-    escalation_score = min(1.0, escalation_hits / 4.0)
-    labelability_score = min(1.0, (len(snippets) + business_hits + actor_count) / 12.0)
-    rank_score = round(
-        (len(events) * 0.15)
-        + evidence_density
-        + cross_surface_score
-        + escalation_score
-        + labelability_score
-        + min(1.0, business_hits / 4.0),
-        4,
-    )
-    return {
-        "evidence_density": round(evidence_density, 4),
-        "cross_surface_score": round(cross_surface_score, 4),
-        "escalation_score": round(escalation_score, 4),
-        "labelability_score": round(labelability_score, 4),
-        "rank_score": rank_score,
-    }
-
-
-def _draft_spec_for_candidate(
-    *,
-    candidate_id: str,
-    title: str,
-    company_name: str,
-    company_domain: str,
-    group_key: str,
-    events: list[CanonicalEvent],
-    surfaces: list[str],
-    snippets: list[str],
-    scores: dict[str, float],
-) -> BusinessTaskSpec:
-    event_ids = _event_ids(events)
-    case_ids = _case_ids(events)
-    example = WorkflowObservedExample(
-        example_id=_stable_id(candidate_id, "observed-example", prefix="wex"),
-        case_id=case_ids[0] if case_ids else None,
-        thread_ref=_thread_ref(events[0]) if events else "",
-        summary=_pattern_summary(title, events, surfaces),
-        event_ids=event_ids,
-        surfaces=surfaces,
-        actor_ids=_actor_ids(events),
-        object_refs=_object_refs(events),
-        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
-        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
-    )
-    reference_path = WorkflowReferencePath(
-        path_id=_stable_id(candidate_id, "reference-path", prefix="wrp"),
-        title=f"Observed example: {title}",
-        description="Evidence-backed example path; not a mandated script.",
-        event_ids=event_ids,
-        case_ids=case_ids,
-        evidence_refs=_evidence_refs(events),
-    )
-    required_evidence = [snippet for snippet in snippets[:5] if snippet] or [
-        "Canonical events for the observed case or thread."
-    ]
-    return BusinessTaskSpec(
-        task_id=_stable_id(company_domain, group_key, title, prefix="bts"),
-        title=title,
-        company_name=company_name,
-        company_domain=company_domain,
-        objective=f"Understand and improve the recurring business work around {title}.",
-        business_context=_pattern_summary(title, events, surfaces),
-        context_requirements=[
-            "Thread or case history",
-            "Relevant actors and recipients",
-            "Source event timestamps",
-        ],
-        required_evidence=required_evidence,
-        permitted_tools=[],
-        constraints=[],
-        policies=[],
-        acceptable_outputs=[],
-        accept_reject_criteria=[],
-        evaluation_rubric=[],
-        escalation_paths=[],
-        observed_examples=[example],
-        reference_paths=[reference_path],
-        source_event_ids=event_ids,
-        source_case_ids=case_ids,
-        labels=[],
-        open_questions=[
-            "What outcome marks this task as accepted or rejected?",
-            "Which context is required before an agent can act safely?",
-            "When should this workflow escalate to a human reviewer?",
-        ],
-        spec_confidence=max(0.1, min(0.85, scores["evidence_density"])),
-        status=BusinessTaskStatus.DRAFT,
-        evaluation_level=EvaluationLevel.DESCRIPTIVE,
-        metadata={
-            "candidate_id": candidate_id,
-            "group_key": group_key,
-            "generated_by": "workflow_mining_v1",
-            "claim_boundary": "descriptive evidence summary, not a deterministic workflow",
-        },
-    )
-
-
-def _candidate_from_group(
-    *,
-    group_key: str,
-    events: list[CanonicalEvent],
-    company_name: str,
-    company_domain: str,
-) -> WorkflowCandidate:
-    events = sorted(events, key=lambda event: (event.ts_ms or 0, event.event_id))
-    title = _title_from_events(events)
-    event_ids = _event_ids(events)
-    candidate_id = _stable_id(company_domain, group_key, prefix="wfc")
-    surfaces = sorted({_surface(event) for event in events if _surface(event)})
-    kinds = sorted({event.kind for event in events if event.kind})
-    snippets = [_event_snippet(event) for event in events if _event_snippet(event)]
-    scores = _candidate_scores(events, snippets)
-    draft_spec = _draft_spec_for_candidate(
-        candidate_id=candidate_id,
-        title=title,
-        company_name=company_name,
-        company_domain=company_domain,
-        group_key=group_key,
-        events=events,
-        surfaces=surfaces,
-        snippets=snippets,
-        scores=scores,
-    )
-    fingerprint = _stable_hash(
-        {
-            "event_ids": event_ids,
-            "surfaces": surfaces,
-            "kinds": kinds,
-            "title": title,
-        }
-    )
-    return WorkflowCandidate(
-        candidate_id=candidate_id,
-        title=title,
-        company_name=company_name,
-        company_domain=company_domain,
-        group_key=group_key,
-        source_case_ids=_case_ids(events),
-        source_event_ids=event_ids,
-        thread_refs=sorted(
-            {_thread_ref(event) for event in events if _thread_ref(event)}
-        ),
-        surfaces=surfaces,
-        event_kinds=kinds,
-        actor_ids=_actor_ids(events),
-        object_refs=_object_refs(events),
-        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
-        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
-        repetition_count=1,
-        evidence_density=scores["evidence_density"],
-        cross_surface_score=scores["cross_surface_score"],
-        escalation_score=scores["escalation_score"],
-        labelability_score=scores["labelability_score"],
-        rank_score=scores["rank_score"],
-        summary=_pattern_summary(title, events, surfaces),
-        snippets=snippets[:8],
-        draft_task_spec=draft_spec,
-        metadata={"fingerprint": fingerprint},
-    )
 
 
 def _semantic_spec_for_skill(
@@ -1504,63 +1204,38 @@ def mine_workflows(
     *,
     output: str | Path | None = None,
     limit: int = 25,
-    backend: str = "auto",
     skill_map_path: str | Path | None = None,
     world_model_report_path: str | Path | None = None,
-    include_structural_fallback: bool = False,
 ) -> WorkflowMiningResult:
-    """Mine recurring workflow candidates from canonical events.
+    """Mine semantic workflow candidates from a company skill map.
 
-    The result is descriptive. It produces candidates and draft task specs, not
-    deterministic step graphs.
+    A company skill map is required: VEI either accepts an explicit
+    `skill_map_path` or discovers one at `<source>/skill_map/company_skill_map.json`.
+    If no skill map is available, mining fails fast — produce one with
+    `vei knowledge skillmap build` first.
+
+    The result is descriptive. It produces candidates and draft task specs
+    grounded in cited canonical evidence, not deterministic step graphs.
     """
 
-    backend = backend.strip().lower()
-    if backend not in {"auto", "structural", "semantic", "merged"}:
-        raise ValueError("backend must be one of: auto, structural, semantic, merged")
     root, context_path = _resolve_source(source_dir)
     context_payload = _load_context_payload(context_path)
     company_name, company_domain = _company_from_context(context_payload)
     events = _load_events(root)
-    groups: dict[str, list[CanonicalEvent]] = defaultdict(list)
-    for event in events:
-        groups[_group_key(event)].append(event)
 
-    structural_candidates = _annotate_repetition(
-        [
-            _candidate_from_group(
-                group_key=group_key,
-                events=group_events,
-                company_name=company_name,
-                company_domain=company_domain,
-            )
-            for group_key, group_events in groups.items()
-            if group_events
-        ]
+    resolved_skill_map_path = (
+        Path(skill_map_path).expanduser().resolve()
+        if skill_map_path is not None
+        else _autodiscover_skill_map_path(root, output)
     )
-    structural_candidates.sort(
-        key=lambda candidate: (
-            candidate.rank_score,
-            candidate.repetition_count,
-            candidate.start_ts_ms or 0,
-        ),
-        reverse=True,
-    )
-    resolved_skill_map_path: Path | None = None
-    skill_map = None
-    if backend != "structural":
-        resolved_skill_map_path = (
-            Path(skill_map_path).expanduser().resolve()
-            if skill_map_path is not None
-            else _autodiscover_skill_map_path(root, output)
+    if resolved_skill_map_path is None:
+        raise FileNotFoundError(
+            "semantic workflow mining requires a company skill map. "
+            "Pass --skill-map or place company_skill_map.json at "
+            "<source>/skill_map/company_skill_map.json. Build one with "
+            "`vei knowledge skillmap build` first."
         )
-        if resolved_skill_map_path is not None:
-            skill_map = _load_skill_map(resolved_skill_map_path)
-        elif backend in {"semantic", "merged"}:
-            raise FileNotFoundError(
-                "semantic workflow mining requires --skill-map or "
-                "<source>/skill_map/company_skill_map.json"
-            )
+    skill_map = _load_skill_map(resolved_skill_map_path)
     resolved_world_model_report_path = _resolve_world_model_report_path(
         world_model_report_path
     )
@@ -1572,50 +1247,22 @@ def mine_workflows(
         company_domain=company_domain,
         world_model_rows=world_model_rows,
     )
-    if backend == "structural" or (backend == "auto" and not semantic_candidates):
-        candidates = structural_candidates
-        selected_backend = "structural"
-    elif backend == "semantic":
-        candidates = semantic_candidates
-        selected_backend = "semantic"
-    else:
-        selected_backend = "semantic" if backend == "auto" else "merged"
-        seen_fingerprints = {
-            str(candidate.metadata.get("source_skill_id") or candidate.candidate_id)
-            for candidate in semantic_candidates
-        }
-        candidates = list(semantic_candidates)
-        if include_structural_fallback or backend == "merged":
-            for candidate in structural_candidates:
-                if candidate.candidate_id in seen_fingerprints:
-                    continue
-                candidates.append(
-                    candidate.model_copy(
-                        update={
-                            "metadata": {
-                                **candidate.metadata,
-                                "generated_by": _STRUCTURAL_GENERATOR,
-                                "diagnostic_only": bool(semantic_candidates),
-                            }
-                        },
-                        deep=True,
-                    )
-                )
-        candidates.sort(
-            key=lambda candidate: (
-                (
-                    1
-                    if candidate.metadata.get("generated_by") == _SKILLMAP_GENERATOR
-                    or candidate.metadata.get("generated_by")
-                    == _WORLD_MODEL_OPPORTUNITY_GENERATOR
-                    else 0
-                ),
-                candidate.rank_score,
-                candidate.repetition_count,
-                candidate.start_ts_ms or 0,
+    candidates = list(semantic_candidates)
+    candidates.sort(
+        key=lambda candidate: (
+            (
+                1
+                if candidate.metadata.get("generated_by") == _SKILLMAP_GENERATOR
+                or candidate.metadata.get("generated_by")
+                == _WORLD_MODEL_OPPORTUNITY_GENERATOR
+                else 0
             ),
-            reverse=True,
-        )
+            candidate.rank_score,
+            candidate.repetition_count,
+            candidate.start_ts_ms or 0,
+        ),
+        reverse=True,
+    )
     result = WorkflowMiningResult(
         source_dir=str(context_path),
         company_name=company_name,
@@ -1626,13 +1273,8 @@ def mine_workflows(
         metadata={
             "source_root": str(root),
             "mining_version": "workflow_mining_v2_semantic",
-            "selected_backend": selected_backend,
-            "backend_requested": backend,
-            "skill_map_path": (
-                str(resolved_skill_map_path)
-                if resolved_skill_map_path is not None
-                else ""
-            ),
+            "selected_backend": "semantic",
+            "skill_map_path": str(resolved_skill_map_path),
             "world_model_report_path": (
                 str(resolved_world_model_report_path)
                 if resolved_world_model_report_path is not None
@@ -1645,14 +1287,9 @@ def mine_workflows(
                 if candidate.metadata.get("generated_by")
                 == _WORLD_MODEL_OPPORTUNITY_GENERATOR
             ),
-            "structural_candidate_count": len(structural_candidates),
-            "structural_fallback_included": bool(
-                include_structural_fallback or backend == "merged"
-            ),
             "candidate_policy": (
                 "skill-backed semantic workflows and cited world-model "
-                "opportunities are primary; structural clusters are "
-                "diagnostics/fallback only"
+                "opportunities are the only candidate sources"
             ),
             "generated_at": _now_iso(),
         },
@@ -1660,27 +1297,10 @@ def mine_workflows(
     if output is not None:
         save_mining_result(result, output)
         output_root = Path(output).expanduser().resolve()
-        if semantic_candidates:
-            structural_result = result.model_copy(
-                update={
-                    "candidate_count": len(structural_candidates),
-                    "candidates": structural_candidates,
-                    "metadata": {
-                        **result.metadata,
-                        "selected_backend": "structural_diagnostic",
-                        "diagnostic_for": str(output_root / MINING_RESULT_FILE),
-                    },
-                },
-                deep=True,
-            )
-            (output_root / STRUCTURAL_MINING_RESULT_FILE).write_text(
-                structural_result.model_dump_json(indent=2) + "\n",
-                encoding="utf-8",
-            )
         manifest = {
             "schema_version": 1,
             "mining_version": result.metadata["mining_version"],
-            "selected_backend": selected_backend,
+            "selected_backend": "semantic",
             "source_dir": str(context_path),
             "skill_map_path": result.metadata["skill_map_path"],
             "world_model_report_path": result.metadata["world_model_report_path"],
@@ -1688,9 +1308,7 @@ def mine_workflows(
             "world_model_opportunity_candidate_count": result.metadata[
                 "world_model_opportunity_candidate_count"
             ],
-            "structural_candidate_count": len(structural_candidates),
             "published_candidate_count": result.candidate_count,
-            "raw_structural_clusters_are_diagnostics": bool(semantic_candidates),
             "generated_at": result.metadata["generated_at"],
         }
         (output_root / MINING_MANIFEST_FILE).write_text(
@@ -2094,10 +1712,8 @@ def refresh_workflows(
     workspace: str | Path,
     output: str | Path,
     limit: int = 25,
-    backend: str = "auto",
     skill_map_path: str | Path | None = None,
     world_model_report_path: str | Path | None = None,
-    include_structural_fallback: bool = False,
     refresh_wiki_artifacts: bool = False,
     refresh_skillmap_artifacts: bool = False,
 ) -> WorkflowRefreshReport:
@@ -2134,10 +1750,8 @@ def refresh_workflows(
         source_dir,
         output=output_root,
         limit=limit,
-        backend=backend,
         skill_map_path=resolved_skill_map_path,
         world_model_report_path=world_model_report_path,
-        include_structural_fallback=include_structural_fallback,
     )
 
     previous_candidates = (

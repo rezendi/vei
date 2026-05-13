@@ -235,10 +235,8 @@ def run_validated_daily_refresh(
             context_path,
             output=workflow_root,
             limit=25,
-            backend="auto",
             skill_map_path=effective_skill_path,
             world_model_report_path=strategic_csv_path,
-            include_structural_fallback=False,
         )
     elif workflow_output is None:
         workflow_root = (

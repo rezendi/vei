@@ -150,7 +150,7 @@ Keyword-like surfaces outside the curated target layer should not be silently fo
 
 | Surface | Current role | Disposition |
 | --- | --- | --- |
-| `vei/workflow/api.py` `_BUSINESS_TERMS`, `_ESCALATION_TERMS`, `_PATTERN_STOPWORDS` | Workflow candidate ranking and pattern keys | Follow `docs/LLM_WORKFLOW_CANDIDATE_MINING.md`: retire keyword scoring and move mining semantics to the LLM mining track. Do not move these terms into `tenant_measurement_manifest.json`. |
+| `vei/workflow/api.py` `_BUSINESS_TERMS`, `_ESCALATION_TERMS` | (Deleted) Workflow candidate ranking and pattern keys | Deleted entirely in the semantic workflow mining track. `vei workflow mine` now requires a company skill map and fails fast without one. Do not migrate these tuples into `tenant_measurement_manifest.json`. |
 | `vei/whatif/ranking.py` outcome-signal terms | Scoring LLM replay branches for objective-pack demos | Separate objective-pack calibration problem. Do not treat as curated target-layer vocabulary in this pass. |
 | `vei/whatif/macro_outcomes.py` prompt terms | Heuristic macro demo response to intervention text | Demo baseline calibration. Keep separate from tenant measurement manifests. |
 | `vei/whatif/benchmark_business.py` business-head terms | Benchmark/business outcome labels and fixtures | Separate benchmark-labeling calibration problem. Do not migrate in this pass unless the benchmark contract is explicitly changed. |
