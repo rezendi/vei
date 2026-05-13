@@ -71,6 +71,10 @@ class VEILazyGroup(LazyTyperGroup):
             module_path="vei.cli.vei_mcm",
             help="Build and compare tenant measurement manifests (kill-hardcoded-keywords).",
         ),
+        "pyinsights": LazyCommandSpec(
+            module_path="vei.cli.vei_pyinsights",
+            help="Run Py Insights validated daily refreshes.",
+        ),
         # Backward-compatible aliases (hidden in `vei --help`).
         "project": LazyCommandSpec(
             module_path="vei.cli.vei_project",

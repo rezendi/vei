@@ -180,6 +180,141 @@ def _source_root(tmp_path: Path) -> tuple[Path, Path, list[str]]:
     return root, context_path, event_ids
 
 
+def _write_company_skill_map(root: Path, event_ids: list[str]) -> Path:
+    skill_map_dir = root / "skill_map"
+    skill_map_dir.mkdir()
+    path = skill_map_dir / "company_skill_map.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "company_skill_map_v1",
+                "organization_name": "Acme",
+                "organization_domain": "acme.test",
+                "generated_at": "2026-05-13T00:00:00Z",
+                "source_ref": "test",
+                "canonical_event_count": len(event_ids),
+                "skill_count": 2,
+                "skills": [
+                    {
+                        "skill_id": "skill:release-to-qa",
+                        "title": "Release-To-QA Feedback And Handoff Workflow",
+                        "summary": (
+                            "Turns support, proposal, and ticket evidence into "
+                            "an owner-backed QA handoff."
+                        ),
+                        "status": "draft",
+                        "domain": "product_ops",
+                        "candidate_type": "workflow",
+                        "usefulness_score": 0.91,
+                        "usefulness_rationale": "High consequence and repeatable.",
+                        "trigger": {
+                            "description": (
+                                "Use when a customer-facing change needs QA "
+                                "handoff, evidence, and owner signoff."
+                            ),
+                            "signals": ["proposal", "ticket", "approval"],
+                        },
+                        "goal": (
+                            "Create a cited QA handoff before changing the "
+                            "customer-facing workflow."
+                        ),
+                        "prerequisites": ["Thread or case history"],
+                        "steps": [
+                            {
+                                "step_id": "step-1",
+                                "instruction": "Collect cited events and owner.",
+                                "tool": "event.search",
+                                "read_only": True,
+                                "requires_approval": False,
+                            },
+                            {
+                                "step_id": "step-2",
+                                "instruction": "Write the QA handoff checklist.",
+                                "tool": "artifact.write",
+                                "read_only": False,
+                                "requires_approval": True,
+                            },
+                        ],
+                        "output_artifacts": [
+                            {
+                                "artifact_id": "qa-handoff",
+                                "title": "QA handoff checklist",
+                                "kind": "checklist",
+                            }
+                        ],
+                        "evidence_refs": [
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_ids[0],
+                                "source": "test",
+                                "surface": "mail",
+                                "title": "Pilot proposal from Acme",
+                            },
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_ids[1],
+                                "source": "test",
+                                "surface": "tickets",
+                                "title": "Prepare partner pilot proposal",
+                            },
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_ids[1],
+                                "source": "test",
+                                "surface": "tickets",
+                                "title": "hi",
+                            },
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_ids[1],
+                                "source": "test",
+                                "surface": "tickets",
+                                "title": (
+                                    "mysql+pymysql://user:"
+                                    "password@db.example.test/app"
+                                ),
+                            },
+                        ],
+                        "allowed_actions": ["create_handoff_checklist"],
+                        "blocked_actions": ["ship_without_approval"],
+                        "deployment_readiness": "activation_candidate",
+                        "confidence": 0.9,
+                        "execution_mode": "approval_gated",
+                    },
+                    {
+                        "skill_id": "skill:junk",
+                        "title": "Hi",
+                        "summary": "Greeting cluster.",
+                        "status": "draft",
+                        "candidate_type": "workflow",
+                        "usefulness_score": 1.0,
+                        "trigger": {"description": "Use on greetings."},
+                        "goal": "Do nothing.",
+                        "steps": [
+                            {
+                                "step_id": "step-junk",
+                                "instruction": "Say hi.",
+                            }
+                        ],
+                        "evidence_refs": [
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_ids[2],
+                                "title": "Hi",
+                            }
+                        ],
+                        "confidence": 1.0,
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def _workflow_spec() -> WorkflowScenarioSpec:
     return WorkflowScenarioSpec.model_validate(
         {
@@ -305,6 +440,65 @@ def test_mining_is_stable_and_promotes_labeled_specs(tmp_path: Path) -> None:
     assert labels[0].label == WorkflowLabelKind.GOOD_EXAMPLE
     assert promoted.evaluation_level == EvaluationLevel.LABELED
     assert promoted.labels[0].note == "clean evidence path"
+
+
+def test_mining_prefers_skill_backed_workflows_when_skill_map_exists(
+    tmp_path: Path,
+) -> None:
+    root, context_path, event_ids = _source_root(tmp_path)
+    _write_company_skill_map(root, event_ids)
+    output = tmp_path / "semantic_workflow"
+
+    result = mine_workflows(context_path, output=output, limit=5)
+
+    assert result.metadata["selected_backend"] == "semantic"
+    assert result.metadata["semantic_candidate_count"] == 1
+    assert result.candidate_count == 1
+    candidate = result.candidates[0]
+    assert candidate.title == "Release-To-QA Feedback And Handoff Workflow"
+    assert candidate.metadata["generated_by"] == "skillmap_semantic_v1"
+    assert (
+        candidate.draft_task_spec.evaluation_level == EvaluationLevel.RUBRIC_EVALUABLE
+    )
+    assert "ship_without_approval" in " ".join(candidate.draft_task_spec.constraints)
+    assert "hi" not in {snippet.lower() for snippet in candidate.snippets}
+    assert all("mysql+pymysql://" not in snippet for snippet in candidate.snippets)
+    assert "[REDACTED_CONNECTION_STRING]" in candidate.snippets
+    assert "Hi" not in {item.title for item in result.candidates}
+    assert (output / "workflow_structural_candidates.json").is_file()
+    assert (output / "workflow_mining_manifest.json").is_file()
+
+
+def test_mining_annotates_skill_workflows_with_world_model_alignment(
+    tmp_path: Path,
+) -> None:
+    root, context_path, event_ids = _source_root(tmp_path)
+    skill_map_path = _write_company_skill_map(root, event_ids)
+    world_model_path = tmp_path / "strategic_state_point_results.csv"
+    world_model_path.write_text(
+        "\n".join(
+            [
+                "decision_point,candidate_label,candidate_type,counterfactual_action,supported_target_score",
+                (
+                    "QA release gate,QA handoff,focused_pilot,"
+                    "Create a QA handoff checklist before customer-facing release,0.71"
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = mine_workflows(
+        context_path,
+        limit=5,
+        skill_map_path=skill_map_path,
+        world_model_report_path=world_model_path,
+    )
+
+    alignment = result.candidates[0].metadata["world_model_alignment"]
+    assert alignment["score"] > 0
+    assert alignment["matches"][0]["candidate_label"] == "QA handoff"
 
 
 def test_workflow_cli_mines_labels_and_promotes_specs(tmp_path: Path) -> None:

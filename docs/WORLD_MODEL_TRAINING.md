@@ -224,6 +224,21 @@ new connector snapshots
 The old checkpoint can be updated with new rows, but the manifest must travel
 with the checkpoint. If the target coverage changes, the report should say so.
 
+For Py Insights, the first operator command for this contract is:
+
+```bash
+vei pyinsights daily-refresh \
+  --mode incremental-validated \
+  --previous latest-valid \
+  --as-of today
+```
+
+V1 is deliberately conservative: it can reuse the current artifact-producing
+steps, but it always writes a validation manifest and emits a CEO report only
+when source freshness, canonical-event checks, workflow/skill citation checks,
+target-manifest/model checks, and the strategic saturation guard pass. Failed
+runs write `validation_failure.md` instead of a CEO report.
+
 ## Scaling View
 
 The model can remain small while the surrounding evidence system grows. Most of

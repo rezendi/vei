@@ -91,9 +91,15 @@ vei knowledge skillmap refresh --workspace _vei_out/<tenant> --output _vei_out/<
 vei provenance access-review --agent-id <agent-id> --workspace _vei_out/<tenant>
 vei provenance verify --workspace _vei_out/<tenant>
 vei provenance export --format evidence-pack --workspace _vei_out/<tenant> --output _vei_out/<tenant>/evidence_pack.json
-vei workflow mine --source-dir _vei_out/<tenant>/context_snapshot.json --output _vei_out/<tenant>/workflows
+vei workflow mine \
+  --source-dir _vei_out/<tenant>/context_snapshot.json \
+  --output _vei_out/<tenant>/workflows \
+  --backend auto \
+  --skill-map _vei_out/<tenant>/skill_map/company_skill_map.json \
+  --world-model-report _vei_out/world_model_strategic_state_points/<run>/strategic_state_point_results.csv
 vei workflow label --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --label good_example --note "source-backed example"
 vei workflow promote --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --output _vei_out/<tenant>/workflows/task_spec.json
+vei pyinsights daily-refresh --mode incremental-validated --previous latest-valid --as-of today
 vei ui serve --root docs/examples/enron-master-agreement-public-context/workspace --host 127.0.0.1 --port 3055
 ```
 
@@ -106,6 +112,14 @@ Eval runners:
   --runner llm --family <family>`, VEI derives the task and argument anchors
   from the family workflow, then reports both enterprise scoring and exact
   workflow-contract validation.
+
+`vei workflow mine --backend auto` publishes semantic, skill-backed candidates
+when a company skill map is available. Raw case/thread clusters are still written
+as diagnostics in `workflow_structural_candidates.json`; use `--backend merged`
+or `--structural-fallback` only when intentionally reviewing those clusters.
+`vei pyinsights daily-refresh` writes a validation manifest and withholds the
+CEO report unless canonical, source freshness, workflow/skill, model, and
+strategic saturation checks pass.
 
 Same seed means same world. Determinism is part of the product. User-facing LLM
 generation defaults to the local Codex CLI using `gpt-5.3-codex-spark`; direct

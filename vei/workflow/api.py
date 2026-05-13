@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import re
@@ -33,6 +34,8 @@ from .models import (
 )
 
 MINING_RESULT_FILE = "workflow_candidates.json"
+STRUCTURAL_MINING_RESULT_FILE = "workflow_structural_candidates.json"
+MINING_MANIFEST_FILE = "workflow_mining_manifest.json"
 LABELS_FILE = "workflow_labels.json"
 REFRESH_REPORT_FILE = "workflow_refresh_report.json"
 
@@ -94,6 +97,95 @@ _PATTERN_STOPWORDS = {
     "your",
 }
 
+_WORKFLOW_TEXT_STOPWORDS = _PATTERN_STOPWORDS | {
+    "able",
+    "action",
+    "actions",
+    "after",
+    "all",
+    "and",
+    "any",
+    "are",
+    "app",
+    "before",
+    "been",
+    "being",
+    "build",
+    "but",
+    "can",
+    "check",
+    "could",
+    "company",
+    "data",
+    "day",
+    "done",
+    "each",
+    "event",
+    "flow",
+    "for",
+    "from",
+    "gate",
+    "get",
+    "has",
+    "have",
+    "into",
+    "its",
+    "may",
+    "new",
+    "not",
+    "one",
+    "only",
+    "path",
+    "review",
+    "run",
+    "should",
+    "state",
+    "status",
+    "step",
+    "task",
+    "test",
+    "that",
+    "the",
+    "this",
+    "through",
+    "until",
+    "use",
+    "user",
+    "when",
+    "will",
+    "with",
+    "would",
+    "work",
+}
+
+_NOISY_WORKFLOW_TITLE_RE = re.compile(
+    r"^(?:hi|hello|hey|ok|okay|sure|yes|no|thanks|thank you|done|cool|great|"
+    r"chat/|https?://|www\\.)",
+    re.IGNORECASE,
+)
+_LOW_SIGNAL_EVIDENCE_RE = re.compile(
+    r"^(?:hi|hello|hey|ok|okay|sure|yes|no|thanks|thank you|done|cool|great|"
+    r"relevant recordings|daily updates?)\\b[\\s.!?,:;-]*$",
+    re.IGNORECASE,
+)
+_EMAIL_TEXT_RE = re.compile(
+    r"\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b", re.IGNORECASE
+)
+_PHONE_TEXT_RE = re.compile(
+    r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b"
+)
+_CONNECTION_STRING_RE = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE)
+_URL_RE = re.compile(r"\bhttps?://\S+", re.IGNORECASE)
+_API_KEY_RE = re.compile(
+    r"(?i)\b(?:api[_-]?key|token|secret|password|passwd|pwd|cvv)\s*[=:]\s*[^\s,;]+"
+)
+_ACCOUNT_ID_RE = re.compile(
+    r"(?i)\b(account\s*id|accountid|account_id)\s*[:=]?\s*[a-f0-9]{12,}\b"
+)
+
+_SKILLMAP_GENERATOR = "skillmap_semantic_v1"
+_STRUCTURAL_GENERATOR = "workflow_mining_v1"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -151,6 +243,53 @@ def _load_events(root: Path) -> list[CanonicalEvent]:
     for path in paths:
         events.extend(load_canonical_events_jsonl(path))
     return events
+
+
+def _autodiscover_skill_map_path(root: Path, output: str | Path | None) -> Path | None:
+    candidates: list[Path] = [
+        root / "skill_map" / "company_skill_map.json",
+        root / ".artifacts" / "skillmap" / "company_skill_map.json",
+    ]
+    if output is not None:
+        output_root = Path(output).expanduser().resolve()
+        candidates.extend(
+            [
+                output_root / "skill_map" / "company_skill_map.json",
+                output_root.parent / "skill_map" / "company_skill_map.json",
+            ]
+        )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_skill_map(path: str | Path | None) -> Any | None:
+    if path is None:
+        return None
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"skill map not found: {resolved}")
+    from vei.skillmap.api import CompanySkillMap
+
+    return CompanySkillMap.model_validate_json(resolved.read_text(encoding="utf-8"))
+
+
+def _resolve_world_model_report_path(path: str | Path | None) -> Path | None:
+    if path is None:
+        return None
+    resolved = Path(path).expanduser().resolve()
+    if resolved.is_dir():
+        for name in (
+            "strategic_state_point_results.csv",
+            "strategic_state_point_results.json",
+        ):
+            candidate = resolved / name
+            if candidate.is_file():
+                return candidate
+    if resolved.is_file():
+        return resolved
+    raise FileNotFoundError(f"world-model report not found: {resolved}")
 
 
 def _delta_data(event: CanonicalEvent) -> dict[str, Any]:
@@ -252,11 +391,14 @@ def _event_ids(events: Iterable[CanonicalEvent]) -> list[str]:
 
 
 def _evidence_refs(
-    events: list[CanonicalEvent], *, limit: int = 8
+    events: list[CanonicalEvent], *, limit: int = 8, redact: bool = False
 ) -> list[WorkflowEvidenceRef]:
     refs: list[WorkflowEvidenceRef] = []
     for event in events[:limit]:
         actor_id = event.actor_ref.actor_id if event.actor_ref is not None else ""
+        snippet = _event_snippet(event)
+        if redact:
+            snippet = _redact_workflow_text(snippet)
         refs.append(
             WorkflowEvidenceRef(
                 event_id=event.event_id,
@@ -266,10 +408,316 @@ def _evidence_refs(
                 kind=event.kind,
                 actor_id=actor_id,
                 object_refs=[ref.object_id for ref in event.object_refs],
-                snippet=_event_snippet(event),
+                snippet=snippet,
             )
         )
     return refs
+
+
+def _tokens_for_match(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", text.lower())
+        if len(token) > 2 and token not in _WORKFLOW_TEXT_STOPWORDS
+    }
+
+
+def _redact_workflow_text(text: str) -> str:
+    redacted = text
+    redacted = _CONNECTION_STRING_RE.sub(
+        lambda match: (
+            "[REDACTED_CONNECTION_STRING]"
+            if "@" in match.group(0)
+            else _URL_RE.sub("[REDACTED_URL]", match.group(0))
+        ),
+        redacted,
+    )
+    redacted = _URL_RE.sub("[REDACTED_URL]", redacted)
+    redacted = _EMAIL_TEXT_RE.sub("[REDACTED_EMAIL]", redacted)
+    redacted = _PHONE_TEXT_RE.sub("[REDACTED_PHONE]", redacted)
+    redacted = _API_KEY_RE.sub("[REDACTED_SECRET]", redacted)
+    redacted = _ACCOUNT_ID_RE.sub(
+        lambda match: f"{match.group(1)} [REDACTED_ID]", redacted
+    )
+    return redacted
+
+
+def _skill_ref_text(ref: Any) -> str:
+    return _clean_text(
+        getattr(ref, "title", "") or getattr(ref, "snippet", ""), limit=240
+    )
+
+
+def _is_low_signal_evidence(text: str) -> bool:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        return True
+    if _LOW_SIGNAL_EVIDENCE_RE.match(cleaned):
+        return True
+    tokens = _tokens_for_match(cleaned)
+    if len(tokens) < 2 and "[REDACTED_" not in cleaned:
+        return True
+    return False
+
+
+def _evidence_text_score(
+    text: str, reference_tokens: set[str]
+) -> tuple[float, int, str]:
+    tokens = _tokens_for_match(text)
+    overlap = tokens & reference_tokens
+    score = len(overlap) * 2.0
+    score += min(3.0, len(tokens) / 3.0)
+    if "[REDACTED_" in text:
+        score += 0.35
+    return score, len(tokens), text
+
+
+def _skill_evidence_texts(
+    skill: Any,
+    events: list[CanonicalEvent],
+    *,
+    limit: int = 8,
+) -> list[str]:
+    reference_tokens = _tokens_for_match(_skill_reference_text(skill))
+    raw_texts: list[str] = []
+    for ref in getattr(skill, "evidence_refs", []) or []:
+        raw_texts.append(_skill_ref_text(ref))
+    raw_texts.extend(_event_snippet(event) for event in events)
+
+    seen: set[str] = set()
+    scored: list[tuple[float, int, str]] = []
+    for raw_text in raw_texts:
+        text = _clean_text(_redact_workflow_text(raw_text), limit=240)
+        if _is_low_signal_evidence(text):
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        scored.append(_evidence_text_score(text, reference_tokens))
+    scored.sort(reverse=True)
+    return [text for _score, _token_count, text in scored[:limit]]
+
+
+def _ranked_skill_events(
+    skill: Any, events: list[CanonicalEvent], *, limit: int = 10
+) -> list[CanonicalEvent]:
+    reference_tokens = _tokens_for_match(_skill_reference_text(skill))
+    scored: list[tuple[float, int, str, CanonicalEvent]] = []
+    for event in events:
+        text = _clean_text(_redact_workflow_text(_event_snippet(event)), limit=240)
+        if _is_low_signal_evidence(text):
+            continue
+        score, token_count, _ = _evidence_text_score(text, reference_tokens)
+        scored.append((score, token_count, event.event_id, event))
+    scored.sort(reverse=True)
+    ranked = [event for _score, _token_count, _event_id, event in scored[:limit]]
+    if ranked:
+        return ranked
+    return events[:limit]
+
+
+def _skill_evidence_event_ids(skill: Any) -> list[str]:
+    ids: list[str] = []
+    seen: set[str] = set()
+    for ref in getattr(skill, "evidence_refs", []) or []:
+        ref_type = str(getattr(ref, "ref_type", "") or "")
+        ref_id = str(getattr(ref, "ref_id", "") or "")
+        if ref_type == "event" and ref_id and ref_id not in seen:
+            ids.append(ref_id)
+            seen.add(ref_id)
+        metadata = getattr(ref, "metadata", {}) or {}
+        if isinstance(metadata, dict):
+            for event_id in metadata.get("event_ids") or []:
+                text_id = str(event_id)
+                if text_id and text_id not in seen:
+                    ids.append(text_id)
+                    seen.add(text_id)
+    return ids
+
+
+def _skill_reference_text(skill: Any) -> str:
+    trigger = getattr(skill, "trigger", None)
+    trigger_text = ""
+    if trigger is not None:
+        trigger_text = " ".join(
+            [
+                str(getattr(trigger, "description", "") or ""),
+                " ".join(str(item) for item in getattr(trigger, "signals", []) or []),
+            ]
+        )
+    step_text = " ".join(
+        str(getattr(step, "instruction", "") or "")
+        for step in getattr(skill, "steps", []) or []
+    )
+    output_text = " ".join(
+        str(getattr(output, "title", "") or "")
+        for output in getattr(skill, "output_artifacts", []) or []
+    )
+    return " ".join(
+        [
+            str(getattr(skill, "title", "") or ""),
+            str(getattr(skill, "summary", "") or ""),
+            str(getattr(skill, "goal", "") or ""),
+            str(getattr(skill, "usefulness_rationale", "") or ""),
+            trigger_text,
+            step_text,
+            output_text,
+            " ".join(str(item) for item in getattr(skill, "allowed_actions", []) or []),
+            " ".join(str(item) for item in getattr(skill, "blocked_actions", []) or []),
+            " ".join(str(item) for item in getattr(skill, "tags", []) or []),
+        ]
+    )
+
+
+def _skill_is_promotable_workflow(skill: Any) -> bool:
+    if str(getattr(skill, "status", "") or "") in {"gap", "retired"}:
+        return False
+    if str(getattr(skill, "candidate_type", "") or "") == "gap":
+        return False
+    title = str(getattr(skill, "title", "") or "").strip()
+    if not title or _NOISY_WORKFLOW_TITLE_RE.search(title):
+        return False
+    if not str(getattr(skill, "goal", "") or "").strip():
+        return False
+    if getattr(skill, "trigger", None) is None:
+        return False
+    if len(_skill_evidence_event_ids(skill)) < 1 and not getattr(
+        skill, "evidence_refs", []
+    ):
+        return False
+    has_operational_shape = bool(getattr(skill, "steps", [])) or bool(
+        getattr(skill, "output_artifacts", [])
+    )
+    return has_operational_shape
+
+
+def _read_world_model_rows(path: Path | None) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    if path.suffix.lower() == ".csv":
+        with path.open(encoding="utf-8", newline="") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("rows", "candidates", "results"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _world_model_alignment(
+    skill: Any, world_model_rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    if not world_model_rows:
+        return {"score": 0.0, "matches": []}
+    skill_tokens = _tokens_for_match(_skill_reference_text(skill))
+    if not skill_tokens:
+        return {"score": 0.0, "matches": []}
+    matches: list[dict[str, Any]] = []
+    for row in world_model_rows:
+        text = " ".join(
+            str(row.get(key, "") or "")
+            for key in (
+                "decision_point",
+                "decision_question",
+                "why_this_decision_was_proposed",
+                "counterfactual_action",
+                "candidate_label",
+                "candidate_type",
+                "success_observable",
+                "failure_observable",
+                "next_decision_trigger",
+            )
+        )
+        row_tokens = _tokens_for_match(text)
+        if not row_tokens:
+            continue
+        overlap = skill_tokens & row_tokens
+        if not overlap:
+            continue
+        jaccard = len(overlap) / max(1, len(skill_tokens | row_tokens))
+        supported = row.get("supported_target_score") or row.get("supported_score")
+        try:
+            supported_score = float(supported) if supported not in (None, "") else 0.0
+        except (TypeError, ValueError):
+            supported_score = 0.0
+        alignment_score = min(1.0, (jaccard * 2.4) + (supported_score * 0.15))
+        matches.append(
+            {
+                "score": round(alignment_score, 4),
+                "overlap_terms": sorted(overlap)[:12],
+                "decision_point": row.get("decision_point", ""),
+                "candidate_label": row.get("candidate_label", ""),
+                "candidate_type": row.get("candidate_type", ""),
+                "supported_target_score": supported,
+            }
+        )
+    matches.sort(key=lambda item: item["score"], reverse=True)
+    score = matches[0]["score"] if matches else 0.0
+    return {"score": score, "matches": matches[:3]}
+
+
+def _readiness_score(value: str) -> float:
+    return {
+        "activation_candidate": 1.0,
+        "shadow_ready": 0.85,
+        "needs_review": 0.55,
+        "not_tested": 0.35,
+    }.get(value, 0.4)
+
+
+def _semantic_workflow_quality(
+    skill: Any,
+    *,
+    event_count: int,
+    world_model_alignment_score: float,
+) -> dict[str, float]:
+    evidence_refs = getattr(skill, "evidence_refs", []) or []
+    steps = getattr(skill, "steps", []) or []
+    outputs = getattr(skill, "output_artifacts", []) or []
+    allowed_actions = getattr(skill, "allowed_actions", []) or []
+    blocked_actions = getattr(skill, "blocked_actions", []) or []
+    trigger = getattr(skill, "trigger", None)
+    try:
+        usefulness = float(getattr(skill, "usefulness_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        usefulness = 0.0
+    try:
+        confidence = float(getattr(skill, "confidence", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    evidence_coverage = min(1.0, max(len(evidence_refs), event_count) / 8.0)
+    operational_shape = min(
+        1.0,
+        (
+            (0.25 if trigger is not None else 0.0)
+            + (0.25 if steps else 0.0)
+            + (0.2 if outputs else 0.0)
+            + (0.15 if allowed_actions else 0.0)
+            + (0.15 if blocked_actions else 0.0)
+        ),
+    )
+    readiness = _readiness_score(str(getattr(skill, "deployment_readiness", "") or ""))
+    total = (
+        (0.28 * usefulness)
+        + (0.18 * confidence)
+        + (0.18 * evidence_coverage)
+        + (0.16 * operational_shape)
+        + (0.1 * readiness)
+        + (0.1 * world_model_alignment_score)
+    )
+    return {
+        "usefulness": round(usefulness, 4),
+        "confidence": round(confidence, 4),
+        "evidence_coverage": round(evidence_coverage, 4),
+        "operational_shape": round(operational_shape, 4),
+        "readiness": round(readiness, 4),
+        "world_model_alignment": round(world_model_alignment_score, 4),
+        "quality": round(min(1.0, total), 4),
+    }
 
 
 def _title_from_events(events: list[CanonicalEvent]) -> str:
@@ -524,11 +972,310 @@ def _candidate_from_group(
     )
 
 
+def _semantic_spec_for_skill(
+    *,
+    candidate_id: str,
+    skill: Any,
+    company_name: str,
+    company_domain: str,
+    group_key: str,
+    events: list[CanonicalEvent],
+    quality: dict[str, float],
+    world_model_alignment: dict[str, Any],
+) -> BusinessTaskSpec:
+    title = str(getattr(skill, "title", "") or "Evidence-backed workflow").strip()
+    event_ids = _event_ids(events)
+    case_ids = _case_ids(events)
+    surfaces = sorted({_surface(event) for event in events if _surface(event)})
+    trigger = getattr(skill, "trigger", None)
+    trigger_description = str(getattr(trigger, "description", "") or "")
+    trigger_signals = [
+        str(signal)
+        for signal in (getattr(trigger, "signals", []) if trigger is not None else [])
+        if str(signal).strip()
+    ]
+    output_titles = [
+        str(getattr(output, "title", "") or "").strip()
+        for output in getattr(skill, "output_artifacts", []) or []
+        if str(getattr(output, "title", "") or "").strip()
+    ]
+    approval_steps = [
+        str(getattr(step, "instruction", "") or "").strip()
+        for step in getattr(skill, "steps", []) or []
+        if bool(getattr(step, "requires_approval", False))
+        and str(getattr(step, "instruction", "") or "").strip()
+    ]
+    permitted_tools = sorted(
+        {
+            str(getattr(step, "tool", "") or "").strip()
+            for step in getattr(skill, "steps", []) or []
+            if str(getattr(step, "tool", "") or "").strip()
+        }
+    )
+    graph_tools = sorted(
+        {
+            f"vei.graph_action:{getattr(step, 'graph_domain')}.{getattr(step, 'graph_action')}"
+            for step in getattr(skill, "steps", []) or []
+            if str(getattr(step, "graph_domain", "") or "").strip()
+            and str(getattr(step, "graph_action", "") or "").strip()
+        }
+    )
+    evidence_titles = _skill_evidence_texts(skill, events)
+    ranked_evidence_events = _ranked_skill_events(skill, events)
+    example = WorkflowObservedExample(
+        example_id=_stable_id(candidate_id, "semantic-observed-example", prefix="wex"),
+        case_id=case_ids[0] if case_ids else None,
+        thread_ref=_thread_ref(events[0]) if events else "",
+        summary=str(getattr(skill, "summary", "") or title),
+        event_ids=event_ids,
+        surfaces=surfaces,
+        actor_ids=_actor_ids(events),
+        object_refs=_object_refs(events),
+        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
+        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
+    )
+    reference_path = WorkflowReferencePath(
+        path_id=_stable_id(candidate_id, "semantic-reference-path", prefix="wrp"),
+        title=f"Observed evidence for {title}",
+        description=(
+            "Citation-backed operating pattern synthesized from the company skill map."
+        ),
+        event_ids=event_ids,
+        case_ids=case_ids,
+        evidence_refs=_evidence_refs(ranked_evidence_events, limit=10, redact=True),
+        metadata={
+            "source_skill_id": getattr(skill, "skill_id", ""),
+            "source": _SKILLMAP_GENERATOR,
+        },
+    )
+    accept_reject_criteria = [
+        *[
+            str(item)
+            for item in getattr(skill, "replay_checks", []) or []
+            if str(item).strip()
+        ],
+        *[f"Output artifact produced: {title}" for title in output_titles[:4]],
+    ]
+    if not accept_reject_criteria and output_titles:
+        accept_reject_criteria = [f"Produce {output_titles[0]} with cited evidence."]
+    if not accept_reject_criteria:
+        accept_reject_criteria = [
+            "A human reviewer can verify the owner, trigger, evidence, and output."
+        ]
+    open_questions = []
+    if not str(getattr(skill, "owner", "") or "").strip():
+        open_questions.append("Who owns this workflow?")
+    if not str(getattr(skill, "reviewer", "") or "").strip():
+        open_questions.append("Who reviews it before activation?")
+    if str(getattr(skill, "review_status", "") or "") == "unreviewed":
+        open_questions.append(
+            "Which cited examples should be reviewed before activation?"
+        )
+    return BusinessTaskSpec(
+        task_id=_stable_id(company_domain, group_key, title, prefix="bts"),
+        title=title,
+        company_name=company_name,
+        company_domain=company_domain,
+        objective=str(
+            getattr(skill, "goal", "") or getattr(skill, "summary", "") or title
+        ),
+        business_context=str(getattr(skill, "summary", "") or ""),
+        context_requirements=[
+            item
+            for item in [
+                trigger_description,
+                *[f"Signal: {signal}" for signal in trigger_signals[:6]],
+                *[
+                    str(item)
+                    for item in getattr(skill, "prerequisites", []) or []
+                    if str(item).strip()
+                ],
+            ]
+            if item
+        ],
+        required_evidence=evidence_titles[:8]
+        or ["Cited events from the source skill map."],
+        permitted_tools=permitted_tools + graph_tools,
+        constraints=[
+            *[
+                str(item)
+                for item in getattr(skill, "negative_triggers", []) or []
+                if str(item).strip()
+            ],
+            *[
+                f"Blocked: {item}"
+                for item in getattr(skill, "blocked_actions", []) or []
+                if str(item).strip()
+            ],
+        ],
+        policies=[
+            (
+                "Approval required before live writes."
+                if str(getattr(skill, "execution_mode", "") or "") == "approval_gated"
+                else "Shadow/read-only execution until reviewed."
+            ),
+            *[f"Approval step: {item}" for item in approval_steps[:4]],
+        ],
+        acceptable_outputs=output_titles,
+        accept_reject_criteria=accept_reject_criteria,
+        evaluation_rubric=accept_reject_criteria,
+        escalation_paths=approval_steps,
+        observed_examples=[example] if events else [],
+        reference_paths=[reference_path] if events else [],
+        source_event_ids=event_ids,
+        source_case_ids=case_ids,
+        labels=[],
+        open_questions=open_questions,
+        spec_confidence=quality["quality"],
+        status=BusinessTaskStatus.DRAFT,
+        evaluation_level=(
+            EvaluationLevel.RUBRIC_EVALUABLE
+            if output_titles or accept_reject_criteria
+            else EvaluationLevel.DESCRIPTIVE
+        ),
+        metadata={
+            "candidate_id": candidate_id,
+            "group_key": group_key,
+            "generated_by": _SKILLMAP_GENERATOR,
+            "source_skill_id": getattr(skill, "skill_id", ""),
+            "claim_boundary": (
+                "semantic workflow candidate synthesized from citation-backed "
+                "skill evidence; requires human review before activation"
+            ),
+            "quality": quality,
+            "world_model_alignment": world_model_alignment,
+        },
+    )
+
+
+def _candidate_from_skill(
+    *,
+    skill: Any,
+    events_by_id: dict[str, CanonicalEvent],
+    company_name: str,
+    company_domain: str,
+    world_model_rows: list[dict[str, Any]],
+) -> WorkflowCandidate | None:
+    if not _skill_is_promotable_workflow(skill):
+        return None
+    evidence_ids = _skill_evidence_event_ids(skill)
+    events = [
+        events_by_id[event_id] for event_id in evidence_ids if event_id in events_by_id
+    ]
+    events.sort(key=lambda event: (event.ts_ms or 0, event.event_id))
+    alignment = _world_model_alignment(skill, world_model_rows)
+    quality = _semantic_workflow_quality(
+        skill,
+        event_count=len(events),
+        world_model_alignment_score=float(alignment["score"]),
+    )
+    title = str(getattr(skill, "title", "") or "Evidence-backed workflow").strip()
+    group_key = f"skill:{getattr(skill, 'skill_id', title)}"
+    candidate_id = _stable_id(company_domain, group_key, title, prefix="wfc")
+    surfaces = sorted({_surface(event) for event in events if _surface(event)})
+    kinds = sorted({event.kind for event in events if event.kind})
+    draft_spec = _semantic_spec_for_skill(
+        candidate_id=candidate_id,
+        skill=skill,
+        company_name=company_name,
+        company_domain=company_domain,
+        group_key=group_key,
+        events=events,
+        quality=quality,
+        world_model_alignment=alignment,
+    )
+    fingerprint = _stable_hash(
+        {
+            "source_skill_id": getattr(skill, "skill_id", ""),
+            "event_ids": evidence_ids,
+            "quality": quality,
+            "title": title,
+        }
+    )
+    return WorkflowCandidate(
+        candidate_id=candidate_id,
+        title=title,
+        company_name=company_name,
+        company_domain=company_domain,
+        group_key=group_key,
+        source_case_ids=_case_ids(events),
+        source_event_ids=_event_ids(events),
+        thread_refs=sorted(
+            {_thread_ref(event) for event in events if _thread_ref(event)}
+        ),
+        surfaces=surfaces,
+        event_kinds=kinds,
+        actor_ids=_actor_ids(events),
+        object_refs=_object_refs(events),
+        start_ts_ms=min((event.ts_ms for event in events if event.ts_ms), default=None),
+        end_ts_ms=max((event.ts_ms for event in events if event.ts_ms), default=None),
+        repetition_count=max(1, len(_case_ids(events))),
+        evidence_density=quality["evidence_coverage"],
+        cross_surface_score=min(1.0, len(surfaces) / 3.0) if surfaces else 0.0,
+        escalation_score=quality["readiness"],
+        labelability_score=quality["operational_shape"],
+        rank_score=round(quality["quality"] * 100.0, 4),
+        summary=str(getattr(skill, "summary", "") or ""),
+        snippets=_skill_evidence_texts(skill, events),
+        draft_task_spec=draft_spec,
+        metadata={
+            "fingerprint": fingerprint,
+            "generated_by": _SKILLMAP_GENERATOR,
+            "source_skill_id": getattr(skill, "skill_id", ""),
+            "source_candidate_type": getattr(skill, "candidate_type", ""),
+            "deployment_readiness": getattr(skill, "deployment_readiness", ""),
+            "review_status": getattr(skill, "review_status", ""),
+            "event_count": len(events),
+            "evidence_ref_count": len(getattr(skill, "evidence_refs", []) or []),
+            "quality": quality,
+            "world_model_alignment": alignment,
+        },
+    )
+
+
+def _semantic_candidates_from_skill_map(
+    *,
+    skill_map: Any | None,
+    events: list[CanonicalEvent],
+    company_name: str,
+    company_domain: str,
+    world_model_rows: list[dict[str, Any]],
+) -> list[WorkflowCandidate]:
+    if skill_map is None:
+        return []
+    events_by_id = _events_by_id(events)
+    candidates: list[WorkflowCandidate] = []
+    for skill in getattr(skill_map, "skills", []) or []:
+        candidate = _candidate_from_skill(
+            skill=skill,
+            events_by_id=events_by_id,
+            company_name=company_name,
+            company_domain=company_domain,
+            world_model_rows=world_model_rows,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.rank_score,
+            candidate.metadata.get("evidence_ref_count", 0),
+            candidate.repetition_count,
+            candidate.title,
+        ),
+        reverse=True,
+    )
+    return candidates
+
+
 def mine_workflows(
     source_dir: str | Path,
     *,
     output: str | Path | None = None,
     limit: int = 25,
+    backend: str = "auto",
+    skill_map_path: str | Path | None = None,
+    world_model_report_path: str | Path | None = None,
+    include_structural_fallback: bool = False,
 ) -> WorkflowMiningResult:
     """Mine recurring workflow candidates from canonical events.
 
@@ -536,6 +1283,9 @@ def mine_workflows(
     deterministic step graphs.
     """
 
+    backend = backend.strip().lower()
+    if backend not in {"auto", "structural", "semantic", "merged"}:
+        raise ValueError("backend must be one of: auto, structural, semantic, merged")
     root, context_path = _resolve_source(source_dir)
     context_payload = _load_context_payload(context_path)
     company_name, company_domain = _company_from_context(context_payload)
@@ -544,7 +1294,7 @@ def mine_workflows(
     for event in events:
         groups[_group_key(event)].append(event)
 
-    candidates = _annotate_repetition(
+    structural_candidates = _annotate_repetition(
         [
             _candidate_from_group(
                 group_key=group_key,
@@ -556,7 +1306,7 @@ def mine_workflows(
             if group_events
         ]
     )
-    candidates.sort(
+    structural_candidates.sort(
         key=lambda candidate: (
             candidate.rank_score,
             candidate.repetition_count,
@@ -564,6 +1314,74 @@ def mine_workflows(
         ),
         reverse=True,
     )
+    resolved_skill_map_path: Path | None = None
+    skill_map = None
+    if backend != "structural":
+        resolved_skill_map_path = (
+            Path(skill_map_path).expanduser().resolve()
+            if skill_map_path is not None
+            else _autodiscover_skill_map_path(root, output)
+        )
+        if resolved_skill_map_path is not None:
+            skill_map = _load_skill_map(resolved_skill_map_path)
+        elif backend in {"semantic", "merged"}:
+            raise FileNotFoundError(
+                "semantic workflow mining requires --skill-map or "
+                "<source>/skill_map/company_skill_map.json"
+            )
+    resolved_world_model_report_path = _resolve_world_model_report_path(
+        world_model_report_path
+    )
+    world_model_rows = _read_world_model_rows(resolved_world_model_report_path)
+    semantic_candidates = _semantic_candidates_from_skill_map(
+        skill_map=skill_map,
+        events=events,
+        company_name=company_name,
+        company_domain=company_domain,
+        world_model_rows=world_model_rows,
+    )
+    if backend == "structural" or (backend == "auto" and not semantic_candidates):
+        candidates = structural_candidates
+        selected_backend = "structural"
+    elif backend == "semantic":
+        candidates = semantic_candidates
+        selected_backend = "semantic"
+    else:
+        selected_backend = "semantic" if backend == "auto" else "merged"
+        seen_fingerprints = {
+            str(candidate.metadata.get("source_skill_id") or candidate.candidate_id)
+            for candidate in semantic_candidates
+        }
+        candidates = list(semantic_candidates)
+        if include_structural_fallback or backend == "merged":
+            for candidate in structural_candidates:
+                if candidate.candidate_id in seen_fingerprints:
+                    continue
+                candidates.append(
+                    candidate.model_copy(
+                        update={
+                            "metadata": {
+                                **candidate.metadata,
+                                "generated_by": _STRUCTURAL_GENERATOR,
+                                "diagnostic_only": bool(semantic_candidates),
+                            }
+                        },
+                        deep=True,
+                    )
+                )
+        candidates.sort(
+            key=lambda candidate: (
+                (
+                    1
+                    if candidate.metadata.get("generated_by") == _SKILLMAP_GENERATOR
+                    else 0
+                ),
+                candidate.rank_score,
+                candidate.repetition_count,
+                candidate.start_ts_ms or 0,
+            ),
+            reverse=True,
+        )
     result = WorkflowMiningResult(
         source_dir=str(context_path),
         company_name=company_name,
@@ -573,12 +1391,68 @@ def mine_workflows(
         candidates=candidates[:limit],
         metadata={
             "source_root": str(root),
-            "mining_version": "workflow_mining_v1",
+            "mining_version": "workflow_mining_v2_semantic",
+            "selected_backend": selected_backend,
+            "backend_requested": backend,
+            "skill_map_path": (
+                str(resolved_skill_map_path)
+                if resolved_skill_map_path is not None
+                else ""
+            ),
+            "world_model_report_path": (
+                str(resolved_world_model_report_path)
+                if resolved_world_model_report_path is not None
+                else ""
+            ),
+            "semantic_candidate_count": len(semantic_candidates),
+            "structural_candidate_count": len(structural_candidates),
+            "structural_fallback_included": bool(
+                include_structural_fallback or backend == "merged"
+            ),
+            "candidate_policy": (
+                "skill-backed semantic workflows are primary; structural "
+                "clusters are diagnostics/fallback only"
+            ),
             "generated_at": _now_iso(),
         },
     )
     if output is not None:
         save_mining_result(result, output)
+        output_root = Path(output).expanduser().resolve()
+        if semantic_candidates:
+            structural_result = result.model_copy(
+                update={
+                    "candidate_count": len(structural_candidates),
+                    "candidates": structural_candidates,
+                    "metadata": {
+                        **result.metadata,
+                        "selected_backend": "structural_diagnostic",
+                        "diagnostic_for": str(output_root / MINING_RESULT_FILE),
+                    },
+                },
+                deep=True,
+            )
+            (output_root / STRUCTURAL_MINING_RESULT_FILE).write_text(
+                structural_result.model_dump_json(indent=2) + "\n",
+                encoding="utf-8",
+            )
+        manifest = {
+            "schema_version": 1,
+            "mining_version": result.metadata["mining_version"],
+            "selected_backend": selected_backend,
+            "source_dir": str(context_path),
+            "skill_map_path": result.metadata["skill_map_path"],
+            "world_model_report_path": result.metadata["world_model_report_path"],
+            "semantic_candidate_count": len(semantic_candidates),
+            "structural_candidate_count": len(structural_candidates),
+            "published_candidate_count": result.candidate_count,
+            "raw_structural_clusters_are_diagnostics": bool(semantic_candidates),
+            "generated_at": result.metadata["generated_at"],
+        }
+        (output_root / MINING_MANIFEST_FILE).write_text(
+            json.dumps(manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return result
 
 
@@ -976,6 +1850,10 @@ def refresh_workflows(
     workspace: str | Path,
     output: str | Path,
     limit: int = 25,
+    backend: str = "auto",
+    skill_map_path: str | Path | None = None,
+    world_model_report_path: str | Path | None = None,
+    include_structural_fallback: bool = False,
     refresh_wiki_artifacts: bool = False,
     refresh_skillmap_artifacts: bool = False,
 ) -> WorkflowRefreshReport:
@@ -984,7 +1862,39 @@ def refresh_workflows(
     if (output_root / MINING_RESULT_FILE).is_file():
         previous_result = load_mining_result(output_root)
     labels = load_workflow_labels(output_root)
-    new_result = mine_workflows(source_dir, output=output_root, limit=limit)
+
+    resolved_skill_map_path: str | Path | None = skill_map_path
+    skillmap_status = "not_requested"
+    if refresh_skillmap_artifacts:
+        try:
+            from vei.skillmap.api import (
+                build_company_skill_map_from_workspace,
+                write_company_skill_map_outputs,
+            )
+
+            skill_map = build_company_skill_map_from_workspace(
+                workspace,
+                context_path=source_dir,
+                include_replay=False,
+                provider="codex",
+            )
+            paths = write_company_skill_map_outputs(
+                skill_map, output_root / "skill_map"
+            )
+            resolved_skill_map_path = paths["json"]
+            skillmap_status = "ok"
+        except Exception as exc:  # noqa: BLE001
+            skillmap_status = f"error:{exc}"
+
+    new_result = mine_workflows(
+        source_dir,
+        output=output_root,
+        limit=limit,
+        backend=backend,
+        skill_map_path=resolved_skill_map_path,
+        world_model_report_path=world_model_report_path,
+        include_structural_fallback=include_structural_fallback,
+    )
 
     previous_candidates = (
         {candidate.candidate_id: candidate for candidate in previous_result.candidates}
@@ -1021,25 +1931,6 @@ def refresh_workflows(
         except Exception as exc:  # noqa: BLE001
             wiki_status = f"error:{exc}"
 
-    skillmap_status = "not_requested"
-    if refresh_skillmap_artifacts:
-        try:
-            from vei.skillmap.api import (
-                build_company_skill_map_from_workspace,
-                write_company_skill_map_outputs,
-            )
-
-            skill_map = build_company_skill_map_from_workspace(
-                workspace,
-                context_path=source_dir,
-                include_replay=False,
-                provider="codex",
-            )
-            write_company_skill_map_outputs(skill_map, output_root / "skill_map")
-            skillmap_status = "ok"
-        except Exception as exc:  # noqa: BLE001
-            skillmap_status = f"error:{exc}"
-
     report = WorkflowRefreshReport(
         source_dir=str(source_dir),
         workspace=str(workspace),
@@ -1051,7 +1942,16 @@ def refresh_workflows(
         label_count=len(labels),
         wiki_refresh_status=wiki_status,
         skillmap_refresh_status=skillmap_status,
-        metadata={"candidate_count": new_result.candidate_count},
+        metadata={
+            "candidate_count": new_result.candidate_count,
+            "selected_backend": new_result.metadata.get("selected_backend"),
+            "semantic_candidate_count": new_result.metadata.get(
+                "semantic_candidate_count"
+            ),
+            "structural_candidate_count": new_result.metadata.get(
+                "structural_candidate_count"
+            ),
+        },
     )
     (output_root / REFRESH_REPORT_FILE).write_text(
         report.model_dump_json(indent=2) + "\n",
