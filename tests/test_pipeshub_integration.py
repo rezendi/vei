@@ -38,6 +38,123 @@ class _Response:
         return False
 
 
+def _write_minimal_skill_map(
+    workspace: Path,
+    *,
+    canonical_events_path: Path,
+    organization_name: str,
+    organization_domain: str,
+    sample_size: int = 12,
+) -> Path:
+    """Write a minimal company skill map citing real canonical events.
+
+    Workflow mining requires a skill map to produce candidates. For this
+    integration test we want to exercise the full pipeline, not the skill-map
+    builder itself, so we hand-craft the smallest skill map that is shaped
+    like a real one and cites event ids that actually exist in the corpus.
+    """
+
+    event_ids: list[str] = []
+    with canonical_events_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            event_ids.append(json.loads(line)["event_id"])
+            if len(event_ids) >= sample_size:
+                break
+    if not event_ids:
+        raise RuntimeError("no canonical events found for skill-map fixture")
+
+    skill_map_dir = workspace / "skill_map"
+    skill_map_dir.mkdir(parents=True, exist_ok=True)
+    path = skill_map_dir / "company_skill_map.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "company_skill_map_v1",
+                "organization_name": organization_name,
+                "organization_domain": organization_domain,
+                "generated_at": "2026-05-13T00:00:00Z",
+                "source_ref": "test_fixture",
+                "canonical_event_count": len(event_ids),
+                "skill_count": 1,
+                "skills": [
+                    {
+                        "skill_id": "skill:pipeshub-ingest-review",
+                        "title": "PipesHub Ingestion Evidence Review",
+                        "summary": (
+                            "Reviews canonical events produced by a PipesHub "
+                            "capture to confirm ingestion fidelity and surface "
+                            "follow-ups."
+                        ),
+                        "status": "draft",
+                        "domain": "operations",
+                        "candidate_type": "workflow",
+                        "usefulness_score": 0.85,
+                        "usefulness_rationale": (
+                            "Confirms a freshly captured bundle is reviewable."
+                        ),
+                        "trigger": {
+                            "description": (
+                                "Use after a PipesHub capture lands canonical "
+                                "events for a tenant."
+                            ),
+                            "signals": ["pipeshub", "capture", "ingestion"],
+                        },
+                        "goal": (
+                            "Confirm the captured events are usable and identify "
+                            "any follow-up review needed."
+                        ),
+                        "prerequisites": ["Canonical events from a capture"],
+                        "steps": [
+                            {
+                                "step_id": "step-1",
+                                "instruction": "Inspect captured events.",
+                                "tool": "event.search",
+                                "read_only": True,
+                                "requires_approval": False,
+                            },
+                            {
+                                "step_id": "step-2",
+                                "instruction": "Summarize ingestion evidence.",
+                                "tool": "artifact.write",
+                                "read_only": False,
+                                "requires_approval": True,
+                            },
+                        ],
+                        "output_artifacts": [
+                            {
+                                "artifact_id": "ingestion-review",
+                                "title": "Ingestion review summary",
+                                "kind": "summary",
+                            }
+                        ],
+                        "evidence_refs": [
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_id,
+                                "source": "test_fixture",
+                                "title": "PipesHub-captured event",
+                            }
+                            for event_id in event_ids
+                        ],
+                        "allowed_actions": ["write_ingestion_summary"],
+                        "blocked_actions": ["mutate_source_records"],
+                        "deployment_readiness": "activation_candidate",
+                        "confidence": 0.9,
+                        "execution_mode": "approval_gated",
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_pipeshub_launcher_dry_run_writes_local_profile(tmp_path: Path) -> None:
     runner = CliRunner()
     runtime_dir = tmp_path / "pipeshub"
@@ -858,6 +975,13 @@ def test_pipeshub_capture_resumes_large_snapshot_without_content_backfill(
     assert readiness["event_count"] == 630
     assert readiness["surface_count"] >= 3
     assert readiness["readiness_label"] in {"ready", "rich"}
+
+    _write_minimal_skill_map(
+        workspace,
+        canonical_events_path=Path(report.canonical_events_path),
+        organization_name="Py Insights",
+        organization_domain="py-insights.com",
+    )
 
     workflow_dir = workspace / ".artifacts" / "workflow_mining"
     workflow_result = runner.invoke(

@@ -94,7 +94,6 @@ vei provenance export --format evidence-pack --workspace _vei_out/<tenant> --out
 vei workflow mine \
   --source-dir _vei_out/<tenant>/context_snapshot.json \
   --output _vei_out/<tenant>/workflows \
-  --backend auto \
   --skill-map _vei_out/<tenant>/skill_map/company_skill_map.json \
   --world-model-report _vei_out/world_model_strategic_state_points/<run>/strategic_state_point_results.csv
 vei workflow label --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --label good_example --note "source-backed example"
@@ -113,10 +112,9 @@ Eval runners:
   from the family workflow, then reports both enterprise scoring and exact
   workflow-contract validation.
 
-`vei workflow mine --backend auto` publishes semantic, skill-backed candidates
-when a company skill map is available. Raw case/thread clusters are still written
-as diagnostics in `workflow_structural_candidates.json`; use `--backend merged`
-or `--structural-fallback` only when intentionally reviewing those clusters.
+`vei workflow mine` publishes semantic, skill-backed candidates and cited
+world-model opportunities. A company skill map is required — produce one with
+`vei knowledge skillmap build` first; mining fails fast when one is missing.
 `vei pyinsights daily-refresh` writes a validation manifest and withholds the
 CEO report unless canonical, source freshness, workflow/skill, model, and
 strategic saturation checks pass.

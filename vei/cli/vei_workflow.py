@@ -34,17 +34,13 @@ def mine(
     ),
     output: Path = typer.Option(..., help="Workflow mining output directory"),
     limit: int = typer.Option(25, min=1, help="Maximum candidates to keep"),
-    backend: str = typer.Option(
-        "auto",
-        "--backend",
-        help="Mining backend: auto | structural | semantic | merged",
-    ),
     skill_map: Path | None = typer.Option(
         None,
         "--skill-map",
         help=(
-            "Optional company_skill_map.json. In auto mode, VEI also checks "
-            "<source>/skill_map/company_skill_map.json."
+            "company_skill_map.json. Optional only if "
+            "<source>/skill_map/company_skill_map.json exists. Mining requires "
+            "a company skill map and fails fast if neither is present."
         ),
     ),
     world_model_report: Path | None = typer.Option(
@@ -55,24 +51,17 @@ def mine(
             "to annotate workflow alignment with current counterfactual priorities."
         ),
     ),
-    structural_fallback: bool = typer.Option(
-        False,
-        "--structural-fallback/--no-structural-fallback",
-        help="Append raw structural clusters after semantic candidates.",
-    ),
     indent: int = typer.Option(2, help="Pretty indent"),
 ) -> None:
-    """Mine recurring work candidates from a canonical company history."""
+    """Mine semantic workflow candidates from a company skill map."""
 
     try:
         result = mine_workflows(
             source_dir,
             output=output,
             limit=limit,
-            backend=backend,
             skill_map_path=skill_map,
             world_model_report_path=world_model_report,
-            include_structural_fallback=structural_fallback,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -159,25 +148,15 @@ def refresh(
     workspace: Path = typer.Option(..., help="Workspace root for adjacent artifacts"),
     output: Path = typer.Option(..., help="Workflow mining output directory"),
     limit: int = typer.Option(25, min=1, help="Maximum candidates to keep"),
-    backend: str = typer.Option(
-        "auto",
-        "--backend",
-        help="Mining backend: auto | structural | semantic | merged",
-    ),
     skill_map: Path | None = typer.Option(
         None,
         "--skill-map",
-        help="Optional company_skill_map.json for semantic workflow mining.",
+        help="company_skill_map.json (or rebuild it with --refresh-skillmap).",
     ),
     world_model_report: Path | None = typer.Option(
         None,
         "--world-model-report",
         help="Optional strategic-state-point report CSV/JSON or run directory.",
-    ),
-    structural_fallback: bool = typer.Option(
-        False,
-        "--structural-fallback/--no-structural-fallback",
-        help="Append raw structural clusters after semantic candidates.",
     ),
     refresh_wiki: bool = typer.Option(False, help="Also rebuild wiki artifacts"),
     refresh_skillmap: bool = typer.Option(
@@ -193,10 +172,8 @@ def refresh(
             workspace=workspace,
             output=output,
             limit=limit,
-            backend=backend,
             skill_map_path=skill_map,
             world_model_report_path=world_model_report,
-            include_structural_fallback=structural_fallback,
             refresh_wiki_artifacts=refresh_wiki,
             refresh_skillmap_artifacts=refresh_skillmap,
         )

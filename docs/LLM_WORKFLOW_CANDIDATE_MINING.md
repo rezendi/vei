@@ -4,7 +4,7 @@ Workflow mining is meant to surface work worth reviewing, automating, testing,
 or turning into an agent environment. It should not rank a Teams greeting above
 a release gate just because the greeting happened in a busy thread.
 
-The current product path is therefore:
+The pipeline is therefore:
 
 ```text
 canonical events
@@ -15,9 +15,11 @@ canonical events
   -> workflow_candidates.json for review/promotion
 ```
 
-The older structural miner still exists, but it is now a diagnostic fallback. It
-groups events by case/thread/object and is useful for coverage checks, not for
-CEO/operator prioritization.
+A prior structural miner (keyword scoring over case/thread clusters) used to
+ship alongside this path as a diagnostic fallback. It was deleted because it
+silently produced keyword-clustered output that called itself "workflows" but
+was not what operators or CEOs should review. Mining now requires a company
+skill map and fails fast when one is missing.
 
 ## Why This Shape
 
@@ -67,15 +69,14 @@ while canonical events remain the citation boundary.
 
 ## Outputs
 
-Every semantic run writes:
+Every run writes:
 
 - `workflow_candidates.json` — published semantic candidates
-- `workflow_structural_candidates.json` — raw structural clusters for diagnosis
-- `workflow_mining_manifest.json` — backend, counts, source paths, and policy
+- `workflow_mining_manifest.json` — counts, source paths, and policy
 
-The manifest makes the trust boundary explicit: semantic candidates are the
-review queue; structural candidates are diagnostics unless the operator asks for
-fallback inclusion.
+Skill-backed semantic workflows and cited world-model opportunities are the
+only candidate sources. Mining fails fast (`FileNotFoundError`) if no company
+skill map is available — produce one with `vei knowledge skillmap build` first.
 
 ## Daily Command
 
@@ -85,14 +86,9 @@ After refreshing the context bundle and skill map, run:
 vei workflow mine \
   --source-dir _vei_out/<tenant>/context_snapshot.json \
   --output _vei_out/<tenant>/workflows \
-  --backend auto \
   --skill-map _vei_out/<tenant>/skill_map/company_skill_map.json \
-  --world-model-report _vei_out/world_model_strategic_state_points/<run>/strategic_state_point_results.csv \
-  --no-structural-fallback
+  --world-model-report _vei_out/world_model_strategic_state_points/<run>/strategic_state_point_results.csv
 ```
-
-Use `--backend merged --structural-fallback` only when deliberately reviewing
-raw structural clusters next to the semantic list.
 
 Use `vei workflow refresh --refresh-skillmap` when the workspace form is
 available and the goal is a daily update that preserves existing labels.
@@ -105,7 +101,7 @@ A daily workflow list is good enough to review when:
 - every candidate has cited event ids
 - noisy snippets such as greetings are filtered from the visible evidence list
 - credential-like snippets are redacted in workflow evidence surfaces
-- unsupported structural clusters are written separately, not silently mixed in
+- mining fails fast when the required company skill map is missing
 - world-model alignment is present when a strategic report is supplied
 - world-model skill opportunities are cited or skipped
 - old human labels survive `vei workflow refresh`
