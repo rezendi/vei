@@ -1,5 +1,5 @@
 {
-  "task_id": "bts_7e10e1b008a8cef6",
+  "task_id": "bts_f6cbb163cb927c05",
   "title": "Morning Dispatch Board",
   "company_name": "Clearwater Field Services",
   "company_domain": "cfs.example.com",
@@ -266,7 +266,7 @@
   "labels": [
     {
       "label_id": "wfl_workflow_walkthrough_good_example",
-      "candidate_id": "wfc_140309889b0c4241",
+      "candidate_id": "wfc_f6cbb163cb927c05",
       "task_id": null,
       "label": "good_example",
       "note": "Repo walkthrough fixture: public Clearwater evidence path reviewed for process packaging.",
@@ -594,7 +594,7 @@
         ]
       }
     },
-    "reviewed_from_candidate_id": "wfc_140309889b0c4241",
+    "reviewed_from_candidate_id": "wfc_f6cbb163cb927c05",
     "source_fixture": "docs/examples/clearwater-technician-no-show/workspace/context_snapshot.json",
     "claim_boundary": "reviewed deterministic service-ops contract for process/compliance packaging only"
   }

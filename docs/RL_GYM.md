@@ -31,8 +31,8 @@ they should not be forced into process RL just to produce a reward file.
 The checked-in walkthrough at
 [examples/workflow-intelligence-walkthrough](examples/workflow-intelligence-walkthrough/)
 exercises this gate end to end: mine a company-history bundle, label and promote
-a Business Task Spec, reject premature packaging, and package only a reviewed
-RL-ready spec.
+a Business Task Spec from a checked-in skill-map fixture, reject premature
+packaging, and package only a reviewed RL-ready spec.
 
 ## Why this scoping holds up
 

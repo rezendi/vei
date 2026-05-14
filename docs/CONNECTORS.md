@@ -69,7 +69,13 @@ vei context pipeshub capture \
 # Smoke the captured bundle through VEI's downstream read models.
 vei context verify --snapshot _vei_out/yourco/context_snapshot.json
 vei wiki build --source-dir _vei_out/yourco --output _vei_out/yourco/wiki
-vei workflow mine --source-dir _vei_out/yourco --output _vei_out/yourco/workflows
+vei knowledge skillmap build \
+  --source-dir _vei_out/yourco/context_snapshot.json \
+  --output _vei_out/yourco/skill_map
+vei workflow mine \
+  --source-dir _vei_out/yourco \
+  --output _vei_out/yourco/workflows \
+  --skill-map _vei_out/yourco/skill_map/company_skill_map.json
 vei context readiness --root _vei_out/yourco --format json
 
 # Stop the local PipesHub stack when the pilot sync is finished.
@@ -185,7 +191,13 @@ vei context teams capture \
 
 vei context verify --snapshot _vei_out/yourco-teams/context_snapshot.json
 vei wiki build --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/wiki
-vei workflow mine --source-dir _vei_out/yourco-teams --output _vei_out/yourco-teams/workflows
+vei knowledge skillmap build \
+  --source-dir _vei_out/yourco-teams/context_snapshot.json \
+  --output _vei_out/yourco-teams/skill_map
+vei workflow mine \
+  --source-dir _vei_out/yourco-teams \
+  --output _vei_out/yourco-teams/workflows \
+  --skill-map _vei_out/yourco-teams/skill_map/company_skill_map.json
 ```
 
 Use `--team` to restrict channel export to specific team ids or display names,

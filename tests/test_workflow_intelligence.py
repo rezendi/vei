@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
+from vei.cli.vei import app as vei_cli_app
 from vei.contract.api import build_contract_from_workflow
 from vei.events.api import ActorRef, EventDomain, ObjectRef, build_event
 from vei.scenario_engine.api import WorkflowScenarioSpec
@@ -603,6 +605,119 @@ def test_mining_surfaces_cited_world_model_skill_opportunities(
     assert "Finance confirmation gate" in opportunity.title
     manifest = json.loads((output / "workflow_mining_manifest.json").read_text())
     assert manifest["world_model_opportunity_candidate_count"] == 1
+
+
+def test_repo_owned_workflow_walkthrough_cli_ladder(tmp_path: Path) -> None:
+    output = tmp_path / "workflows"
+    runner = CliRunner()
+
+    mine_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "mine",
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(output),
+            "--limit",
+            "3",
+        ],
+    )
+    assert mine_result.exit_code == 0, mine_result.output
+    mined_payload = json.loads(mine_result.output)
+    candidate = mined_payload["candidates"][0]
+    candidate_id = candidate["candidate_id"]
+    event_id = candidate["source_event_ids"][0]
+
+    assert mined_payload["company_name"] == "Clearwater Field Services"
+    assert mined_payload["company_domain"] == "cfs.example.com"
+    assert mined_payload["event_count"] == 45
+    assert candidate_id == "wfc_f6cbb163cb927c05"
+    assert candidate["title"] == "Morning Dispatch Board"
+    assert candidate["metadata"]["generated_by"] == "skillmap_semantic_v1"
+    assert (
+        candidate["draft_task_spec"]["metadata"]["claim_boundary"]
+        == "semantic workflow candidate synthesized from citation-backed "
+        "skill evidence; requires human review before activation"
+    )
+
+    label_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "label",
+            "--root",
+            str(output),
+            "--candidate-id",
+            candidate_id,
+            "--label",
+            "good_example",
+            "--note",
+            "walkthrough evidence path",
+            "--event-id",
+            event_id,
+        ],
+    )
+    assert label_result.exit_code == 0, label_result.output
+    label_payload = json.loads(label_result.output)
+    assert label_payload["label"] == "good_example"
+    assert label_payload["event_ids"] == [event_id]
+
+    spec_path = tmp_path / "task_spec.json"
+    promote_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "promote",
+            "--root",
+            str(output),
+            "--candidate-id",
+            candidate_id,
+            "--output",
+            str(spec_path),
+        ],
+    )
+    assert promote_result.exit_code == 0, promote_result.output
+    promoted_payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    assert promoted_payload["evaluation_level"] == "labeled"
+    assert promoted_payload["status"] == "draft"
+    assert promoted_payload["labels"][0]["note"] == "walkthrough evidence path"
+
+    package_rejected = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "package-env",
+            "--spec",
+            str(spec_path),
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(tmp_path / "rejected_env"),
+        ],
+    )
+    assert package_rejected.exit_code != 0
+    assert "requires evaluation_level=rl_packaged" in package_rejected.output
+
+    package_result = runner.invoke(
+        vei_cli_app,
+        [
+            "workflow",
+            "package-env",
+            "--spec",
+            str(WORKFLOW_WALKTHROUGH_SPEC),
+            "--source-dir",
+            str(CLEARWATER_WALKTHROUGH_CONTEXT),
+            "--output",
+            str(tmp_path / "env"),
+        ],
+    )
+    assert package_result.exit_code == 0, package_result.output
+    package_payload = json.loads(package_result.output)
+    assert package_payload["evaluation_level"] == "rl_packaged"
+    assert "environment_manifest.json" in package_payload["files"]
+    assert "reward_spec.json" in package_payload["files"]
 
 
 def test_package_env_rejects_descriptive_specs_and_writes_rl_package(

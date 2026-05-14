@@ -1,0 +1,182 @@
+{
+  "schema_version": "company_skill_map_v1",
+  "organization_name": "Clearwater Field Services",
+  "organization_domain": "cfs.example.com",
+  "generated_at": "2026-05-14T00:00:00Z",
+  "source_ref": "docs/examples/clearwater-technician-no-show/workspace",
+  "source_providers": [
+    "slack",
+    "google",
+    "jira",
+    "service_ops"
+  ],
+  "canonical_event_count": 45,
+  "skill_count": 1,
+  "skills": [
+    {
+      "skill_id": "skill:morning-dispatch-board",
+      "title": "Morning Dispatch Board",
+      "summary": "Coordinate VIP technician recovery, billing hold, dispatch assignment, and customer-facing handoff from the same cited case record.",
+      "status": "draft",
+      "domain": "service_ops",
+      "candidate_type": "workflow",
+      "usefulness_score": 0.9,
+      "usefulness_rationale": "The pattern spans dispatch, billing, documentation, ticket comments, and Slack updates for a service recovery case.",
+      "trigger": {
+        "description": "Use when a VIP service appointment loses the assigned technician while billing or account status can affect the dispatch response.",
+        "signals": [
+          "technician unavailable",
+          "VIP outage",
+          "billing hold",
+          "dispatch reroute",
+          "customer handoff"
+        ]
+      },
+      "goal": "Stabilize the appointment, preserve billing context, and leave a cited cross-system handoff trail.",
+      "prerequisites": [
+        "Service request or work-order history",
+        "Billing/account status",
+        "Dispatch channel and handoff document"
+      ],
+      "steps": [
+        {
+          "step_id": "inspect-dispatch-thread",
+          "instruction": "Read the dispatch and field-technician evidence for the appointment risk.",
+          "tool": "event.search",
+          "read_only": true,
+          "requires_approval": false
+        },
+        {
+          "step_id": "confirm-billing-boundary",
+          "instruction": "Confirm whether billing hold or dispute state constrains field follow-up.",
+          "tool": "event.search",
+          "read_only": true,
+          "requires_approval": false
+        },
+        {
+          "step_id": "write-handoff",
+          "instruction": "Write the dispatch handoff with cited appointment, billing, and exception evidence.",
+          "tool": "artifact.write",
+          "read_only": false,
+          "requires_approval": true
+        }
+      ],
+      "output_artifacts": [
+        {
+          "artifact_id": "dispatch-handoff",
+          "title": "Dispatch recovery handoff",
+          "kind": "handoff",
+          "required": true
+        },
+        {
+          "artifact_id": "billing-hold-note",
+          "title": "Billing hold note",
+          "kind": "status_note",
+          "required": true
+        }
+      ],
+      "evidence_refs": [
+        {
+          "ref_type": "event",
+          "ref_id": "history_5dc15ff183243fb8",
+          "source": "docs_example",
+          "surface": "slack",
+          "title": "Dispatch approval updated",
+          "snippet": "SR-CFS-100 dispatch approval updated. Status: pending_approval. Emergency dispatch reroute approved for Clearwater Medical."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_aa36eec30a4cd6a5",
+          "source": "docs_example",
+          "surface": "slack",
+          "title": "Backup technician assigned",
+          "snippet": "WO-CFS-100 reassigned. Technician: TECH-CFS-02. Backup controls technician assigned and VIP appointment stabilized."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_ff37c647b1ae05d7",
+          "source": "docs_example",
+          "surface": "slack",
+          "title": "Billing hold placed",
+          "snippet": "BILL-CFS-100 placed on billing hold. Billing remains stable while dispatch recovers the technician gap."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_8427068109beb867",
+          "source": "docs_example",
+          "surface": "slack",
+          "title": "Original technician unavailable",
+          "snippet": "Calling out sick. I can't take WO-CFS-100 this morning."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_51cfaf03ac3d816f",
+          "source": "docs_example",
+          "surface": "slack",
+          "title": "Backup search starts",
+          "snippet": "Copy. Looking for backup with rooftop controls certification now."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_90e797e63d8cb914",
+          "source": "docs_example",
+          "surface": "docs",
+          "title": "Runbook dispatch approval note",
+          "snippet": "SR-CFS-100 dispatch approval updated. Status: pending_approval. Emergency dispatch reroute approved for Clearwater Medical."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_4933377963cb1ca1",
+          "source": "docs_example",
+          "surface": "docs",
+          "title": "Runbook backup technician note",
+          "snippet": "WO-CFS-100 reassigned. Technician: TECH-CFS-02. Backup controls technician assigned and VIP appointment stabilized."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_ca21c8335107b252",
+          "source": "docs_example",
+          "surface": "docs",
+          "title": "Billing document hold note",
+          "snippet": "BILL-CFS-100 placed on billing hold. Billing remains stable while dispatch recovers the technician gap."
+        },
+        {
+          "ref_type": "event",
+          "ref_id": "history_f651c2064b27680c",
+          "source": "docs_example",
+          "surface": "docs",
+          "title": "Executive handoff summary",
+          "snippet": "DOC-CFS-HANDOFF updated. Backup dispatch assigned, billing hold linked to the dispute, and field-to-billing handoff aligned."
+        }
+      ],
+      "allowed_actions": [
+        "write_dispatch_handoff",
+        "update_billing_note"
+      ],
+      "blocked_actions": [
+        "send_customer_eta_without_dispatch_owner",
+        "resume_collection_followup_while_billing_hold_active"
+      ],
+      "freshness_status": "fresh",
+      "replay_score": 0.0,
+      "deployment_readiness": "shadow_ready",
+      "confidence": 0.88,
+      "owner": "service_ops",
+      "reviewer": "ops-manager",
+      "review_status": "reviewed",
+      "execution_mode": "approval_gated",
+      "tags": [
+        "docs-example",
+        "workflow-intelligence",
+        "service-ops"
+      ],
+      "metadata": {
+        "fixture_role": "repo_owned_workflow_intelligence_walkthrough"
+      }
+    }
+  ],
+  "gaps": [],
+  "metadata": {
+    "claim_boundary": "Public fixture for deterministic workflow-intelligence docs and smoke tests."
+  }
+}
