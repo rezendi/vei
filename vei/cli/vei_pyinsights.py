@@ -90,6 +90,45 @@ def daily_refresh(
         "--allow-report-on-warning/--fail-on-warning",
         help="Warnings are recorded but do not block CEO report emission.",
     ),
+    fresh_capture: bool = typer.Option(
+        True,
+        "--fresh-capture/--reuse-context-bundle",
+        help=(
+            "Capture a current Py Insights source bundle first when the configured "
+            "context bundle is stale."
+        ),
+    ),
+    capture_workspace: Path | None = typer.Option(
+        None,
+        "--capture-workspace",
+        help="Directory for fresh capture artifacts. Defaults inside the daily run root.",
+    ),
+    capture_connector: list[str] = typer.Option(
+        [],
+        "--capture-connector",
+        "-c",
+        help=(
+            "Expected live connector/provider to capture. Repeat to override "
+            "the providers inferred from the existing context bundle."
+        ),
+    ),
+    capture_limit: int = typer.Option(
+        5000,
+        "--capture-limit",
+        min=1,
+        help="Maximum records/messages to keep during fresh source capture.",
+    ),
+    capture_timeout_s: int = typer.Option(
+        30,
+        "--capture-timeout-s",
+        min=1,
+        help="HTTP timeout for live connector capture.",
+    ),
+    capture_include_content: bool = typer.Option(
+        False,
+        "--capture-include-content/--capture-metadata-only",
+        help="Fetch converted document/email content during PipesHub capture.",
+    ),
     indent: int = typer.Option(2, help="JSON indent."),
 ) -> None:
     """Run the validated daily Py Insights refresh gate."""
@@ -109,6 +148,12 @@ def daily_refresh(
             source_freshness_policy=source_freshness_policy,
             refresh_workflows=refresh_workflows,
             allow_report_on_warning=allow_report_on_warning,
+            fresh_capture=fresh_capture,
+            capture_workspace=capture_workspace,
+            capture_connectors=capture_connector or None,
+            capture_limit=capture_limit,
+            capture_timeout_s=capture_timeout_s,
+            capture_include_content=capture_include_content,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc

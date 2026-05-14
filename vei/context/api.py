@@ -118,7 +118,10 @@ __all__ = [
     "build_public_context",
     "canonical_history_paths",
     "canonical_history_sidecars_exist",
+    "capture_pipeshub_context_from_env",
+    "capture_teams_graph_context_from_env",
     "capture_context",
+    "context_iso_now",
     "diff_snapshots",
     "discover_public_context_path",
     "empty_enron_public_context",
@@ -131,6 +134,9 @@ __all__ = [
     "load_enron_public_context",
     "load_public_context",
     "legacy_threads_payload_to_snapshot",
+    "merge_context_source_results",
+    "new_pipeshub_capture_run_id",
+    "new_teams_graph_capture_run_id",
     "public_context_has_items",
     "public_context_prompt_lines",
     "query_canonical_history",
@@ -139,9 +145,12 @@ __all__ = [
     "slice_public_context_to_branch",
     "slice_public_context_to_window",
     "source_payload",
+    "verify_context_snapshot",
     "with_snapshot_role",
     "write_canonical_history_bundle",
     "write_canonical_history_sidecars",
+    "write_pipeshub_capture_outputs",
+    "write_teams_graph_capture_outputs",
 ]
 
 
@@ -198,6 +207,68 @@ def hydrate_blueprint(
         scenario_name=scenario_name,
         workflow_name=workflow_name,
     )
+
+
+def context_iso_now() -> str:
+    return iso_now()
+
+
+def verify_context_snapshot(snapshot: ContextSnapshot, *, snapshot_path: str | Path):
+    from .normalize import verify_context_snapshot as _verify_context_snapshot
+
+    return _verify_context_snapshot(snapshot, snapshot_path=snapshot_path)
+
+
+def merge_context_source_results(
+    sources: list[ContextSourceResult],
+) -> list[ContextSourceResult]:
+    from ._normalize_extract import merge_source_results
+
+    return merge_source_results(sources)
+
+
+def new_pipeshub_capture_run_id() -> str:
+    from .pipeshub import new_pipeshub_run_id
+
+    return new_pipeshub_run_id()
+
+
+def capture_pipeshub_context_from_env(*, timeout_s: int, **kwargs: Any) -> Any:
+    from .pipeshub import PipesHubClient, capture_pipeshub_context
+
+    return capture_pipeshub_context(
+        PipesHubClient.from_env(timeout_s=timeout_s), **kwargs
+    )
+
+
+def write_pipeshub_capture_outputs(
+    capture: Any, *, workspace: Path, output: Path
+) -> Any:
+    from .pipeshub import write_pipeshub_capture
+
+    return write_pipeshub_capture(capture, workspace=workspace, output=output)
+
+
+def new_teams_graph_capture_run_id() -> str:
+    from .providers.teams import new_teams_graph_run_id
+
+    return new_teams_graph_run_id()
+
+
+def capture_teams_graph_context_from_env(*, timeout_s: int, **kwargs: Any) -> Any:
+    from .providers.teams import TeamsGraphClient, capture_teams_graph_context
+
+    return capture_teams_graph_context(
+        TeamsGraphClient.from_env(timeout_s=timeout_s), **kwargs
+    )
+
+
+def write_teams_graph_capture_outputs(
+    capture: Any, *, workspace: Path, output: Path
+) -> Any:
+    from .providers.teams import write_teams_graph_capture
+
+    return write_teams_graph_capture(capture, workspace=workspace, output=output)
 
 
 def ingest_slack_export(

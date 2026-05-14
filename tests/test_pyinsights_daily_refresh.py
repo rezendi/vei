@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from typer.testing import CliRunner
 
+import vei.pyinsights.daily_refresh as daily_refresh_module
 from vei.cli.vei import app as vei_app
-from vei.pyinsights.daily_refresh import run_validated_daily_refresh
+from vei.pyinsights.daily_refresh import (
+    DailyRefreshCheck,
+    FreshContextCaptureResult,
+    run_validated_daily_refresh,
+)
 
 
 def test_validated_daily_refresh_emits_report_only_after_gates_pass(
@@ -33,6 +39,36 @@ def test_validated_daily_refresh_emits_report_only_after_gates_pass(
     assert "validation_failure_note" not in manifest.artifacts
 
 
+def test_validated_daily_refresh_demotes_activation_candidate_without_owner_reviewer(
+    tmp_path: Path,
+) -> None:
+    fixture = _write_daily_fixture(tmp_path, guard_passed=True)
+    skill_map_path = fixture["skill_map"]
+    payload = json.loads(skill_map_path.read_text(encoding="utf-8"))
+    payload["skills"][0]["deployment_readiness"] = "activation_candidate"
+    payload["skills"][0]["owner"] = ""
+    payload["skills"][0]["reviewer"] = ""
+    skill_map_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    manifest = run_validated_daily_refresh(
+        as_of="2026-05-13",
+        previous="none",
+        context_bundle=fixture["context"],
+        output_root=tmp_path / "daily",
+        model_run_root=fixture["model"],
+        strategic_run_root=fixture["strategic"],
+        workflow_output=fixture["workflow"],
+        skill_map_path=skill_map_path,
+        refresh_workflows=False,
+    )
+
+    assert manifest.status == "validated"
+    rendered_skill_map = json.loads(
+        Path(manifest.artifacts["skill_map"]).read_text(encoding="utf-8")
+    )
+    assert rendered_skill_map["skills"][0]["deployment_readiness"] == "shadow_ready"
+
+
 def test_validated_daily_refresh_blocks_report_when_guard_fails(
     tmp_path: Path,
 ) -> None:
@@ -56,6 +92,59 @@ def test_validated_daily_refresh_blocks_report_when_guard_fails(
     failure_note = Path(manifest.artifacts["validation_failure_note"])
     assert failure_note.is_file()
     assert "strategic.saturation_guard_passed" in failure_note.read_text()
+
+
+def test_validated_daily_refresh_uses_fresh_capture_when_bundle_is_stale(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    fixture = _write_daily_fixture(tmp_path, guard_passed=True)
+    fresh_context = _copy_context_with_capture_date(
+        fixture["context"],
+        tmp_path / "fresh_context",
+        captured_at="2026-05-14T12:00:00+00:00",
+    )
+
+    def fake_capture(**kwargs) -> FreshContextCaptureResult:
+        assert kwargs["existing_context_path"] == fixture["context"].resolve()
+        assert kwargs["as_of_date"].isoformat() == "2026-05-14"
+        return FreshContextCaptureResult(
+            context_path=fresh_context,
+            checks=[
+                DailyRefreshCheck(
+                    code="source.fresh_capture_for_as_of",
+                    passed=True,
+                    detail=str(fresh_context),
+                )
+            ],
+            references={"source_capture_context": str(fresh_context)},
+            notes=["test fresh capture used"],
+        )
+
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "_capture_fresh_context_for_as_of",
+        fake_capture,
+    )
+
+    manifest = daily_refresh_module.run_validated_daily_refresh(
+        as_of="2026-05-14",
+        previous="none",
+        context_bundle=fixture["context"],
+        output_root=tmp_path / "daily",
+        model_run_root=fixture["model"],
+        strategic_run_root=fixture["strategic"],
+        workflow_output=fixture["workflow"],
+        refresh_workflows=False,
+    )
+
+    assert manifest.status == "validated"
+    assert manifest.references["context_bundle"] == str(fresh_context)
+    assert manifest.references["source_capture_context"] == str(fresh_context)
+    assert any(
+        check.code == "source.fresh_capture_for_as_of" and check.passed
+        for check in manifest.checks
+    )
 
 
 def test_pyinsights_daily_refresh_cli_returns_nonzero_on_unvalidated_run(
@@ -94,6 +183,70 @@ def test_pyinsights_daily_refresh_cli_returns_nonzero_on_unvalidated_run(
     assert "ceo_report" not in payload["artifacts"]
 
 
+def test_validated_daily_refresh_rejects_one_off_descriptive_workflow_queue(
+    tmp_path: Path,
+) -> None:
+    fixture = _write_daily_fixture(tmp_path, guard_passed=True)
+    workflow_root = fixture["workflow"]
+    (workflow_root / "workflow_candidates.json").write_text(
+        json.dumps(
+            {
+                "candidate_count": 1,
+                "candidates": [
+                    {
+                        "candidate_id": "wfc-noisy",
+                        "title": "Hi",
+                        "source_event_ids": ["evt-1"],
+                        "snippets": ["Release review evidence"],
+                        "draft_task_spec": {
+                            "task_id": "task-noisy",
+                            "title": "Hi",
+                            "evaluation_level": "descriptive",
+                        },
+                        "metadata": {"generated_by": "legacy_cluster_v1"},
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (workflow_root / "workflow_mining_manifest.json").write_text(
+        json.dumps(
+            {
+                "selected_backend": "semantic",
+                "semantic_candidate_count": 1,
+                "published_candidate_count": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = run_validated_daily_refresh(
+        as_of="2026-05-13",
+        previous="none",
+        context_bundle=fixture["context"],
+        output_root=tmp_path / "daily",
+        model_run_root=fixture["model"],
+        strategic_run_root=fixture["strategic"],
+        workflow_output=workflow_root,
+        skill_map_path=fixture["skill_map"],
+        refresh_workflows=False,
+    )
+
+    assert manifest.status == "not_validated"
+    failed_codes = {
+        check.code
+        for check in manifest.checks
+        if not check.passed and check.severity == "error"
+    }
+    assert "workflow.discovery_queue_has_multiple_candidates" in failed_codes
+    assert "workflow.only_semantic_discovery_sources" in failed_codes
+    assert "workflow.all_candidates_have_rubric_evaluable_task_specs" in failed_codes
+    assert "workflow.workflow_titles_are_operating_patterns" in failed_codes
+
+
 def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Path]:
     context_root = tmp_path / "context"
     context_root.mkdir()
@@ -120,15 +273,38 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
         encoding="utf-8",
     )
     rows = [
-        {"event_id": "evt-1", "surface": "teams", "provider": "teams"},
-        {"event_id": "evt-2", "surface": "teams", "provider": "teams"},
+        {
+            "event_id": "evt-1",
+            "timestamp": as_of,
+            "ts_ms": 1715601600000,
+            "surface": "teams",
+            "provider": "teams",
+            "kind": "chat_message",
+            "domain": "comm_graph",
+            "subject": "clients-web",
+            "snippet": "clients-web",
+        },
+        {
+            "event_id": "evt-2",
+            "timestamp": as_of,
+            "ts_ms": 1715601601000,
+            "surface": "teams",
+            "provider": "teams",
+            "kind": "chat_message",
+            "domain": "comm_graph",
+            "subject": "clients-web",
+            "snippet": "Follow-up",
+        },
     ]
     (context_root / "canonical_event_index.json").write_text(
         json.dumps(
             {
                 "version": "1",
+                "organization_name": "Py Insights",
+                "organization_domain": "py-insights.com",
                 "captured_at": as_of,
                 "event_count": 2,
+                "case_count": 0,
                 "surface_counts": {"teams": 2},
                 "rows": rows,
             }
@@ -137,7 +313,28 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
         encoding="utf-8",
     )
     (context_root / "canonical_events.jsonl").write_text(
-        '{"event_id":"evt-1"}\n{"event_id":"evt-2"}\n',
+        json.dumps(
+            {
+                "schema_version": 1,
+                "event_id": "evt-1",
+                "tenant_id": "pyinsights",
+                "ts_ms": 1715601600000,
+                "domain": "comm_graph",
+                "kind": "chat_message",
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "schema_version": 1,
+                "event_id": "evt-2",
+                "tenant_id": "pyinsights",
+                "ts_ms": 1715601601000,
+                "domain": "comm_graph",
+                "kind": "chat_message",
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     (context_root / "context_verify_20260513.json").write_text(
@@ -181,15 +378,26 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
     (workflow / "workflow_candidates.json").write_text(
         json.dumps(
             {
-                "candidate_count": 1,
+                "candidate_count": 3,
                 "candidates": [
-                    {
-                        "candidate_id": "wfc-1",
-                        "title": "Release gate",
-                        "source_event_ids": ["evt-1"],
-                        "snippets": ["Release review evidence"],
-                        "metadata": {"generated_by": "skillmap_semantic_v1"},
-                    }
+                    _workflow_candidate(
+                        "wfc-1",
+                        "Release gate",
+                        ["evt-1"],
+                        level="rubric_evaluable",
+                    ),
+                    _workflow_candidate(
+                        "wfc-2",
+                        "Evidence-backed privacy review",
+                        ["evt-2"],
+                        level="rubric_evaluable",
+                    ),
+                    _workflow_candidate(
+                        "wfc-3",
+                        "Study handoff checklist",
+                        ["evt-1", "evt-2"],
+                        level="rubric_evaluable",
+                    ),
                 ],
             }
         )
@@ -200,8 +408,8 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
         json.dumps(
             {
                 "selected_backend": "semantic",
-                "semantic_candidate_count": 1,
-                "published_candidate_count": 1,
+                "semantic_candidate_count": 3,
+                "published_candidate_count": 3,
             }
         )
         + "\n",
@@ -289,4 +497,63 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
         "workflow": workflow,
         "model": model,
         "strategic": strategic,
+    }
+
+
+def _copy_context_with_capture_date(
+    source_context: Path,
+    destination_root: Path,
+    *,
+    captured_at: str,
+) -> Path:
+    shutil.copytree(source_context.parent, destination_root)
+    context_path = destination_root / "context_snapshot.json"
+    context_payload = json.loads(context_path.read_text(encoding="utf-8"))
+    context_payload["captured_at"] = captured_at
+    for source in context_payload.get("sources", []) or []:
+        if isinstance(source, dict):
+            source["captured_at"] = captured_at
+    context_path.write_text(json.dumps(context_payload) + "\n", encoding="utf-8")
+
+    index_path = destination_root / "canonical_event_index.json"
+    index_payload = json.loads(index_path.read_text(encoding="utf-8"))
+    index_payload["captured_at"] = captured_at
+    index_path.write_text(json.dumps(index_payload) + "\n", encoding="utf-8")
+    (destination_root / "context_verify_20260514.json").write_text(
+        json.dumps({"ok": True, "checks": []}) + "\n",
+        encoding="utf-8",
+    )
+    return context_path
+
+
+def _workflow_candidate(
+    candidate_id: str,
+    title: str,
+    event_ids: list[str],
+    *,
+    level: str,
+) -> dict[str, object]:
+    return {
+        "candidate_id": candidate_id,
+        "title": title,
+        "source_event_ids": event_ids,
+        "source_case_ids": [f"case-{candidate_id}"],
+        "rank_score": 90.0,
+        "snippets": [f"{title} cited evidence"],
+        "draft_task_spec": {
+            "task_id": f"task-{candidate_id}",
+            "title": title,
+            "objective": f"Review {title.lower()} with cited evidence.",
+            "evaluation_level": level,
+            "metadata": {
+                "claim_boundary": (
+                    "semantic workflow candidate synthesized from citation-backed "
+                    "skill evidence; requires human review before activation"
+                )
+            },
+        },
+        "metadata": {
+            "generated_by": "skillmap_semantic_v1",
+            "deployment_readiness": "shadow_ready",
+        },
     }

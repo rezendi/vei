@@ -3,9 +3,11 @@ from __future__ import annotations
 import csv
 import json
 import math
+import os
 import re
 import shutil
 from collections import Counter
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -13,6 +15,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from vei.context.api import (
+    ContextSnapshot,
+    capture_pipeshub_context_from_env,
+    capture_teams_graph_context_from_env,
+    context_iso_now,
+    merge_context_source_results,
+    new_pipeshub_capture_run_id,
+    new_teams_graph_capture_run_id,
+    verify_context_snapshot,
+    write_canonical_history_sidecars,
+    write_pipeshub_capture_outputs,
+    write_teams_graph_capture_outputs,
+)
 from vei.skillmap.api import (
     CompanySkillMap,
     enrich_skill_map_with_world_model_opportunities,
@@ -35,6 +50,24 @@ DEFAULT_DAILY_ROOT = Path("_vei_out/pyinsights_daily_refresh")
 DEFAULT_WORLD_MODEL_ROOT = Path("_vei_out/world_model_multitenant_jepa")
 DEFAULT_STRATEGIC_ROOT = Path("_vei_out/world_model_strategic_state_points")
 DEFAULT_TENANT_ID = "pyinsights"
+DEFAULT_CAPTURE_PROVIDERS = ("onedrive", "outlook", "teams")
+
+_EVALUATION_LEVEL_ORDER = {
+    "descriptive": 0,
+    "labeled": 1,
+    "rubric_evaluable": 2,
+    "contract_evaluable": 3,
+    "rl_packaged": 4,
+}
+_ALLOWED_WORKFLOW_GENERATORS = {
+    "skillmap_semantic_v1",
+    "world_model_skill_opportunity_v1",
+}
+_NOISY_WORKFLOW_TITLE_RE = re.compile(
+    r"^(?:hi\b|hello\b|hey\b|ok\b|okay\b|sure\b|yes\b|no\b|thanks\b|"
+    r"thank you\b|done\b|cool\b|great\b|chat/|https?://|www\.)",
+    re.IGNORECASE,
+)
 
 _RAW_SECRET_PATTERNS = (
     re.compile(r"\b[a-z][a-z0-9+.-]*://\S+@\S+", re.IGNORECASE),
@@ -69,6 +102,14 @@ class DailyRefreshManifest(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class FreshContextCaptureResult:
+    context_path: Path | None = None
+    checks: list[DailyRefreshCheck] = field(default_factory=list)
+    references: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+
 def run_validated_daily_refresh(
     *,
     as_of: str | date,
@@ -84,6 +125,12 @@ def run_validated_daily_refresh(
     source_freshness_policy: FreshnessPolicy = "all-sources-current",
     refresh_workflows: bool = True,
     allow_report_on_warning: bool = True,
+    fresh_capture: bool = True,
+    capture_workspace: str | Path | None = None,
+    capture_connectors: list[str] | None = None,
+    capture_limit: int = 5000,
+    capture_timeout_s: int = 30,
+    capture_include_content: bool = False,
 ) -> DailyRefreshManifest:
     """Validate a Py Insights daily run and emit the CEO report only if trusted.
 
@@ -100,7 +147,30 @@ def run_validated_daily_refresh(
     run_root = output_base / _slug(run_label)
     run_root.mkdir(parents=True, exist_ok=True)
 
+    checks: list[DailyRefreshCheck] = []
+    notes: list[str] = []
+    capture_references: dict[str, str] = {}
     context_path = Path(context_bundle).expanduser().resolve()
+    if fresh_capture:
+        capture_result = _capture_fresh_context_for_as_of(
+            existing_context_path=context_path,
+            as_of_date=as_of_date,
+            run_root=run_root,
+            capture_workspace=(
+                Path(capture_workspace).expanduser().resolve()
+                if capture_workspace is not None
+                else None
+            ),
+            capture_connectors=capture_connectors,
+            limit=capture_limit,
+            timeout_s=capture_timeout_s,
+            include_content=capture_include_content,
+        )
+        checks.extend(capture_result.checks)
+        notes.extend(capture_result.notes)
+        capture_references.update(capture_result.references)
+        if capture_result.context_path is not None:
+            context_path = capture_result.context_path
     context_root = context_path.parent
     event_index_path = context_root / "canonical_event_index.json"
     canonical_events_path = context_root / "canonical_events.jsonl"
@@ -139,8 +209,6 @@ def run_validated_daily_refresh(
         else run_root / "workflows"
     )
 
-    checks: list[DailyRefreshCheck] = []
-    notes: list[str] = []
     if previous_valid is None:
         notes.append(
             "No previous validated daily run was found; using full validation fallback."
@@ -200,7 +268,7 @@ def run_validated_daily_refresh(
         current_event_ids=index_event_ids,
     )
 
-    if refresh_workflows and skill_path.is_file() and strategic_csv_path.is_file():
+    if skill_path.is_file() and strategic_csv_path.is_file():
         try:
             base_skill_map = CompanySkillMap.model_validate_json(
                 skill_path.read_text(encoding="utf-8")
@@ -212,6 +280,7 @@ def run_validated_daily_refresh(
                 max_opportunities=8,
                 require_trusted_ranking=True,
             )
+            _demote_activation_candidates_without_owners(enriched_skill_map)
             skill_outputs = write_company_skill_map_outputs(
                 enriched_skill_map, skill_output_root
             )
@@ -231,6 +300,8 @@ def run_validated_daily_refresh(
                     detail=str(exc),
                 )
             )
+
+    if refresh_workflows and strategic_csv_path.is_file():
         mine_workflows(
             context_path,
             output=workflow_root,
@@ -291,6 +362,9 @@ def run_validated_daily_refresh(
     artifacts: dict[str, str] = {
         "validation_manifest": str(run_root / "validation_manifest.json"),
         "workflow_skill_summary": str(run_root / "workflow_skill_refresh_summary.md"),
+        "workflow_discovery_summary": str(
+            run_root / "workflow_skill_refresh_summary.md"
+        ),
         "skill_map": str(effective_skill_path),
     }
     references = {
@@ -313,6 +387,7 @@ def run_validated_daily_refresh(
     }
     if source_ceo_report_path is not None:
         references["source_ceo_report"] = str(source_ceo_report_path)
+    references.update(capture_references)
 
     if validation_passed:
         report_path = (
@@ -363,6 +438,406 @@ def run_validated_daily_refresh(
         encoding="utf-8",
     )
     return manifest
+
+
+def _capture_fresh_context_for_as_of(
+    *,
+    existing_context_path: Path,
+    as_of_date: date,
+    run_root: Path,
+    capture_workspace: Path | None,
+    capture_connectors: list[str] | None,
+    limit: int,
+    timeout_s: int,
+    include_content: bool,
+) -> FreshContextCaptureResult:
+    existing_payload = _read_json_or_empty(existing_context_path)
+    expected_providers = _expected_capture_providers(
+        existing_payload,
+        capture_connectors=capture_connectors,
+    )
+    if _context_bundle_current_for_as_of(
+        existing_payload,
+        as_of_date=as_of_date,
+        expected_providers=expected_providers,
+    ):
+        return FreshContextCaptureResult(
+            checks=[
+                DailyRefreshCheck(
+                    code="source.fresh_capture_for_as_of",
+                    passed=True,
+                    detail=f"existing context bundle is current for {as_of_date}",
+                )
+            ],
+            notes=["Existing context bundle is already fresh for the as-of date."],
+        )
+
+    workspace = capture_workspace or run_root / "source_capture"
+    workspace.mkdir(parents=True, exist_ok=True)
+    try:
+        return _run_live_context_capture(
+            workspace=workspace,
+            existing_context_payload=existing_payload,
+            as_of_date=as_of_date,
+            expected_providers=expected_providers,
+            capture_connectors=capture_connectors,
+            limit=limit,
+            timeout_s=timeout_s,
+            include_content=include_content,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return FreshContextCaptureResult(
+            checks=[
+                DailyRefreshCheck(
+                    code="source.fresh_capture_for_as_of",
+                    passed=False,
+                    detail=(
+                        f"fresh source capture failed for {as_of_date}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                )
+            ],
+            notes=[
+                "Fresh source capture failed; daily validation continued against "
+                "the configured context bundle and should withhold trusted reports."
+            ],
+        )
+
+
+def _run_live_context_capture(
+    *,
+    workspace: Path,
+    existing_context_payload: dict[str, Any],
+    as_of_date: date,
+    expected_providers: set[str],
+    capture_connectors: list[str] | None,
+    limit: int,
+    timeout_s: int,
+    include_content: bool,
+) -> FreshContextCaptureResult:
+    _load_dotenv_if_available()
+    organization_name = (
+        str(existing_context_payload.get("organization_name") or "").strip()
+        or "Py Insights"
+    )
+    organization_domain = str(
+        existing_context_payload.get("organization_domain") or ""
+    ).strip()
+    connector_names = _normalized_capture_connectors(
+        capture_connectors,
+        expected_providers=expected_providers,
+    )
+
+    snapshots: list[Any] = []
+    references: dict[str, str] = {}
+    notes: list[str] = []
+    capture_errors: list[str] = []
+
+    if _pipeshub_capture_configured():
+        try:
+            run_id = new_pipeshub_capture_run_id()
+            pipeshub_workspace = workspace / "pipeshub"
+            sync_root = (
+                pipeshub_workspace / "imports" / "source_syncs" / "pipeshub" / run_id
+            )
+            capture = capture_pipeshub_context_from_env(
+                timeout_s=timeout_s,
+                organization_name=organization_name,
+                organization_domain=organization_domain,
+                connectors=connector_names,
+                include_content=include_content,
+                limit=limit,
+                page_size=100,
+                run_id=run_id,
+                manifest_path=sync_root / "capture_manifest.json",
+                raw_records_path=sync_root / "records.jsonl",
+            )
+            write_pipeshub_capture_outputs(
+                capture,
+                workspace=pipeshub_workspace,
+                output=workspace / "pipeshub_context_snapshot.json",
+            )
+            snapshots.append(capture.snapshot)
+            references["source_capture_pipeshub_report"] = str(
+                sync_root / "capture_report.json"
+            )
+            notes.append(
+                "PipesHub fresh capture completed for "
+                + ", ".join(connector_names or sorted(expected_providers))
+                + "."
+            )
+        except Exception as exc:  # noqa: BLE001
+            capture_errors.append(f"pipeshub: {type(exc).__name__}: {exc}")
+    else:
+        capture_errors.append(
+            "pipeshub: missing PIPESHUB_BASE_URL/PIPESHUB_BEARER_AUTH configuration"
+        )
+
+    captured_providers = _snapshot_provider_names(snapshots)
+    if "teams" in expected_providers and "teams" not in captured_providers:
+        if _teams_graph_capture_configured():
+            try:
+                run_id = new_teams_graph_capture_run_id()
+                teams_workspace = workspace / "microsoft_teams"
+                sync_root = (
+                    teams_workspace
+                    / "imports"
+                    / "source_syncs"
+                    / "microsoft_teams"
+                    / run_id
+                )
+                capture = capture_teams_graph_context_from_env(
+                    timeout_s=timeout_s,
+                    organization_name=organization_name,
+                    organization_domain=organization_domain,
+                    limit=limit,
+                    run_id=run_id,
+                    manifest_path=sync_root / "capture_manifest.json",
+                    raw_records_path=sync_root / "records.jsonl",
+                )
+                write_teams_graph_capture_outputs(
+                    capture,
+                    workspace=teams_workspace,
+                    output=workspace / "teams_context_snapshot.json",
+                )
+                snapshots.append(capture.snapshot)
+                references["source_capture_teams_report"] = str(
+                    sync_root / "capture_report.json"
+                )
+                notes.append("Microsoft Graph Teams fresh capture completed.")
+            except Exception as exc:  # noqa: BLE001
+                capture_errors.append(
+                    f"microsoft_graph_teams: {type(exc).__name__}: {exc}"
+                )
+        else:
+            capture_errors.append(
+                "microsoft_graph_teams: missing VEI_MSFT_TENANT_ID/"
+                "VEI_MSFT_CLIENT_ID/VEI_MSFT_CLIENT_SECRET configuration"
+            )
+
+    if not snapshots:
+        return FreshContextCaptureResult(
+            checks=[
+                DailyRefreshCheck(
+                    code="source.fresh_capture_for_as_of",
+                    passed=False,
+                    detail="; ".join(capture_errors),
+                )
+            ],
+            references=references,
+            notes=notes,
+        )
+
+    combined_path = workspace / "context_snapshot.json"
+    combined_snapshot = _combine_context_snapshots(
+        snapshots,
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        as_of_date=as_of_date,
+    )
+    combined_path.write_text(
+        combined_snapshot.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    paths = write_canonical_history_sidecars(combined_snapshot, combined_path)
+    verify_result = verify_context_snapshot(
+        combined_snapshot,
+        snapshot_path=combined_path,
+    )
+    verify_path = workspace / f"context_verify_{as_of_date:%Y%m%d}.json"
+    verify_path.write_text(
+        verify_result.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+    final_providers = _snapshot_provider_names([combined_snapshot])
+    missing_providers = sorted(expected_providers - final_providers)
+    checks = [
+        DailyRefreshCheck(
+            code="source.fresh_capture_for_as_of",
+            passed=True,
+            detail=f"context={combined_path} providers={sorted(final_providers)}",
+        ),
+        DailyRefreshCheck(
+            code="source.fresh_capture_expected_providers_present",
+            passed=not missing_providers,
+            detail=(
+                f"expected={sorted(expected_providers)} "
+                f"captured={sorted(final_providers)} missing={missing_providers}"
+            ),
+        ),
+    ]
+    if capture_errors:
+        checks.append(
+            DailyRefreshCheck(
+                code="source.fresh_capture_partial_errors_absent",
+                passed=False,
+                severity="warning" if not missing_providers else "error",
+                detail="; ".join(capture_errors),
+            )
+        )
+    references.update(
+        {
+            "source_capture_context": str(combined_path),
+            "source_capture_canonical_events": str(paths.events_path),
+            "source_capture_canonical_event_index": str(paths.index_path),
+            "source_capture_context_verify": str(verify_path),
+        }
+    )
+    notes.append("Fresh source capture bundle was used for daily validation.")
+    return FreshContextCaptureResult(
+        context_path=combined_path,
+        checks=checks,
+        references=references,
+        notes=notes,
+    )
+
+
+def _combine_context_snapshots(
+    snapshots: list[Any],
+    *,
+    organization_name: str,
+    organization_domain: str,
+    as_of_date: date,
+) -> Any:
+    sources = []
+    for snapshot in snapshots:
+        sources.extend(list(snapshot.sources))
+    return ContextSnapshot(
+        organization_name=organization_name,
+        organization_domain=organization_domain,
+        captured_at=context_iso_now(),
+        sources=merge_context_source_results(sources),
+        metadata={
+            "snapshot_role": "company_history_bundle",
+            "fresh_capture_for_as_of": as_of_date.isoformat(),
+            "capture_source": "pyinsights_daily_refresh",
+        },
+    )
+
+
+def _expected_capture_providers(
+    context_payload: dict[str, Any],
+    *,
+    capture_connectors: list[str] | None,
+) -> set[str]:
+    if capture_connectors:
+        return {
+            _normalize_provider_name(connector)
+            for connector in capture_connectors
+            if connector.strip()
+        }
+    providers = {
+        _normalize_provider_name(str(source.get("provider") or ""))
+        for source in context_payload.get("sources", []) or []
+        if isinstance(source, dict) and source.get("provider")
+    }
+    return providers or set(DEFAULT_CAPTURE_PROVIDERS)
+
+
+def _normalized_capture_connectors(
+    capture_connectors: list[str] | None,
+    *,
+    expected_providers: set[str],
+) -> list[str]:
+    if capture_connectors:
+        return [
+            connector.strip() for connector in capture_connectors if connector.strip()
+        ]
+    return sorted(expected_providers)
+
+
+def _context_bundle_current_for_as_of(
+    context_payload: dict[str, Any],
+    *,
+    as_of_date: date,
+    expected_providers: set[str],
+) -> bool:
+    if not context_payload:
+        return False
+    captured_at = _parse_datetime(context_payload.get("captured_at"))
+    if captured_at is None or captured_at.date() < as_of_date:
+        return False
+    sources = context_payload.get("sources", []) or []
+    provider_dates: dict[str, datetime | None] = {}
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        provider = _normalize_provider_name(str(source.get("provider") or ""))
+        if provider:
+            provider_dates[provider] = _parse_datetime(source.get("captured_at"))
+    if not expected_providers.issubset(set(provider_dates)):
+        return False
+    return all(
+        provider_dates[provider] is not None
+        and provider_dates[provider].date() >= as_of_date
+        for provider in expected_providers
+    )
+
+
+def _snapshot_provider_names(snapshots: list[Any]) -> set[str]:
+    providers: set[str] = set()
+    for snapshot in snapshots:
+        for source in getattr(snapshot, "sources", []) or []:
+            provider = _normalize_provider_name(str(getattr(source, "provider", "")))
+            if provider:
+                providers.add(provider)
+    return providers
+
+
+def _normalize_provider_name(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "microsoft_onedrive": "onedrive",
+        "microsoft_outlook": "outlook",
+        "microsoft_teams": "teams",
+        "microsoftteams": "teams",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _pipeshub_capture_configured() -> bool:
+    return bool(
+        os.environ.get("PIPESHUB_BASE_URL", "").strip()
+        or os.environ.get("PIPESHUB_BEARER_AUTH", "").strip()
+    )
+
+
+def _teams_graph_capture_configured() -> bool:
+    return all(
+        os.environ.get(name, "").strip()
+        for name in (
+            "VEI_MSFT_TENANT_ID",
+            "VEI_MSFT_CLIENT_ID",
+            "VEI_MSFT_CLIENT_SECRET",
+        )
+    )
+
+
+def _load_dotenv_if_available() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv(override=False)
+
+
+def _demote_activation_candidates_without_owners(skill_map: CompanySkillMap) -> None:
+    """Activation-candidate is a promotion surface: require named owner+reviewer.
+
+    The skill-map pipeline already warns when draft skills lack owner/reviewer,
+    but daily validation treats activation_candidate as a hard readiness signal.
+    If owner/reviewer are absent, keep the skill in shadow_ready so the daily
+    run remains internally consistent without inventing ownership.
+    """
+
+    for skill in skill_map.skills:
+        if skill.deployment_readiness != "activation_candidate":
+            continue
+        if str(skill.owner).strip() and str(skill.reviewer).strip():
+            continue
+        skill.deployment_readiness = "shadow_ready"
 
 
 def _resolve_as_of(value: str | date) -> date:
@@ -653,6 +1128,13 @@ def _validate_workflows(
             detail=f"candidate_count={len(candidates)}",
         )
     )
+    checks.append(
+        DailyRefreshCheck(
+            code="workflow.discovery_queue_has_multiple_candidates",
+            passed=len(candidates) >= 2,
+            detail=f"candidate_count={len(candidates)}",
+        )
+    )
     missing_evidence = [
         str(candidate.get("candidate_id", ""))
         for candidate in candidates
@@ -685,11 +1167,66 @@ def _validate_workflows(
             detail=f"generated_by={sorted(generated_by)}",
         )
     )
+    unsupported_generators = sorted(
+        generator
+        for generator in generated_by
+        if generator not in _ALLOWED_WORKFLOW_GENERATORS
+    )
+    checks.append(
+        DailyRefreshCheck(
+            code="workflow.only_semantic_discovery_sources",
+            passed=not unsupported_generators and bool(generated_by),
+            detail=f"unsupported_generators={unsupported_generators}",
+        )
+    )
     checks.append(
         DailyRefreshCheck(
             code="workflow.semantic_candidate_source_policy",
             passed=workflow_manifest.get("selected_backend") == "semantic",
             detail=f"selected_backend={workflow_manifest.get('selected_backend')}",
+        )
+    )
+    missing_specs = [
+        str(candidate.get("candidate_id", ""))
+        for candidate in candidates
+        if isinstance(candidate, dict)
+        and not isinstance(candidate.get("draft_task_spec"), dict)
+    ]
+    checks.append(
+        DailyRefreshCheck(
+            code="workflow.all_candidates_have_draft_task_specs",
+            passed=not missing_specs,
+            detail=f"missing={missing_specs[:5]}",
+        )
+    )
+    below_rubric = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        spec = candidate.get("draft_task_spec")
+        level = spec.get("evaluation_level") if isinstance(spec, dict) else ""
+        if _evaluation_level_rank(str(level)) < _evaluation_level_rank(
+            "rubric_evaluable"
+        ):
+            below_rubric.append(f"{candidate.get('candidate_id', '')}:{level}")
+    checks.append(
+        DailyRefreshCheck(
+            code="workflow.all_candidates_have_rubric_evaluable_task_specs",
+            passed=not below_rubric,
+            detail=f"below_rubric={below_rubric[:5]}",
+        )
+    )
+    noisy_titles = [
+        str(candidate.get("candidate_id", ""))
+        for candidate in candidates
+        if isinstance(candidate, dict)
+        and _NOISY_WORKFLOW_TITLE_RE.search(str(candidate.get("title", "")).strip())
+    ]
+    checks.append(
+        DailyRefreshCheck(
+            code="workflow.workflow_titles_are_operating_patterns",
+            passed=not noisy_titles,
+            detail=f"noisy_title_candidate_ids={noisy_titles[:5]}",
         )
     )
     raw_sensitive = []
@@ -707,6 +1244,10 @@ def _validate_workflows(
             detail=f"raw_sensitive_candidate_ids={raw_sensitive[:5]}",
         )
     )
+
+
+def _evaluation_level_rank(level: str) -> int:
+    return _EVALUATION_LEVEL_ORDER.get(level, -1)
 
 
 def _validate_skill_map(
@@ -1120,6 +1661,14 @@ def _render_workflow_skill_summary(
 ) -> str:
     candidates = workflows_payload.get("candidates", []) or []
     skills = skill_payload.get("skills", []) or []
+    task_spec_count = _task_spec_count(candidates)
+    rubric_or_better_count = _candidate_count_at_or_above(
+        candidates, "rubric_evaluable"
+    )
+    contract_or_better_count = _candidate_count_at_or_above(
+        candidates, "contract_evaluable"
+    )
+    rl_packaged_count = _candidate_count_at_or_above(candidates, "rl_packaged")
     opportunity_meta = (
         skill_payload.get("metadata", {}).get("world_model_skill_opportunities", {})
         if isinstance(skill_payload, dict)
@@ -1139,9 +1688,17 @@ def _render_workflow_skill_summary(
         and skill.get("metadata", {}).get("world_model_upgrade_opportunities")
     ]
     lines = [
-        f"# Py Insights Workflow/Skill Daily Summary - {as_of_date.isoformat()}",
+        f"# Py Insights Workflow Discovery Daily Summary - {as_of_date.isoformat()}",
+        "",
+        "Primary artifact: broad workflow discovery. Task specs and package "
+        "readiness are downstream per-candidate review states, not a single "
+        "handpicked workflow.",
         "",
         f"- Published workflow candidates: `{len(candidates)}`",
+        f"- Candidates with draft task specs: `{task_spec_count}`",
+        f"- Rubric-evaluable task specs: `{rubric_or_better_count}`",
+        f"- Contract-evaluable specs: `{contract_or_better_count}`",
+        f"- RL-package-ready specs: `{rl_packaged_count}`",
         f"- Skill count: `{len(skills)}`",
         f"- World-model skill opportunities: `{opportunity_meta.get('opportunities_added', 0)}`",
         f"- Missing-skill opportunities: `{opportunity_meta.get('missing_skill_gap_count', 0)}`",
@@ -1156,11 +1713,30 @@ def _render_workflow_skill_summary(
     for index, candidate in enumerate(candidates[:25], start=1):
         if not isinstance(candidate, dict):
             continue
+        spec = candidate.get("draft_task_spec", {})
+        level = spec.get("evaluation_level", "") if isinstance(spec, dict) else ""
+        event_count = len(candidate.get("source_event_ids", []) or [])
+        case_count = len(candidate.get("source_case_ids", []) or [])
         lines.append(
             f"{index}. {candidate.get('title', '')} "
             f"(score={candidate.get('rank_score', '')}, "
+            f"level={level or 'missing'}, "
+            f"events={event_count}, "
+            f"cases={case_count}, "
+            f"source={candidate.get('metadata', {}).get('generated_by', '')}, "
             f"readiness={candidate.get('metadata', {}).get('deployment_readiness', '')})"
         )
+    lines.extend(
+        [
+            "",
+            "## Package Readiness",
+            "",
+            "- `rubric_evaluable`: reviewable task spec exists for the discovered workflow.",
+            "- `contract_evaluable`: deterministic success/failure predicates are attached.",
+            "- `rl_packaged`: reviewed contract can be exported with `vei workflow package-env`.",
+            "- Current daily discovery should normally produce many rubric-evaluable specs and zero or few package-ready specs until a human promotes candidates.",
+        ]
+    )
     if opportunity_gaps or upgrade_skills:
         lines.extend(["", "## World-Model Skill Opportunities", ""])
         for gap in opportunity_gaps[:10]:
@@ -1174,6 +1750,29 @@ def _render_workflow_skill_summary(
                 f"(opportunities={skill.get('metadata', {}).get('world_model_upgrade_opportunity_count', '')})"
             )
     return "\n".join(lines) + "\n"
+
+
+def _task_spec_count(candidates: list[Any]) -> int:
+    return sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("draft_task_spec"), dict)
+    )
+
+
+def _candidate_count_at_or_above(candidates: list[Any], level: str) -> int:
+    required = _evaluation_level_rank(level)
+    return sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("draft_task_spec"), dict)
+        and _evaluation_level_rank(
+            str(candidate.get("draft_task_spec", {}).get("evaluation_level", ""))
+        )
+        >= required
+    )
 
 
 def _render_minimal_validated_report(

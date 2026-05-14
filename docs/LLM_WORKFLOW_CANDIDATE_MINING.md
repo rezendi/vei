@@ -41,6 +41,14 @@ Each promoted workflow carries the original skill id, the cited events, the
 draft task spec, replay criteria, approval boundaries, evidence snippets, and a
 quality breakdown.
 
+The primary output is a discovery queue, not a single promoted workflow. A
+daily Py Insights run is reviewable only when it publishes multiple semantic
+workflow candidates and each candidate carries a draft task spec. Those specs
+should normally be `rubric_evaluable`: ready for human review against cited
+criteria, but not yet exported as training/eval environments. `contract_evaluable`
+and `rl_packaged` remain later promotion states after deterministic predicates
+and review are attached.
+
 ## Ranking
 
 Semantic workflow rank is a weighted quality score over:
@@ -97,8 +105,11 @@ available and the goal is a daily update that preserves existing labels.
 
 A daily workflow list is good enough to review when:
 
+- it is a broad discovery queue, not one handpicked candidate
 - top candidates are named operating patterns, not thread subjects
 - every candidate has cited event ids
+- every candidate carries a draft task spec
+- every draft task spec is at least `rubric_evaluable`
 - noisy snippets such as greetings are filtered from the visible evidence list
 - credential-like snippets are redacted in workflow evidence surfaces
 - mining fails fast when the required company skill map is missing

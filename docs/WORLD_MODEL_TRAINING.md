@@ -242,11 +242,19 @@ vei pyinsights daily-refresh \
   --as-of today
 ```
 
-V1 is deliberately conservative: it can reuse the current artifact-producing
-steps, but it always writes a validation manifest and emits a CEO report only
-when source freshness, canonical-event checks, workflow/skill citation checks,
-target-manifest/model checks, and the strategic saturation guard pass. Failed
-runs write `validation_failure.md` instead of a CEO report.
+V1 is deliberately conservative: it reuses current artifact-producing steps,
+but first attempts a fresh source capture when the configured context bundle is
+stale for the as-of date. It always writes a validation manifest and emits a CEO
+report only when source freshness, canonical-event checks, workflow/skill
+citation checks, target-manifest/model checks, and the strategic saturation
+guard pass. Failed runs write `validation_failure.md` instead of a CEO report.
+
+For workflow review, the daily command treats discovery as the main artifact.
+It should publish a multi-candidate semantic workflow queue, with a cited draft
+task spec on every candidate. A candidate is useful for review once its draft
+spec is at least `rubric_evaluable`; training/eval packaging remains a later
+promotion state and should not be implied for a candidate until deterministic
+contract predicates and human review are attached.
 
 ## Scaling View
 
