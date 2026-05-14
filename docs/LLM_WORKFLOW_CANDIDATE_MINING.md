@@ -101,7 +101,7 @@ A daily workflow list is good enough to review when:
 - every candidate has cited event ids
 - noisy snippets such as greetings are filtered from the visible evidence list
 - credential-like snippets are redacted in workflow evidence surfaces
-- unsupported structural clusters are written separately, not silently mixed in
+- mining fails fast when the required company skill map is missing
 - world-model alignment is present when a strategic report is supplied
 - world-model skill opportunities are cited or skipped
 - old human labels survive `vei workflow refresh`

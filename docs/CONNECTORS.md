@@ -242,7 +242,6 @@ vei wiki refresh --workspace _vei_out/yourco-teams
 vei workflow mine \
   --source-dir _vei_out/yourco-teams/context_snapshot.json \
   --output _vei_out/yourco-teams/workflows \
-  --backend auto \
   --skill-map _vei_out/yourco-teams/skill_map/company_skill_map.json
 vei workflow promote \
   --root _vei_out/yourco-teams/workflows \

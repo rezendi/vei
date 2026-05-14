@@ -306,6 +306,93 @@ def _write_company_skill_map(root: Path, event_ids: list[str]) -> Path:
     return path
 
 
+def _write_private_fixture_skill_map(tmp_path: Path, context_path: Path) -> Path:
+    root = context_path.parent
+    context = json.loads(context_path.read_text(encoding="utf-8"))
+    event_ids: list[str] = []
+    with (root / "canonical_events.jsonl").open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            event_ids.append(json.loads(line)["event_id"])
+            if len(event_ids) >= 8:
+                break
+    if not event_ids:
+        raise RuntimeError(f"private fixture has no canonical events: {root}")
+
+    path = tmp_path / f"{root.name}_company_skill_map.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "company_skill_map_v1",
+                "organization_name": context["organization_name"],
+                "organization_domain": context.get("organization_domain", ""),
+                "generated_at": "2026-05-13T00:00:00Z",
+                "source_ref": "private_fixture_test",
+                "canonical_event_count": len(event_ids),
+                "skill_count": 1,
+                "skills": [
+                    {
+                        "skill_id": "skill:private-fixture-review",
+                        "title": "Private Fixture Evidence Review",
+                        "summary": (
+                            "Reviews cited private-fixture events for workflow "
+                            "mining regression coverage."
+                        ),
+                        "status": "draft",
+                        "domain": "operations",
+                        "candidate_type": "workflow",
+                        "usefulness_score": 0.75,
+                        "usefulness_rationale": (
+                            "Source-backed fixture coverage for semantic mining."
+                        ),
+                        "trigger": {
+                            "description": "Use when validating a private fixture.",
+                            "signals": ["fixture", "evidence", "review"],
+                        },
+                        "goal": "Confirm the private fixture mines without seed leakage.",
+                        "prerequisites": ["Canonical events from the private fixture"],
+                        "steps": [
+                            {
+                                "step_id": "step-1",
+                                "instruction": "Inspect cited fixture events.",
+                                "tool": "event.search",
+                                "read_only": True,
+                                "requires_approval": False,
+                            }
+                        ],
+                        "output_artifacts": [
+                            {
+                                "artifact_id": "fixture-review",
+                                "title": "Private fixture review summary",
+                                "kind": "summary",
+                            }
+                        ],
+                        "evidence_refs": [
+                            {
+                                "ref_type": "event",
+                                "ref_id": event_id,
+                                "source": "private_fixture_test",
+                                "title": "Private fixture event",
+                            }
+                            for event_id in event_ids
+                        ],
+                        "allowed_actions": ["write_fixture_review"],
+                        "blocked_actions": ["publish_private_events"],
+                        "deployment_readiness": "needs_review",
+                        "confidence": 0.8,
+                        "execution_mode": "approval_gated",
+                    }
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def _workflow_spec() -> WorkflowScenarioSpec:
     return WorkflowScenarioSpec.model_validate(
         {
@@ -624,8 +711,14 @@ POWR_CONTEXT = Path("_vei_out/datasets/powrofyou/context_snapshot.json")
     not DISPATCH_CONTEXT.exists(),
     reason="private Dispatch fixture not present",
 )
-def test_dispatch_private_fixture_mines_real_workflows_without_seed_leakage() -> None:
-    result = mine_workflows(DISPATCH_CONTEXT, limit=8)
+def test_dispatch_private_fixture_mines_real_workflows_without_seed_leakage(
+    tmp_path: Path,
+) -> None:
+    result = mine_workflows(
+        DISPATCH_CONTEXT,
+        limit=8,
+        skill_map_path=_write_private_fixture_skill_map(tmp_path, DISPATCH_CONTEXT),
+    )
 
     assert result.company_name == "Dispatch"
     assert result.company_domain == "thedispatch.ai"
@@ -657,19 +750,22 @@ def test_dispatch_private_fixture_mines_real_workflows_without_seed_leakage() ->
     not POWR_CONTEXT.exists(),
     reason="private Powr of You fixture not present",
 )
-def test_powrofyou_private_fixture_mines_source_backed_specs_without_cross_leakage() -> (
-    None
-):
-    result = mine_workflows(POWR_CONTEXT, limit=12)
+def test_powrofyou_private_fixture_mines_source_backed_specs_without_cross_leakage(
+    tmp_path: Path,
+) -> None:
+    result = mine_workflows(
+        POWR_CONTEXT,
+        limit=12,
+        skill_map_path=_write_private_fixture_skill_map(tmp_path, POWR_CONTEXT),
+    )
 
     assert result.company_name == "Powr of You"
     assert result.company_domain == "powrofyou.com"
     assert result.candidate_count >= 1
     assert any(candidate.source_event_ids for candidate in result.candidates)
-    assert any(
-        term in candidate.model_dump_json().lower()
+    assert all(
+        candidate.metadata.get("generated_by") == "skillmap_semantic_v1"
         for candidate in result.candidates
-        for term in ("application", "partner", "deal", "customer", "pilot")
     )
     payload = result.model_dump_json().lower()
     assert "thedispatch.ai" not in payload

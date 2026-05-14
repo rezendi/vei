@@ -687,11 +687,9 @@ def _validate_workflows(
     )
     checks.append(
         DailyRefreshCheck(
-            code="workflow.structural_clusters_diagnostic",
-            passed=bool(
-                workflow_manifest.get("raw_structural_clusters_are_diagnostics")
-            ),
-            detail=f"manifest={workflow_manifest.get('raw_structural_clusters_are_diagnostics')}",
+            code="workflow.semantic_candidate_source_policy",
+            passed=workflow_manifest.get("selected_backend") == "semantic",
+            detail=f"selected_backend={workflow_manifest.get('selected_backend')}",
         )
     )
     raw_sensitive = []
@@ -1150,7 +1148,7 @@ def _render_workflow_skill_summary(
         f"- Skill-upgrade opportunities: `{opportunity_meta.get('skill_upgrade_count', 0)}`",
         f"- Untrusted strategic rows skipped: `{opportunity_meta.get('rows_skipped_untrusted', 0)}`",
         f"- Semantic candidate count: `{workflow_manifest.get('semantic_candidate_count', '')}`",
-        f"- Structural diagnostic cluster count: `{workflow_manifest.get('structural_candidate_count', '')}`",
+        f"- Workflow candidate source: `{workflow_manifest.get('selected_backend', '')}`",
         "",
         "## Workflow Queue",
         "",

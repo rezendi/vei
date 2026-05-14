@@ -199,9 +199,9 @@ def _write_daily_fixture(tmp_path: Path, *, guard_passed: bool) -> dict[str, Pat
     (workflow / "workflow_mining_manifest.json").write_text(
         json.dumps(
             {
+                "selected_backend": "semantic",
                 "semantic_candidate_count": 1,
-                "structural_candidate_count": 2,
-                "raw_structural_clusters_are_diagnostics": True,
+                "published_candidate_count": 1,
             }
         )
         + "\n",

@@ -1806,9 +1806,6 @@ def refresh_workflows(
             "semantic_candidate_count": new_result.metadata.get(
                 "semantic_candidate_count"
             ),
-            "structural_candidate_count": new_result.metadata.get(
-                "structural_candidate_count"
-            ),
         },
     )
     (output_root / REFRESH_REPORT_FILE).write_text(
