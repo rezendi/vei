@@ -193,7 +193,7 @@ A short list of things to look out for:
 - A new threshold in source (`if score > 0.42: ...`) with no comment block citing where 0.42 came from. Same.
 - A new top-N cap (`max_results = 8`, `limit = 10`) with no defensible derivation. Same.
 - A "scenario," "prediction," or "counterfactual" surface that promises correctness against an alternate reality. The architectural constraint (per-tenant world models, no cross-sample triangulation) makes that promise unsupportable today; rephrase as internally-consistent extrapolation.
-- A new "fallback" path kept alive as a "diagnostic." Verify it has a real consumer; if not, the right move is deletion, not demotion. (The structural workflow miner deletion sets a precedent.)
+- A new "fallback" path kept alive as a "diagnostic." Verify it has a real consumer; if not, the right move is deletion, not demotion.
 - An LLM-driven output that adopts the *form* of citation (event_id references) without the *predicate* (verbatim substring check against the cited event's text). The form is not the rigor; the check is the rigor.
 - A "manifest," "validation," or "calibration" surface whose presence is treated as evidence of correctness rather than as a record of provenance. Manifests document; they do not validate. Validation happens at runtime via observable residuals.
 
