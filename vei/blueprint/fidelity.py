@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from vei.blueprint.models import BlueprintAsset, SurfaceFidelitySpec
+from vei.blueprint.models import SurfaceFidelitySpec
 
 _SURFACE_FROM_TOOL_PREFIX = {
     "slack": "slack",
@@ -39,24 +39,6 @@ def resolve_surface(tool_name: str) -> str:
     """Map a tool name like 'slack.send_message' to a surface key."""
     prefix = tool_name.split(".")[0].lower()
     return _SURFACE_FROM_TOOL_PREFIX.get(prefix, prefix)
-
-
-def get_fidelity(
-    asset: BlueprintAsset,
-    tool_name: str,
-) -> SurfaceFidelitySpec:
-    """Get the fidelity spec for a tool's surface."""
-    surface = resolve_surface(tool_name)
-    return asset.surface_fidelity.get(
-        surface,
-        SurfaceFidelitySpec(level="L3"),
-    )
-
-
-def should_intercept(asset: BlueprintAsset, tool_name: str) -> bool:
-    """Return True if the tool call should be intercepted (L1 or L2)."""
-    spec = get_fidelity(asset, tool_name)
-    return spec.level in ("L1", "L2")
 
 
 def l1_response(spec: SurfaceFidelitySpec, tool_name: str) -> dict[str, Any]:

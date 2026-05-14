@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Protocol
 
-from vei.monitors.api import MonitorFinding
-
 if TYPE_CHECKING:
     from .memory import MemoryStore
 
@@ -63,14 +61,6 @@ class SelectorNode(BehaviorNode):
         return "failure"
 
 
-class ConditionNode(BehaviorNode):
-    def __init__(self, predicate: Callable[[BehaviorContext], bool]) -> None:
-        self.predicate = predicate
-
-    def tick(self, ctx: BehaviorContext) -> Status:
-        return "success" if self.predicate(ctx) else "failure"
-
-
 class ToolAction(BehaviorNode):
     def __init__(
         self,
@@ -87,7 +77,7 @@ class ToolAction(BehaviorNode):
             result = ctx.router.call_and_step(self.tool, dict(self.args))
             ctx.record({"tool": self.tool, "args": self.args, "result": result})
             return "success"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             ctx.record({"tool": self.tool, "args": self.args, "error": str(exc)})
             return "failure"
 
@@ -123,31 +113,3 @@ class WaitFor(BehaviorNode):
                 break
         ctx.record({"wait_complete": True, "met": met})
         return "success" if met else "failure"
-
-
-class MemoriseFinding(BehaviorNode):
-    def __init__(
-        self, kind: str, extractor: Callable[[BehaviorContext], Optional[str]]
-    ) -> None:
-        self.kind = kind
-        self.extractor = extractor
-
-    def tick(self, ctx: BehaviorContext) -> Status:
-        value = self.extractor(ctx)
-        if value:
-            ctx.memory.remember(kind=self.kind, key="latest", value=value)
-            return "success"
-        return "failure"
-
-
-def findings_from_snapshot(snapshot: Dict[str, object]) -> List[MonitorFinding]:
-    payload = snapshot.get("monitor_findings")
-    if not isinstance(payload, list):
-        return []
-    findings: List[MonitorFinding] = []
-    for item in payload:
-        try:
-            findings.append(MonitorFinding(**item))
-        except Exception:
-            continue
-    return findings
