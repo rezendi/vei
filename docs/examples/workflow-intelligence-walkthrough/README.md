@@ -5,6 +5,7 @@ intelligence:
 
 ```text
 company-history bundle
+-> company skill map
 -> mined workflow candidate
 -> human label
 -> promoted Business Task Spec
@@ -22,6 +23,16 @@ That bundle is small enough for a repo-owned smoke path and still contains a
 real canonical event history across Slack, docs, tickets, billing, exceptions,
 and dispatch records.
 
+The workspace also includes a small checked-in skill-map fixture at:
+
+```text
+docs/examples/clearwater-technician-no-show/workspace/skill_map/company_skill_map.json
+```
+
+That fixture keeps this walkthrough runnable from a fresh clone without a live
+skill-map generation step. For real company data, build or refresh the skill map
+before mining.
+
 ## 1. Mine Candidates
 
 ```bash
@@ -29,6 +40,7 @@ export WORKDIR="$(mktemp -d)"
 
 vei workflow mine \
   --source-dir docs/examples/clearwater-technician-no-show/workspace/context_snapshot.json \
+  --skill-map docs/examples/clearwater-technician-no-show/workspace/skill_map/company_skill_map.json \
   --output "$WORKDIR/workflows" \
   --limit 3
 ```
@@ -36,20 +48,20 @@ vei workflow mine \
 Expected boundary:
 
 - the output is `workflow_candidates.json`
-- candidates are descriptive evidence summaries
-- draft specs have `evaluation_level=descriptive`
+- candidates are semantic, skill-backed evidence summaries
+- draft specs can carry a review rubric but are not deterministic contracts
 - no deterministic workflow, contract, or RL reward has been created
 
 In the current fixture, the top candidate is:
 
 ```text
-wfc_140309889b0c4241  Morning Dispatch Board
+wfc_f6cbb163cb927c05  Morning Dispatch Board
 ```
 
 ## 2. Label the Candidate
 
 ```bash
-CANDIDATE_ID="wfc_140309889b0c4241"
+CANDIDATE_ID="wfc_f6cbb163cb927c05"
 EVENT_ID="$(python - <<'PY'
 import json
 import os
