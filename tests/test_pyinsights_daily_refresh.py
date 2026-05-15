@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
 import vei.pyinsights.daily_refresh as daily_refresh_module
 from vei.cli.vei import app as vei_app
+from vei.context.api import ContextSourceResult
 from vei.pyinsights.daily_refresh import (
     DailyRefreshCheck,
     FreshContextCaptureResult,
@@ -144,6 +146,161 @@ def test_validated_daily_refresh_uses_fresh_capture_when_bundle_is_stale(
     assert any(
         check.code == "source.fresh_capture_for_as_of" and check.passed
         for check in manifest.checks
+    )
+
+
+def test_fresh_capture_prunes_only_unconfigured_pipeshub_providers(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PIPESHUB_BASE_URL", raising=False)
+    monkeypatch.delenv("PIPESHUB_BEARER_AUTH", raising=False)
+
+    expected, skipped = daily_refresh_module._prune_expected_providers_for_env(
+        {"onedrive", "outlook", "teams"}
+    )
+
+    assert expected == {"teams"}
+    assert skipped == {"onedrive", "outlook"}
+
+
+def test_fresh_capture_keeps_pipeshub_providers_when_token_exists(monkeypatch) -> None:
+    monkeypatch.setenv("PIPESHUB_BEARER_AUTH", "token")
+
+    expected, skipped = daily_refresh_module._prune_expected_providers_for_env(
+        {"onedrive", "outlook", "teams"}
+    )
+
+    assert expected == {"onedrive", "outlook", "teams"}
+    assert skipped == set()
+
+
+def test_fresh_capture_runs_pipeshub_per_connector(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_capture(**kwargs):
+        connectors = tuple(kwargs["connectors"])
+        calls.append(connectors)
+        provider = daily_refresh_module._normalize_provider_name(connectors[0])
+        snapshot = daily_refresh_module.ContextSnapshot(
+            organization_name=kwargs["organization_name"],
+            organization_domain=kwargs["organization_domain"],
+            captured_at="2026-05-15T12:00:00Z",
+            sources=[
+                ContextSourceResult(
+                    provider=provider,
+                    captured_at="2026-05-15T12:00:00Z",
+                    record_counts={"records": 1},
+                    data={"records": [{"id": f"{provider}-1"}]},
+                )
+            ],
+        )
+        return SimpleNamespace(snapshot=snapshot)
+
+    monkeypatch.setattr(daily_refresh_module, "_load_dotenv_if_available", lambda: None)
+    monkeypatch.setattr(
+        daily_refresh_module, "_pipeshub_capture_configured", lambda: True
+    )
+    monkeypatch.setattr(
+        daily_refresh_module, "_teams_graph_capture_configured", lambda: False
+    )
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "capture_pipeshub_context_from_env",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "write_pipeshub_capture_outputs",
+        lambda *args, **kwargs: None,
+    )
+
+    workspace = tmp_path / "capture"
+    workspace.mkdir()
+    result = daily_refresh_module._run_live_context_capture(
+        workspace=workspace,
+        existing_context_payload={
+            "organization_name": "Py Insights",
+            "organization_domain": "py-insights.com",
+        },
+        as_of_date=daily_refresh_module.date(2026, 5, 15),
+        expected_providers={"onedrive", "outlook"},
+        capture_connectors=None,
+        limit=5000,
+        timeout_s=30,
+        include_content=False,
+    )
+
+    assert calls == [("onedrive",), ("outlook",)]
+    assert result.context_path is not None
+    assert result.references["source_capture_pipeshub_onedrive_report"]
+    assert result.references["source_capture_pipeshub_outlook_report"]
+    provider_check = next(
+        check
+        for check in result.checks
+        if check.code == "source.fresh_capture_expected_providers_present"
+    )
+    assert provider_check.passed is True
+
+
+def test_latest_valid_ignores_current_run_for_skill_map_resolution(
+    tmp_path: Path,
+) -> None:
+    fixture = _write_daily_fixture(tmp_path, guard_passed=True)
+    current_run = tmp_path / "daily" / "pyinsights_daily_20260513"
+    current_skill_map = current_run / "skill_map" / "company_skill_map.json"
+    current_skill_map.parent.mkdir(parents=True)
+    current_skill_map.write_text(
+        json.dumps(
+            {
+                "schema_version": "company_skill_map_v1",
+                "organization_name": "Py Insights",
+                "organization_domain": "py-insights.com",
+                "generated_at": "2026-05-13T12:00:00+00:00",
+                "source_ref": "current-run",
+                "skill_count": 1,
+                "skills": [
+                    {
+                        "skill_id": "skill-current",
+                        "title": "Current run stale skill",
+                        "summary": "Invalid current-run citation.",
+                        "status": "draft",
+                        "candidate_type": "workflow",
+                        "trigger": {"description": "When release is planned."},
+                        "goal": "Avoid using the current run as previous input.",
+                        "evidence_refs": [
+                            {"ref_type": "event", "ref_id": "missing-current-event"}
+                        ],
+                        "deployment_readiness": "shadow_ready",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (current_run / "validation_manifest.json").write_text(
+        json.dumps({"status": "validated", "as_of": "2026-05-13"}) + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = run_validated_daily_refresh(
+        as_of="2026-05-13",
+        previous="latest-valid",
+        context_bundle=fixture["context"],
+        output_root=tmp_path / "daily",
+        model_run_root=fixture["model"],
+        strategic_run_root=fixture["strategic"],
+        workflow_output=fixture["workflow"],
+        refresh_workflows=False,
+        fresh_capture=False,
+    )
+
+    assert manifest.status == "validated"
+    assert manifest.references["source_skill_map"] == str(
+        fixture["skill_map"].resolve()
     )
 
 

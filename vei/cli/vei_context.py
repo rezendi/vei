@@ -8,6 +8,14 @@ import typer
 
 from vei.whatif.filenames import CONTEXT_SNAPSHOT_FILE, PUBLIC_CONTEXT_FILE
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional local convenience dependency
+
+    def load_dotenv(*args: object, **kwargs: object) -> None:
+        return None
+
+
 app = typer.Typer(add_completion=False)
 pipeshub_app = typer.Typer(
     add_completion=False,
@@ -55,6 +63,7 @@ def _require_canonical_history(root: str) -> Path:
 def _pipeshub_client(base_url: str, token_env: str, timeout_s: int):
     from vei.context.pipeshub import PipesHubClient
 
+    load_dotenv(override=False)
     return PipesHubClient.from_env(
         base_url=base_url,
         token_env=token_env,

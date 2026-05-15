@@ -854,6 +854,8 @@ def _candidate_from_skill(
     events = [
         events_by_id[event_id] for event_id in evidence_ids if event_id in events_by_id
     ]
+    if not events:
+        return None
     events.sort(key=lambda event: (event.ts_ms or 0, event.event_id))
     alignment = _world_model_alignment(skill, world_model_rows)
     quality = _semantic_workflow_quality(

@@ -1812,6 +1812,100 @@ def _extract_context_skills_with_llm(
         provider=provider,
         model=model,
     )
+    failures: list[dict[str, str]] = []
+    for attempt_index, (
+        attempt_provider,
+        attempt_model,
+    ) in enumerate(
+        _skillmap_llm_attempts(resolved_provider, resolved_model),
+        start=1,
+    ):
+        if not _llm_available(attempt_provider):
+            failures.append(
+                {
+                    "provider": attempt_provider,
+                    "model": attempt_model,
+                    "error": "provider credentials unavailable",
+                }
+            )
+            continue
+        try:
+            skills, metadata, gaps = _extract_context_skills_with_llm_once(
+                organization_name=organization_name,
+                organization_domain=organization_domain,
+                source_providers=source_providers,
+                canonical_event_count=canonical_event_count,
+                evidence_catalog=evidence_catalog,
+                limit=limit,
+                provider=attempt_provider,
+                model=attempt_model,
+                timeout_s=timeout_s,
+                catalog_shard_size=catalog_shard_size,
+                progress=progress,
+            )
+        except Exception as exc:
+            failures.append(
+                {
+                    "provider": attempt_provider,
+                    "model": attempt_model,
+                    "error": _truncate_text(str(exc) or type(exc).__name__, 600),
+                }
+            )
+            if not _retryable_skillmap_llm_failure(exc):
+                raise
+            _report_progress(
+                progress,
+                (
+                    "Skill map LLM attempt failed; "
+                    f"trying fallback {attempt_index + 1}: "
+                    f"{type(exc).__name__}: {_truncate_text(str(exc), 160)}"
+                ),
+            )
+            continue
+        if failures:
+            metadata["llm_fallback_used"] = True
+            metadata["llm_attempt_count"] = attempt_index
+            metadata["llm_failed_attempts"] = failures
+        else:
+            metadata["llm_fallback_used"] = False
+            metadata["llm_attempt_count"] = 1
+        return skills, metadata, gaps
+
+    failure_text = "; ".join(
+        f"{item['provider']}/{item['model']}: {item['error']}" for item in failures
+    )
+    if failures and all(
+        item["error"] == "provider credentials unavailable" for item in failures
+    ):
+        env_names: list[str] = []
+        for attempt_provider, _attempt_model in _skillmap_llm_attempts(
+            resolved_provider, resolved_model
+        ):
+            env_names.extend(_provider_env_names(attempt_provider))
+        env_hint = ", ".join(_unique(env_names)) or "provider credentials"
+        raise RuntimeError(
+            "LLM skill extraction requires credentials because deterministic "
+            "skill extraction is disabled. Configure "
+            f"{env_hint}, or pass --provider/--model for an available LLM."
+        )
+    raise RuntimeError(f"LLM skill extraction failed for all attempts: {failure_text}")
+
+
+def _extract_context_skills_with_llm_once(
+    *,
+    organization_name: str,
+    organization_domain: str,
+    source_providers: list[str],
+    canonical_event_count: int,
+    evidence_catalog: list[dict[str, Any]],
+    limit: int,
+    provider: str,
+    model: str,
+    timeout_s: int,
+    catalog_shard_size: int,
+    progress: ProgressReporter | None = None,
+) -> tuple[list[CompanySkill], dict[str, Any], list[SkillMapGap]]:
+    resolved_provider, resolved_model = provider, model
     metadata: dict[str, Any] = {
         "llm_provider": resolved_provider,
         "llm_model": resolved_model,
@@ -3578,6 +3672,64 @@ def _skill_evidence_ids(skill: CompanySkill) -> list[str]:
     ids = [_evidence_id(evidence) for evidence in skill.evidence_refs]
     ids.extend(str(item) for item in _safe_list(skill.metadata.get("evidence_ids")))
     return _unique(ids)
+
+
+def _skillmap_llm_attempts(
+    primary_provider: str, primary_model: str
+) -> list[tuple[str, str]]:
+    attempts: list[tuple[str, str]] = [(primary_provider, primary_model)]
+    for candidate in _configured_skillmap_fallbacks(primary_provider):
+        if candidate not in attempts:
+            attempts.append(candidate)
+    if primary_provider.strip().lower() == "codex":
+        for fallback_model in ("gpt-5.4", "gpt-5.4-mini", "gpt-5.2"):
+            candidate = ("codex", fallback_model)
+            if candidate not in attempts:
+                attempts.append(candidate)
+    return attempts
+
+
+def _configured_skillmap_fallbacks(
+    primary_provider: str,
+) -> list[tuple[str, str]]:
+    raw = os.environ.get("VEI_SKILLMAP_LLM_FALLBACKS", "").strip()
+    if not raw:
+        return []
+    if raw.lower() in {"0", "false", "none", "off", "disabled"}:
+        return []
+    fallbacks: list[tuple[str, str]] = []
+    for entry in re.split(r"[,;]", raw):
+        item = entry.strip()
+        if not item:
+            continue
+        if ":" in item:
+            provider, model = item.split(":", 1)
+        else:
+            provider, model = primary_provider, item
+        provider = provider.strip().lower()
+        model = model.strip()
+        if provider and model:
+            fallbacks.append((provider, model))
+    return fallbacks
+
+
+def _retryable_skillmap_llm_failure(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    retry_markers = (
+        "usage limit",
+        "quota",
+        "rate limit",
+        "rate_limit",
+        "429",
+        "timeout",
+        "timed out",
+        "temporarily",
+        "overloaded",
+        "capacity",
+        "try again",
+        "service unavailable",
+    )
+    return any(marker in text for marker in retry_markers)
 
 
 def _llm_available(provider: str) -> bool:

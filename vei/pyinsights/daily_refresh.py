@@ -30,6 +30,7 @@ from vei.context.api import (
 )
 from vei.skillmap.api import (
     CompanySkillMap,
+    build_company_skill_map_from_context_path,
     enrich_skill_map_with_world_model_opportunities,
     write_company_skill_map_outputs,
 )
@@ -51,6 +52,7 @@ DEFAULT_WORLD_MODEL_ROOT = Path("_vei_out/world_model_multitenant_jepa")
 DEFAULT_STRATEGIC_ROOT = Path("_vei_out/world_model_strategic_state_points")
 DEFAULT_TENANT_ID = "pyinsights"
 DEFAULT_CAPTURE_PROVIDERS = ("onedrive", "outlook", "teams")
+_PIPESHUB_ONLY_PROVIDERS = frozenset({"onedrive", "outlook"})
 
 _EVALUATION_LEVEL_ORDER = {
     "descriptive": 0,
@@ -150,7 +152,18 @@ def run_validated_daily_refresh(
     checks: list[DailyRefreshCheck] = []
     notes: list[str] = []
     capture_references: dict[str, str] = {}
-    context_path = Path(context_bundle).expanduser().resolve()
+    if previous_valid == run_root:
+        notes.append(
+            "Previous run resolved to current run root; ignoring it for comparison."
+        )
+        previous_valid = None
+    if previous_valid is None:
+        notes.append(
+            "No previous validated daily run was found; using full validation fallback."
+        )
+    configured_context_path = Path(context_bundle).expanduser().resolve()
+    configured_context_root = configured_context_path.parent
+    context_path = configured_context_path
     if fresh_capture:
         capture_result = _capture_fresh_context_for_as_of(
             existing_context_path=context_path,
@@ -175,10 +188,11 @@ def run_validated_daily_refresh(
     event_index_path = context_root / "canonical_event_index.json"
     canonical_events_path = context_root / "canonical_events.jsonl"
     verify_path = _latest_context_verify(context_root)
-    skill_path = (
-        Path(skill_map_path).expanduser().resolve()
-        if skill_map_path is not None
-        else context_root / "skill_map" / "company_skill_map.json"
+    skill_path = _resolve_skill_map_path(
+        skill_map_path,
+        context_root=context_root,
+        configured_context_root=configured_context_root,
+        previous_valid=previous_valid,
     )
     model_root = (
         Path(model_run_root).expanduser().resolve()
@@ -208,16 +222,6 @@ def run_validated_daily_refresh(
         if workflow_output is not None
         else run_root / "workflows"
     )
-
-    if previous_valid is None:
-        notes.append(
-            "No previous validated daily run was found; using full validation fallback."
-        )
-    elif previous_valid == run_root:
-        notes.append(
-            "Previous run resolved to current run root; ignoring it for comparison."
-        )
-        previous_valid = None
 
     _check_required_files(
         checks,
@@ -268,26 +272,36 @@ def run_validated_daily_refresh(
         current_event_ids=index_event_ids,
     )
 
-    if skill_path.is_file() and strategic_csv_path.is_file():
+    should_refresh_skillmap_from_context = (
+        skill_map_path is None and context_path != configured_context_path
+    )
+    refreshed_skill_map = False
+    if should_refresh_skillmap_from_context:
         try:
-            base_skill_map = CompanySkillMap.model_validate_json(
-                skill_path.read_text(encoding="utf-8")
+            base_skill_map = build_company_skill_map_from_context_path(
+                context_path,
+                limit=12,
+                include_replay=True,
+                previous_map_path=str(skill_path) if skill_path.is_file() else None,
             )
-            enriched_skill_map = enrich_skill_map_with_world_model_opportunities(
-                base_skill_map,
-                context_path=context_path,
-                world_model_report_path=strategic_csv_path,
-                max_opportunities=8,
-                require_trusted_ranking=True,
-            )
+            enriched_skill_map = base_skill_map
+            if strategic_csv_path.is_file():
+                enriched_skill_map = enrich_skill_map_with_world_model_opportunities(
+                    base_skill_map,
+                    context_path=context_path,
+                    world_model_report_path=strategic_csv_path,
+                    max_opportunities=8,
+                    require_trusted_ranking=True,
+                )
             _demote_activation_candidates_without_owners(enriched_skill_map)
             skill_outputs = write_company_skill_map_outputs(
                 enriched_skill_map, skill_output_root
             )
             effective_skill_path = skill_outputs["json"]
+            refreshed_skill_map = True
             checks.append(
                 DailyRefreshCheck(
-                    code="skillmap.world_model_opportunity_refresh_ran",
+                    code="skillmap.refresh_from_context_bundle_ran",
                     passed=True,
                     detail=str(effective_skill_path),
                 )
@@ -295,9 +309,44 @@ def run_validated_daily_refresh(
         except Exception as exc:  # noqa: BLE001
             checks.append(
                 DailyRefreshCheck(
-                    code="skillmap.world_model_opportunity_refresh_ran",
+                    code="skillmap.refresh_from_context_bundle_ran",
                     passed=False,
+                    severity="warning",
                     detail=str(exc),
+                )
+            )
+    if not refreshed_skill_map and skill_path.is_file():
+        try:
+            base_skill_map = CompanySkillMap.model_validate_json(
+                skill_path.read_text(encoding="utf-8")
+            )
+            enriched_skill_map = base_skill_map
+            if strategic_csv_path.is_file():
+                enriched_skill_map = enrich_skill_map_with_world_model_opportunities(
+                    base_skill_map,
+                    context_path=context_path,
+                    world_model_report_path=strategic_csv_path,
+                    max_opportunities=8,
+                    require_trusted_ranking=True,
+                )
+            _demote_activation_candidates_without_owners(enriched_skill_map)
+            skill_outputs = write_company_skill_map_outputs(
+                enriched_skill_map, skill_output_root
+            )
+            effective_skill_path = skill_outputs["json"]
+            checks.append(
+                DailyRefreshCheck(
+                    code="skillmap.reuse_prior_skill_map_ran",
+                    passed=True,
+                    detail=str(effective_skill_path),
+                )
+            )
+        except Exception as fallback_exc:  # noqa: BLE001
+            checks.append(
+                DailyRefreshCheck(
+                    code="skillmap.reuse_prior_skill_map_ran",
+                    passed=False,
+                    detail=str(fallback_exc),
                 )
             )
 
@@ -322,6 +371,17 @@ def run_validated_daily_refresh(
     workflow_manifest_path = workflow_root / "workflow_mining_manifest.json"
     workflows_payload = _read_json_or_empty(workflow_result_path)
     skill_payload = _read_json_or_empty(effective_skill_path)
+    skill_reference_event_ids = set(index_event_ids)
+    if skill_path.is_file():
+        skill_context_root = skill_path.parent.parent
+        skill_event_index_path = skill_context_root / "canonical_event_index.json"
+        if skill_event_index_path.is_file():
+            skill_event_index = _read_json_or_empty(skill_event_index_path)
+            skill_reference_event_ids |= {
+                str(row.get("event_id", ""))
+                for row in skill_event_index.get("rows", []) or []
+                if isinstance(row, dict) and row.get("event_id")
+            }
     _validate_workflows(
         checks,
         workflows_payload=workflows_payload,
@@ -331,7 +391,7 @@ def run_validated_daily_refresh(
     _validate_skill_map(
         checks,
         skill_payload=skill_payload,
-        valid_event_ids=set(index_event_ids),
+        valid_event_ids=skill_reference_event_ids,
     )
     _validate_model_artifacts(
         checks,
@@ -440,6 +500,46 @@ def run_validated_daily_refresh(
     return manifest
 
 
+def _resolve_skill_map_path(
+    skill_map_path: str | Path | None,
+    *,
+    context_root: Path,
+    configured_context_root: Path,
+    previous_valid: Path | None,
+) -> Path:
+    if skill_map_path is not None:
+        resolved = Path(skill_map_path).expanduser().resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(f"skill map not found: {resolved}")
+        return resolved
+
+    candidates: list[Path] = []
+    if previous_valid is not None:
+        candidates.append(previous_valid / "skill_map" / "company_skill_map.json")
+        candidates.append(
+            previous_valid / ".artifacts" / "skillmap" / "company_skill_map.json"
+        )
+
+    candidates.extend(
+        [
+            configured_context_root / "skill_map" / "company_skill_map.json",
+            configured_context_root
+            / ".artifacts"
+            / "skillmap"
+            / "company_skill_map.json",
+            context_root / "skill_map" / "company_skill_map.json",
+            context_root / ".artifacts" / "skillmap" / "company_skill_map.json",
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+
+    joined = "\n".join(f"- {path}" for path in candidates)
+    raise FileNotFoundError(f"skill map not found; tried:\n{joined}")
+
+
 def _capture_fresh_context_for_as_of(
     *,
     existing_context_path: Path,
@@ -451,10 +551,14 @@ def _capture_fresh_context_for_as_of(
     timeout_s: int,
     include_content: bool,
 ) -> FreshContextCaptureResult:
+    _load_dotenv_if_available()
     existing_payload = _read_json_or_empty(existing_context_path)
     expected_providers = _expected_capture_providers(
         existing_payload,
         capture_connectors=capture_connectors,
+    )
+    expected_providers, skipped_providers = _prune_expected_providers_for_env(
+        expected_providers
     )
     if _context_bundle_current_for_as_of(
         existing_payload,
@@ -475,7 +579,7 @@ def _capture_fresh_context_for_as_of(
     workspace = capture_workspace or run_root / "source_capture"
     workspace.mkdir(parents=True, exist_ok=True)
     try:
-        return _run_live_context_capture(
+        capture_result = _run_live_context_capture(
             workspace=workspace,
             existing_context_payload=existing_payload,
             as_of_date=as_of_date,
@@ -485,6 +589,21 @@ def _capture_fresh_context_for_as_of(
             timeout_s=timeout_s,
             include_content=include_content,
         )
+        if skipped_providers:
+            capture_result.checks.append(
+                DailyRefreshCheck(
+                    code="source.expected_providers_skipped_unconfigured",
+                    passed=True,
+                    severity="warning",
+                    detail=f"skipped={sorted(skipped_providers)}",
+                )
+            )
+            capture_result.notes.append(
+                "Fresh capture skipped unconfigured providers: "
+                + ", ".join(sorted(skipped_providers))
+                + "."
+            )
+        return capture_result
     except Exception as exc:  # noqa: BLE001
         return FreshContextCaptureResult(
             checks=[
@@ -534,44 +653,26 @@ def _run_live_context_capture(
     capture_errors: list[str] = []
 
     if _pipeshub_capture_configured():
-        try:
-            run_id = new_pipeshub_capture_run_id()
-            pipeshub_workspace = workspace / "pipeshub"
-            sync_root = (
-                pipeshub_workspace / "imports" / "source_syncs" / "pipeshub" / run_id
-            )
-            capture = capture_pipeshub_context_from_env(
-                timeout_s=timeout_s,
-                organization_name=organization_name,
-                organization_domain=organization_domain,
-                connectors=connector_names,
-                include_content=include_content,
-                limit=limit,
-                page_size=100,
-                run_id=run_id,
-                manifest_path=sync_root / "capture_manifest.json",
-                raw_records_path=sync_root / "records.jsonl",
-            )
-            write_pipeshub_capture_outputs(
-                capture,
-                workspace=pipeshub_workspace,
-                output=workspace / "pipeshub_context_snapshot.json",
-            )
-            snapshots.append(capture.snapshot)
-            references["source_capture_pipeshub_report"] = str(
-                sync_root / "capture_report.json"
-            )
-            notes.append(
-                "PipesHub fresh capture completed for "
-                + ", ".join(connector_names or sorted(expected_providers))
-                + "."
-            )
-        except Exception as exc:  # noqa: BLE001
-            capture_errors.append(f"pipeshub: {type(exc).__name__}: {exc}")
-    else:
-        capture_errors.append(
-            "pipeshub: missing PIPESHUB_BASE_URL/PIPESHUB_BEARER_AUTH configuration"
+        pipeshub_captures = _capture_pipeshub_connector_snapshots(
+            workspace=workspace,
+            organization_name=organization_name,
+            organization_domain=organization_domain,
+            connector_names=connector_names,
+            expected_providers=expected_providers,
+            limit=limit,
+            timeout_s=timeout_s,
+            include_content=include_content,
         )
+        snapshots.extend(pipeshub_captures.snapshots)
+        references.update(pipeshub_captures.references)
+        notes.extend(pipeshub_captures.notes)
+        capture_errors.extend(pipeshub_captures.errors)
+    else:
+        pipeshub_required = bool(expected_providers & _PIPESHUB_ONLY_PROVIDERS)
+        if pipeshub_required:
+            capture_errors.append(
+                "pipeshub: missing PIPESHUB_BASE_URL/PIPESHUB_BEARER_AUTH configuration"
+            )
 
     captured_providers = _snapshot_provider_names(snapshots)
     if "teams" in expected_providers and "teams" not in captured_providers:
@@ -694,6 +795,89 @@ def _run_live_context_capture(
     )
 
 
+@dataclass
+class _PipesHubDailyCaptureResult:
+    snapshots: list[Any] = field(default_factory=list)
+    references: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+
+def _capture_pipeshub_connector_snapshots(
+    *,
+    workspace: Path,
+    organization_name: str,
+    organization_domain: str,
+    connector_names: list[str],
+    expected_providers: set[str],
+    limit: int,
+    timeout_s: int,
+    include_content: bool,
+) -> _PipesHubDailyCaptureResult:
+    result = _PipesHubDailyCaptureResult()
+    groups = _pipeshub_connector_capture_groups(connector_names, expected_providers)
+    for group in groups:
+        group_label = _pipeshub_capture_group_label(group, expected_providers)
+        try:
+            run_id = f"{new_pipeshub_capture_run_id()}_{group_label}"
+            pipeshub_workspace = workspace / "pipeshub" / group_label
+            sync_root = (
+                pipeshub_workspace / "imports" / "source_syncs" / "pipeshub" / run_id
+            )
+            capture = capture_pipeshub_context_from_env(
+                timeout_s=timeout_s,
+                organization_name=organization_name,
+                organization_domain=organization_domain,
+                connectors=group,
+                include_content=include_content,
+                limit=limit,
+                page_size=100,
+                run_id=run_id,
+                manifest_path=sync_root / "capture_manifest.json",
+                raw_records_path=sync_root / "records.jsonl",
+            )
+            write_pipeshub_capture_outputs(
+                capture,
+                workspace=pipeshub_workspace,
+                output=workspace / f"pipeshub_{group_label}_context_snapshot.json",
+            )
+            result.snapshots.append(capture.snapshot)
+            reference_key = f"source_capture_pipeshub_{group_label}_report"
+            result.references[reference_key] = str(sync_root / "capture_report.json")
+            result.notes.append(
+                "PipesHub fresh capture completed for "
+                + ", ".join(group or sorted(expected_providers))
+                + "."
+            )
+        except Exception as exc:  # noqa: BLE001
+            requested = ", ".join(group or sorted(expected_providers))
+            result.errors.append(f"pipeshub:{requested}: {type(exc).__name__}: {exc}")
+    return result
+
+
+def _pipeshub_connector_capture_groups(
+    connector_names: list[str],
+    expected_providers: set[str],
+) -> list[list[str]]:
+    names = list(
+        dict.fromkeys(name.strip() for name in connector_names if name.strip())
+    )
+    if not names:
+        names = sorted(expected_providers)
+    if len(names) <= 1:
+        return [names]
+    return [[name] for name in names]
+
+
+def _pipeshub_capture_group_label(
+    connector_group: list[str],
+    expected_providers: set[str],
+) -> str:
+    if not connector_group:
+        return _slug("_".join(sorted(expected_providers)) or "all")
+    return _slug("_".join(connector_group))
+
+
 def _combine_context_snapshots(
     snapshots: list[Any],
     *,
@@ -734,6 +918,21 @@ def _expected_capture_providers(
         if isinstance(source, dict) and source.get("provider")
     }
     return providers or set(DEFAULT_CAPTURE_PROVIDERS)
+
+
+def _prune_expected_providers_for_env(
+    expected_providers: set[str],
+) -> tuple[set[str], set[str]]:
+    if not expected_providers:
+        return expected_providers, set()
+    if _pipeshub_capture_configured():
+        return expected_providers, set()
+    skipped = {
+        provider
+        for provider in expected_providers
+        if provider in _PIPESHUB_ONLY_PROVIDERS
+    }
+    return expected_providers - skipped, skipped
 
 
 def _normalized_capture_connectors(
@@ -798,10 +997,7 @@ def _normalize_provider_name(value: str) -> str:
 
 
 def _pipeshub_capture_configured() -> bool:
-    return bool(
-        os.environ.get("PIPESHUB_BASE_URL", "").strip()
-        or os.environ.get("PIPESHUB_BEARER_AUTH", "").strip()
-    )
+    return bool(os.environ.get("PIPESHUB_BEARER_AUTH", "").strip())
 
 
 def _teams_graph_capture_configured() -> bool:

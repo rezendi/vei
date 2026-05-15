@@ -336,6 +336,30 @@ def test_pipeshub_inspect_reports_configured_connectors(
     assert any("clickup" in warning for warning in payload["warnings"])
 
 
+def test_pipeshub_inspect_loads_dotenv_before_reading_token(monkeypatch) -> None:
+    monkeypatch.delenv("PIPESHUB_BEARER_AUTH", raising=False)
+    dotenv_calls: list[bool] = []
+
+    def fake_load_dotenv(*args, **kwargs):  # noqa: ANN001
+        dotenv_calls.append(bool(kwargs.get("override")))
+        monkeypatch.setenv("PIPESHUB_BEARER_AUTH", "token-from-dotenv")
+
+    def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
+        assert request.get_header("Authorization") == "Bearer token-from-dotenv"
+        return _Response({"connectors": []})
+
+    monkeypatch.setattr("vei.cli.vei_context.load_dotenv", fake_load_dotenv)
+    monkeypatch.setattr("vei.context.pipeshub.urlopen", fake_urlopen)
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["context", "pipeshub", "inspect", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert dotenv_calls == [False]
+
+
 def test_pipeshub_inspect_auth_error_names_token_env(monkeypatch) -> None:
     def fake_urlopen(request, timeout=30):  # noqa: ANN001, ARG001
         raise HTTPError(

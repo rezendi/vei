@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import vei.skillmap.skill_pipeline as skill_pipeline
 from vei.context.api import (
     ContextSnapshot,
     ContextSourceResult,
@@ -134,6 +135,179 @@ def test_skill_map_requires_llm_credentials_when_building_context_bundle(
         RuntimeError, match="deterministic skill extraction is disabled"
     ):
         build_company_skill_map_from_context_path(snapshot_path, limit=4)
+
+
+def test_skill_map_retries_codex_quota_with_fallback_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models: list[str] = []
+
+    async def fake_plan_once_with_usage(**kwargs: object) -> SimpleNamespace:
+        model = str(kwargs["model"])
+        models.append(model)
+        if model == "gpt-5.3-codex-spark":
+            raise RuntimeError("You've hit your usage limit for GPT-5.3-Codex-Spark.")
+        payload = json.loads(str(kwargs["user"]))
+        if "evidence_catalog" in payload:
+            return SimpleNamespace(
+                plan={
+                    "tool": "skillmap.cluster",
+                    "args": {
+                        "clusters": [
+                            {
+                                "title": "Sensitive data release gate",
+                                "summary": "Authentication reports show repeated sensitive logging risk.",
+                                "candidate_type": "flagship_skill",
+                                "domain": "security_privacy",
+                                "positive_triggers": ["OTP or CVV appears in logs"],
+                                "negative_triggers": ["No auth or payment fields"],
+                                "reuse_pattern": "Sensitive auth/payment fields require redaction review.",
+                                "evidence_ids": ["event:evt-1"],
+                                "allowed_actions": ["audit_logs"],
+                                "blocked_actions": ["live_write_without_approval"],
+                                "output_artifacts": [
+                                    {
+                                        "artifact_id": "redaction_audit",
+                                        "title": "Redaction audit",
+                                        "kind": "table",
+                                        "schema_hint": "field, risk, mitigation",
+                                    }
+                                ],
+                                "replay_checks": [
+                                    "Replay seeded auth data and confirm tokens are absent."
+                                ],
+                                "usefulness_scores": {
+                                    "company_specificity": 0.9,
+                                    "repeat_frequency": 0.7,
+                                    "business_consequence": 0.9,
+                                    "actionability": 0.8,
+                                    "evidence_coverage": 0.8,
+                                    "risk_if_wrong": 0.9,
+                                    "replay_testability": 0.8,
+                                },
+                                "usefulness_rationale": "Prevents repeated sensitive-data exposure.",
+                                "confidence": 0.83,
+                            }
+                        ]
+                    },
+                },
+                usage=_usage(model),
+            )
+        return SimpleNamespace(
+            plan={
+                "tool": "skillmap.propose",
+                "args": {
+                    "skills": [
+                        {
+                            "title": "Audit auth/payment log redaction",
+                            "summary": "Use cited auth and payment evidence before shipping logging changes.",
+                            "candidate_type": "flagship_skill",
+                            "domain": "security_privacy",
+                            "trigger": {
+                                "description": "Auth or payment flows touch logs.",
+                                "signals": ["OTP", "CVV", "PII"],
+                            },
+                            "negative_triggers": ["No sensitive fields touched."],
+                            "goal": "Prevent sensitive fields from entering logs or local stores.",
+                            "reuse_pattern": "Sensitive fields need redaction audit before release.",
+                            "evidence_ids": ["event:evt-1"],
+                            "steps": [
+                                {
+                                    "instruction": "Review cited sensitive-data report.",
+                                    "tool": "event.search",
+                                    "read_only": True,
+                                }
+                            ],
+                            "output_artifacts": [
+                                {
+                                    "artifact_id": "redaction_audit",
+                                    "title": "Redaction audit",
+                                    "kind": "table",
+                                    "schema_hint": "field, risk, mitigation",
+                                }
+                            ],
+                            "replay_checks": [
+                                "Replay seeded auth data and confirm tokens are absent."
+                            ],
+                            "allowed_actions": ["audit_logs"],
+                            "blocked_actions": ["live_write_without_approval"],
+                            "execution_mode": "shadow",
+                            "tags": ["privacy", "auth"],
+                            "usefulness_scores": {
+                                "company_specificity": 0.9,
+                                "repeat_frequency": 0.7,
+                                "business_consequence": 0.9,
+                                "actionability": 0.8,
+                                "evidence_coverage": 0.8,
+                                "risk_if_wrong": 0.9,
+                                "replay_testability": 0.8,
+                            },
+                            "usefulness_rationale": "Prevents repeated sensitive-data exposure.",
+                            "confidence": 0.83,
+                        }
+                    ]
+                },
+            },
+            usage=_usage(model),
+        )
+
+    monkeypatch.delenv("VEI_SKILLMAP_LLM_FALLBACKS", raising=False)
+    monkeypatch.setattr(
+        skill_pipeline, "plan_once_with_usage", fake_plan_once_with_usage
+    )
+    monkeypatch.setattr(skill_pipeline, "_llm_available", lambda provider: True)
+
+    skills, metadata, gaps = skill_pipeline._extract_context_skills_with_llm(
+        organization_name="Py Insights",
+        organization_domain="py-insights.com",
+        source_providers=["teams"],
+        canonical_event_count=1,
+        evidence_catalog=[
+            {
+                "evidence_id": "event:evt-1",
+                "ref_type": "event",
+                "title": "OTP is logged",
+                "source": "teams",
+                "surface": "teams",
+                "timestamp": "2026-05-15T00:00:00Z",
+                "snippet": "OTP is being captured in logs.",
+                "summary": "OTP is being captured in logs.",
+                "facts": {},
+                "evidence_ref": {
+                    "ref_type": "event",
+                    "ref_id": "evt-1",
+                    "source": "teams",
+                    "surface": "teams",
+                    "title": "OTP is logged",
+                    "timestamp": "2026-05-15T00:00:00Z",
+                    "snippet": "OTP is being captured in logs.",
+                },
+            }
+        ],
+        limit=4,
+        provider=None,
+        model=None,
+        timeout_s=30,
+        catalog_shard_size=80,
+    )
+
+    assert [models[0], models[1]] == ["gpt-5.3-codex-spark", "gpt-5.4"]
+    assert skills
+    assert metadata["llm_fallback_used"] is True
+    assert metadata["llm_model"] == "gpt-5.4"
+    assert metadata["llm_failed_attempts"][0]["model"] == "gpt-5.3-codex-spark"
+    assert not any(gap.severity == "error" for gap in gaps)
+
+
+def _usage(model: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        provider="codex",
+        model=model,
+        prompt_tokens=10,
+        completion_tokens=20,
+        total_tokens=30,
+        estimated_cost_usd=None,
+    )
 
 
 def test_skill_map_adds_cited_world_model_opportunities(
