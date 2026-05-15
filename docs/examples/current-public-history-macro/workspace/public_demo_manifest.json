@@ -1,0 +1,23 @@
+{
+  "source_id": "current_macro_public_history_world",
+  "title": "Public History: Current U.S. Macro World",
+  "summary": "Choose a point from a current 416-record U.S. macro public record, 2024-01-01 through 2026-05-14, then test a branch event or policy response from that evidence state.",
+  "record_count": 416,
+  "date_range": {
+    "start": "2024-01-01",
+    "end": "2026-05-14"
+  },
+  "as_of_date": "2026-05-14",
+  "launch_command": "vei ui serve --root docs/examples/current-public-history-macro/workspace --host 127.0.0.1 --port 3058",
+  "refresh_path": {
+    "workspace_fixture": "python scripts/build_current_macro_public_history_fixture.py --workspace docs/examples/current-public-history-macro/workspace",
+    "state_point_run": "vei whatif benchmark news-state-point --input current_macro=docs/examples/current-public-history-macro/workspace/context_snapshot.json --checkpoint docs/examples/news-public-history-demo/workspace/jepa_model.pt --topic all_public_record --as-of {as_of}",
+    "static_assets": "python scripts/export_public_history_static_assets.py --workspace docs/examples/current-public-history-macro/workspace --output /path/to/strangelab.ai/public/public-history-current"
+  },
+  "source_path": "context_snapshot.json",
+  "source_manifest_path": "source_manifest.json",
+  "saved_result_path": "current_macro_state_point_result.json",
+  "jepa_checkpoint_path": "../../news-public-history-demo/workspace/jepa_model.pt",
+  "default_topic": "all_public_record",
+  "default_as_of": "2026-05-14"
+}

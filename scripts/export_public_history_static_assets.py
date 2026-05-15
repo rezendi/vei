@@ -204,6 +204,7 @@ def export_model_onnx(
                 "token_numeric": {0: torch.export.Dim.AUTO},
             },
             opset_version=18,
+            external_data=False,
             dynamo=True,
         )
 

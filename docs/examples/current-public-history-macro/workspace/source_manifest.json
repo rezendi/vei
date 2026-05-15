@@ -1,0 +1,119 @@
+{
+  "version": "1",
+  "generated_at": "2026-05-15T00:27:02Z",
+  "as_of": "2026-05-14",
+  "source_records": [
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "CPIAUCSL"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "CPILFESL"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "PCEPI"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "PCEPILFE"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "UNRATE"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 28,
+      "detail": "PAYEMS"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 28,
+      "detail": "FEDFUNDS"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 48,
+      "detail": "DGS2"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 48,
+      "detail": "DGS10"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 48,
+      "detail": "T10Y2Y"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 28,
+      "detail": "RSAFS"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 27,
+      "detail": "INDPRO"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDPC1&cosd=2024-01-01&coed=2026-05-14",
+      "status": "ok",
+      "record_count": 9,
+      "detail": "GDPC1"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202605",
+      "status": "ok",
+      "record_count": 10,
+      "detail": "month=202605"
+    },
+    {
+      "source_family": "bea_current_releases",
+      "url": "https://www.bea.gov/news/current-releases",
+      "status": "ok",
+      "record_count": 6,
+      "detail": "max_releases=6"
+    },
+    {
+      "source_family": "federal_reserve_fomc",
+      "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260429a.htm",
+      "status": "ok",
+      "record_count": 1,
+      "detail": "as_of=2026-05-14"
+    }
+  ]
+}

@@ -12,6 +12,9 @@ from vei.ui import _public_demo_routes as public_demo_routes
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_DEMO_ROOT = REPO_ROOT / "docs/examples/news-public-history-demo/workspace"
+CURRENT_MACRO_DEMO_ROOT = (
+    REPO_ROOT / "docs/examples/current-public-history-macro/workspace"
+)
 
 
 def test_public_demo_checked_in_manifests_match_workspace_snapshot() -> None:
@@ -59,6 +62,63 @@ def test_public_demo_checked_in_manifests_match_workspace_snapshot() -> None:
         "workspace_fixture",
         "static_assets",
     }
+
+
+def test_current_macro_public_demo_manifest_matches_snapshot() -> None:
+    snapshot = json.loads(
+        (CURRENT_MACRO_DEMO_ROOT / "context_snapshot.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (CURRENT_MACRO_DEMO_ROOT / "public_demo_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    project = json.loads(
+        (CURRENT_MACRO_DEMO_ROOT / "vei_project.json").read_text(encoding="utf-8")
+    )
+    source_manifest = json.loads(
+        (CURRENT_MACRO_DEMO_ROOT / "source_manifest.json").read_text(encoding="utf-8")
+    )
+
+    metadata = snapshot["metadata"]
+    expected_date_range = {
+        "start": metadata["start_date"],
+        "end": metadata["end_date"],
+    }
+    source_record_count = 0
+    for source in snapshot["sources"]:
+        counts = source["record_counts"]
+        source_record_count += int(
+            counts.get("documents") or counts.get("messages") or 0
+        )
+    expected_count = int(metadata["selected_event_count"])
+
+    assert metadata["source_kind"] == "official_macro_data_and_public_releases"
+    assert source_record_count == expected_count
+    assert manifest["source_id"] == "current_macro_public_history_world"
+    assert manifest["record_count"] == expected_count
+    assert manifest["date_range"] == expected_date_range
+    assert manifest["default_as_of"] == metadata["as_of_date"] == "2026-05-14"
+    assert manifest["jepa_checkpoint_path"].endswith("jepa_model.pt")
+    assert {
+        record["source_family"] for record in source_manifest["source_records"]
+    } >= {
+        "fred",
+        "treasury_yield_curve",
+        "bea_current_releases",
+        "federal_reserve_fomc",
+    }
+
+    public_demo_metadata = project["metadata"]["public_demo"]
+    for key in (
+        "source_id",
+        "record_count",
+        "date_range",
+        "as_of_date",
+        "launch_command",
+        "refresh_path",
+    ):
+        assert public_demo_metadata[key] == manifest[key]
 
 
 def test_public_demo_models_validate_defaults() -> None:
@@ -152,6 +212,42 @@ def test_public_demo_status_and_chat_only_use_pre_cutoff_evidence() -> None:
         for event in earlier["evidence_events"]
     )
     assert "Banking bill debate" not in earlier["state_summary"]
+
+
+def test_current_macro_public_demo_status_uses_current_cutoff() -> None:
+    client = TestClient(ui_api.create_ui_app(CURRENT_MACRO_DEMO_ROOT))
+
+    response = client.get("/api/workspace/public-demo")
+
+    assert response.status_code == 200
+    status = response.json()
+    assert status["available"] is True
+    assert status["source"]["source_id"] == "current_macro_public_history_world"
+    assert status["source"]["default_as_of"] == "2026-05-14"
+    assert status["source"]["event_count"] >= 400
+    assert status["source"]["first_timestamp"].startswith("2024-")
+    assert status["source"]["last_timestamp"].startswith("2026-05-14")
+    assert status["scoring_available"] is True
+    assert status["scoring_checkpoint_path"].endswith("jepa_model.pt")
+    assert status["evidence_events"]
+    assert all(
+        event["timestamp"] <= "2026-05-14T00:00:00Z"
+        for event in status["evidence_events"]
+    )
+    evidence_text = " ".join(
+        f"{event['subject']} {event['snippet']}" for event in status["evidence_events"]
+    ).lower()
+    assert any(
+        term in evidence_text
+        for term in ("inflation", "fomc", "treasury", "gdp", "unemployment")
+    )
+    suggested_labels = " ".join(
+        action["label"] for action in status["suggested_candidate_actions"]
+    ).lower()
+    assert any(
+        term in suggested_labels
+        for term in ("inflation", "federal reserve", "treasury", "unemployment")
+    )
 
 
 def test_public_demo_status_reports_missing_live_jepa_without_fallback(
