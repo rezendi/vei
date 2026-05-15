@@ -7,6 +7,7 @@ import argparse
 import csv
 import html
 import json
+import math
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from io import StringIO
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeVar
 from urllib.parse import urlencode, urljoin
 from zoneinfo import ZoneInfo
 
@@ -37,18 +38,24 @@ LAUNCH_COMMAND = (
 )
 JEPA_CHECKPOINT_PATH = "../../news-public-history-demo/workspace/jepa_model.pt"
 USER_AGENT = "vei-current-macro-public-history/1.0 contact=https://strangelab.ai"
+T = TypeVar("T")
 
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+BLS_PUBLIC_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 BEA_CURRENT_RELEASES_URL = "https://www.bea.gov/news/current-releases"
 FED_MONETARY_POLICY_URL = "https://www.federalreserve.gov/monetarypolicy.htm"
 TREASURY_YIELD_XML_URL = (
     "https://home.treasury.gov/resource-center/data-chart-center/"
     "interest-rates/pages/xml"
 )
+FEDERAL_REGISTER_API_URL = "https://www.federalregister.gov/api/v1/documents.json"
 GDELT_DOC_API_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 GDELT_MACRO_QUERY = (
     '(inflation OR "Federal Reserve" OR "interest rates" OR jobs OR '
     "unemployment OR GDP OR Treasury OR tariffs OR recession) sourceCountry:US"
+)
+FEDERAL_REGISTER_MACRO_QUERY = (
+    "inflation energy interest rates labor housing banking financial stability"
 )
 
 
@@ -61,6 +68,23 @@ class FredSeriesSpec:
 
 
 @dataclass(frozen=True)
+class BlsSeriesSpec:
+    series_id: str
+    title: str
+    units: str
+    topic: str
+
+
+@dataclass(frozen=True)
+class MacroWindow:
+    window_id: str
+    label: str
+    start_date: str
+    end_date: str
+    role: str
+
+
+@dataclass(frozen=True)
 class SourceDocument:
     doc_id: str
     title: str
@@ -70,6 +94,9 @@ class SourceDocument:
     url: str
     source_family: str
     topic: str
+    window_id: str = ""
+    window_label: str = ""
+    window_role: str = ""
 
 
 @dataclass(frozen=True)
@@ -194,6 +221,169 @@ FRED_SERIES: tuple[FredSeriesSpec, ...] = (
         "billions of chained 2017 dollars",
         "government_policy",
     ),
+    FredSeriesSpec("DGS30", "30-Year Treasury Yield", "percent", "banking_markets"),
+    FredSeriesSpec(
+        "T10YIE",
+        "10-Year Breakeven Inflation Rate",
+        "percent",
+        "banking_markets",
+    ),
+    FredSeriesSpec("DFII10", "10-Year Real Treasury Rate", "percent", "banking_markets"),
+    FredSeriesSpec(
+        "VIXCLS",
+        "CBOE Volatility Index",
+        "index",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "DCOILWTICO",
+        "WTI Crude Oil Price",
+        "dollars per barrel",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "GASREGW",
+        "Regular Gasoline Price",
+        "dollars per gallon",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "MORTGAGE30US",
+        "30-Year Fixed Mortgage Rate",
+        "percent",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "UMCSENT",
+        "University of Michigan Consumer Sentiment",
+        "index 1966:Q1=100",
+        "banking_markets",
+    ),
+    FredSeriesSpec("HOUST", "Housing Starts", "thousands of units", "banking_markets"),
+    FredSeriesSpec(
+        "PERMIT",
+        "Building Permits",
+        "thousands of units",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "ICSA",
+        "Initial Unemployment Claims",
+        "number",
+        "labor_work",
+    ),
+    FredSeriesSpec(
+        "JTSJOL",
+        "Job Openings",
+        "thousands",
+        "labor_work",
+    ),
+    FredSeriesSpec(
+        "PPIACO",
+        "Producer Price Index: All Commodities",
+        "index 1982=100",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "NFCI",
+        "Chicago Fed National Financial Conditions Index",
+        "index",
+        "banking_markets",
+    ),
+    FredSeriesSpec(
+        "WALCL",
+        "Federal Reserve Total Assets",
+        "millions of dollars",
+        "government_policy",
+    ),
+    FredSeriesSpec("BAA", "Moody's Baa Corporate Bond Yield", "percent", "banking_markets"),
+    FredSeriesSpec("AAA", "Moody's Aaa Corporate Bond Yield", "percent", "banking_markets"),
+    FredSeriesSpec(
+        "DTWEXBGS",
+        "Nominal Broad U.S. Dollar Index",
+        "index Jan 2006=100",
+        "banking_markets",
+    ),
+)
+
+
+BLS_SERIES: tuple[BlsSeriesSpec, ...] = (
+    BlsSeriesSpec(
+        "CUUR0000SA0",
+        "Consumer Price Index for All Urban Consumers",
+        "index 1982-84=100",
+        "banking_markets",
+    ),
+    BlsSeriesSpec(
+        "LNS14000000",
+        "Unemployment Rate",
+        "percent",
+        "labor_work",
+    ),
+    BlsSeriesSpec(
+        "CES0000000001",
+        "Total Nonfarm Employment",
+        "thousands of persons",
+        "labor_work",
+    ),
+    BlsSeriesSpec(
+        "WPUFD4",
+        "Producer Price Index: Final Demand",
+        "index Nov 2009=100",
+        "banking_markets",
+    ),
+    BlsSeriesSpec(
+        "JTS000000000000000JOL",
+        "Job Openings: Total Nonfarm",
+        "thousands",
+        "labor_work",
+    ),
+)
+
+
+ANALOG_WINDOWS: tuple[MacroWindow, ...] = (
+    MacroWindow(
+        "volcker_inflation_1979_1982",
+        "Volcker inflation fight",
+        "1979-01-01",
+        "1982-12-31",
+        "similar: inflation, energy, rates, recession pressure; different: policy regime and data environment",
+    ),
+    MacroWindow(
+        "soft_landing_1994_1995",
+        "1994-95 tightening and soft landing",
+        "1994-01-01",
+        "1995-12-31",
+        "different: tightening cycle with a less severe macro break",
+    ),
+    MacroWindow(
+        "dotcom_911_2000_2002",
+        "Dot-com and post-9/11 slowdown",
+        "2000-03-01",
+        "2002-12-31",
+        "different: market crash, security shock, and mild recession",
+    ),
+    MacroWindow(
+        "global_financial_crisis_2007_2009",
+        "Global financial crisis",
+        "2007-07-01",
+        "2009-06-30",
+        "similar: bank stress, Treasury/Fed action, credit-market confidence",
+    ),
+    MacroWindow(
+        "covid_policy_shock_2020_2021",
+        "COVID policy shock",
+        "2020-02-01",
+        "2021-06-30",
+        "different: public-health shock with extraordinary fiscal and monetary response",
+    ),
+    MacroWindow(
+        "inflation_hiking_cycle_2021_2023",
+        "Inflation and hiking cycle",
+        "2021-07-01",
+        "2023-12-31",
+        "similar: inflation, labor tightness, energy pressure, rapid rate hikes",
+    ),
 )
 
 
@@ -207,11 +397,16 @@ def main() -> None:
     session.headers.update({"User-Agent": USER_AGENT})
     documents: list[SourceDocument] = []
     fetch_records: list[SourceFetchRecord] = []
+    windows = _macro_windows(
+        as_of=as_of,
+        current_start_date=args.start_date,
+        include_analogs=not args.current_only,
+    )
 
     fred_documents, fred_records = _fetch_fred_documents(
         session=session,
-        start_date=args.start_date,
         as_of=as_of,
+        windows=windows,
         max_observations_per_series=args.max_observations_per_series,
         timeout_s=args.timeout_s,
     )
@@ -221,10 +416,32 @@ def main() -> None:
     treasury_documents, treasury_record = _fetch_treasury_yield_documents(
         session=session,
         as_of=as_of,
+        windows=windows,
+        max_rows_per_month=args.max_treasury_rows_per_month,
         timeout_s=args.timeout_s,
     )
     documents.extend(treasury_documents)
-    fetch_records.append(treasury_record)
+    fetch_records.extend(treasury_record)
+
+    bls_documents, bls_records = _fetch_bls_documents(
+        session=session,
+        windows=windows,
+        max_observations_per_series=args.max_bls_observations_per_series,
+        timeout_s=args.timeout_s,
+    )
+    documents.extend(bls_documents)
+    fetch_records.extend(bls_records)
+
+    federal_register_documents, federal_register_records = (
+        _fetch_federal_register_documents(
+            session=session,
+            windows=windows,
+            max_records_per_window=args.max_federal_register_records,
+            timeout_s=args.timeout_s,
+        )
+    )
+    documents.extend(federal_register_documents)
+    fetch_records.extend(federal_register_records)
 
     release_documents, release_records = _fetch_official_release_documents(
         session=session,
@@ -253,13 +470,15 @@ def main() -> None:
         documents=documents,
         fetch_records=fetch_records,
         as_of=as_of,
-        start_date=args.start_date,
+        start_date=windows[0].start_date if windows else args.start_date,
+        windows=windows,
         output_path=snapshot_path,
     )
     manifest = _build_public_manifest(
         documents=documents,
         as_of=as_of,
-        start_date=args.start_date,
+        start_date=windows[0].start_date if windows else args.start_date,
+        windows=windows,
     )
     _write_json(output_root / "public_demo_manifest.json", manifest)
     _write_json(output_root / "vei_project.json", _build_project_manifest(manifest))
@@ -269,6 +488,16 @@ def main() -> None:
             "version": "1",
             "generated_at": _iso_now(),
             "as_of": as_of,
+            "comparison_windows": [
+                {
+                    "window_id": window.window_id,
+                    "label": window.label,
+                    "start_date": window.start_date,
+                    "end_date": window.end_date,
+                    "role": window.role,
+                }
+                for window in windows
+            ],
             "source_records": [
                 {
                     "source_family": record.source_family,
@@ -301,9 +530,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--start-date", default=DEFAULT_START_DATE)
     parser.add_argument("--as-of", default="")
     parser.add_argument("--timeout-s", type=int, default=DEFAULT_TIMEOUT_S)
-    parser.add_argument("--max-observations-per-series", type=int, default=48)
+    parser.add_argument("--max-observations-per-series", type=int, default=24)
+    parser.add_argument("--max-bls-observations-per-series", type=int, default=18)
+    parser.add_argument("--max-treasury-rows-per-month", type=int, default=8)
+    parser.add_argument("--max-federal-register-records", type=int, default=16)
     parser.add_argument("--max-official-releases", type=int, default=6)
     parser.add_argument("--max-gdelt-records", type=int, default=75)
+    parser.add_argument(
+        "--current-only",
+        action="store_true",
+        help="Use only the current macro window instead of the mixed analog corpus.",
+    )
     parser.add_argument(
         "--include-gdelt-headlines",
         action="store_true",
@@ -320,16 +557,35 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _macro_windows(
+    *,
+    as_of: str,
+    current_start_date: str,
+    include_analogs: bool,
+) -> list[MacroWindow]:
+    current = MacroWindow(
+        "current_2024_now",
+        "Current higher-rate macro regime",
+        current_start_date,
+        as_of,
+        "current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty",
+    )
+    if not include_analogs:
+        return [current]
+    return [*ANALOG_WINDOWS, current]
+
+
 def _fetch_fred_documents(
     *,
     session: requests.Session,
-    start_date: str,
     as_of: str,
+    windows: list[MacroWindow],
     max_observations_per_series: int,
     timeout_s: int,
 ) -> tuple[list[SourceDocument], list[SourceFetchRecord]]:
     documents: list[SourceDocument] = []
     records: list[SourceFetchRecord] = []
+    start_date = min(window.start_date for window in windows)
     for spec in FRED_SERIES:
         params = {"id": spec.series_id, "cosd": start_date, "coed": as_of}
         url = f"{FRED_CSV_URL}?{urlencode(params)}"
@@ -347,13 +603,17 @@ def _fetch_fred_documents(
                 )
             )
             continue
-        valid_observations = [
-            item
-            for item in observations
-            if start_date <= item[0] <= as_of and _is_float(item[1])
-        ][-max_observations_per_series:]
-        for index, (observation_date, value) in enumerate(valid_observations):
-            previous = valid_observations[index - 1] if index else None
+        selected_observations = _sample_windowed_observations(
+            observations=observations,
+            windows=windows,
+            max_observations_per_window=max_observations_per_series,
+        )
+        for index, (observation_date, value, window) in enumerate(selected_observations):
+            previous = (
+                (selected_observations[index - 1][0], selected_observations[index - 1][1])
+                if index
+                else None
+            )
             documents.append(
                 _fred_document(
                     spec=spec,
@@ -362,6 +622,7 @@ def _fetch_fred_documents(
                     previous=previous,
                     source_url=f"https://fred.stlouisfed.org/series/{spec.series_id}",
                     as_of=as_of,
+                    window=window,
                 )
             )
         records.append(
@@ -369,11 +630,52 @@ def _fetch_fred_documents(
                 source_family="fred",
                 url=url,
                 status="ok",
-                record_count=len(valid_observations),
-                detail=spec.series_id,
+                record_count=len(selected_observations),
+                detail=(
+                    f"{spec.series_id}; windows={len(windows)}; "
+                    f"max_per_window={max_observations_per_series}"
+                ),
             )
         )
     return documents, records
+
+
+def _sample_windowed_observations(
+    *,
+    observations: list[tuple[str, str]],
+    windows: list[MacroWindow],
+    max_observations_per_window: int,
+) -> list[tuple[str, str, MacroWindow]]:
+    selected: list[tuple[str, str, MacroWindow]] = []
+    seen_dates: set[str] = set()
+    for window in windows:
+        valid_observations = [
+            item
+            for item in observations
+            if window.start_date <= item[0] <= window.end_date and _is_float(item[1])
+        ]
+        for observation_date, value in _evenly_sample(
+            valid_observations,
+            max_items=max_observations_per_window,
+        ):
+            if observation_date in seen_dates:
+                continue
+            seen_dates.add(observation_date)
+            selected.append((observation_date, value, window))
+    selected.sort(key=lambda item: item[0])
+    return selected
+
+
+def _evenly_sample(items: list[T], *, max_items: int) -> list[T]:
+    if max_items <= 0 or len(items) <= max_items:
+        return list(items)
+    if max_items == 1:
+        return [items[-1]]
+    indexes = {
+        min(len(items) - 1, round(index * (len(items) - 1) / (max_items - 1)))
+        for index in range(max_items)
+    }
+    return [items[index] for index in sorted(indexes)]
 
 
 def _parse_fred_csv(text: str, series_id: str) -> list[tuple[str, str]]:
@@ -394,6 +696,7 @@ def _fred_document(
     previous: tuple[str, str] | None,
     source_url: str,
     as_of: str,
+    window: MacroWindow,
 ) -> SourceDocument:
     previous_text = "No prior kept observation is included in this fixture."
     if previous is not None and _is_float(previous[1]):
@@ -405,6 +708,7 @@ def _fred_document(
     title = f"{spec.title}: {value} on {observation_date}"
     body = (
         f"Topic: {_topic_label(spec.topic)}. Date: {observation_date}. "
+        f"Comparison window: {window.label} ({window.role}). "
         f"Source: FRED series {spec.series_id}. Public macro observation as of "
         f"{as_of}: {spec.title} was {value} {spec.units}. {previous_text} "
         f"Source URL: {source_url}."
@@ -418,6 +722,9 @@ def _fred_document(
         url=source_url,
         source_family="fred",
         topic=spec.topic,
+        window_id=window.window_id,
+        window_label=window.label,
+        window_role=window.role,
     )
 
 
@@ -425,38 +732,77 @@ def _fetch_treasury_yield_documents(
     *,
     session: requests.Session,
     as_of: str,
+    windows: list[MacroWindow],
+    max_rows_per_month: int,
     timeout_s: int,
-) -> tuple[list[SourceDocument], SourceFetchRecord]:
-    month = as_of[:7].replace("-", "")
-    params = {
-        "data": "daily_treasury_yield_curve",
-        "field_tdr_date_value_month": month,
-    }
-    url = f"{TREASURY_YIELD_XML_URL}?{urlencode(params)}"
-    try:
-        response = session.get(url, timeout=timeout_s)
-        response.raise_for_status()
-        documents = _parse_treasury_yield_xml(response.text, source_url=url)
-        documents = [
-            document for document in documents if document.created_time[:10] <= as_of
-        ]
-        return documents, SourceFetchRecord(
-            source_family="treasury_yield_curve",
-            url=url,
-            status="ok",
-            record_count=len(documents),
-            detail=f"month={month}",
-        )
-    except (requests.RequestException, ET.ParseError) as exc:
-        return [], SourceFetchRecord(
-            source_family="treasury_yield_curve",
-            url=url,
-            status="error",
-            detail=str(exc),
-        )
+) -> tuple[list[SourceDocument], list[SourceFetchRecord]]:
+    documents: list[SourceDocument] = []
+    records: list[SourceFetchRecord] = []
+    for window in windows:
+        for month in _representative_months(window):
+            params = {
+                "data": "daily_treasury_yield_curve",
+                "field_tdr_date_value_month": month.replace("-", ""),
+            }
+            url = f"{TREASURY_YIELD_XML_URL}?{urlencode(params)}"
+            try:
+                response = session.get(url, timeout=timeout_s)
+                response.raise_for_status()
+                month_documents = _parse_treasury_yield_xml(
+                    response.text,
+                    source_url=url,
+                    window=window,
+                )
+                month_documents = [
+                    document
+                    for document in month_documents
+                    if window.start_date <= document.created_time[:10] <= window.end_date
+                    and document.created_time[:10] <= as_of
+                ]
+                month_documents = _evenly_sample(
+                    month_documents,
+                    max_items=max_rows_per_month,
+                )
+                documents.extend(month_documents)
+                records.append(
+                    SourceFetchRecord(
+                        source_family="treasury_yield_curve",
+                        url=url,
+                        status="ok",
+                        record_count=len(month_documents),
+                        detail=f"window={window.window_id}; month={month}",
+                    )
+                )
+            except (requests.RequestException, ET.ParseError) as exc:
+                records.append(
+                    SourceFetchRecord(
+                        source_family="treasury_yield_curve",
+                        url=url,
+                        status="error",
+                        detail=f"window={window.window_id}; {exc}",
+                    )
+                )
+    return documents, records
 
 
-def _parse_treasury_yield_xml(text: str, *, source_url: str) -> list[SourceDocument]:
+def _representative_months(window: MacroWindow) -> list[str]:
+    start_month = window.start_date[:7]
+    end_month = window.end_date[:7]
+    months = [start_month, end_month]
+    start = datetime.strptime(window.start_date[:10], "%Y-%m-%d").date()
+    end = datetime.strptime(window.end_date[:10], "%Y-%m-%d").date()
+    midpoint = start.toordinal() + math.floor((end.toordinal() - start.toordinal()) / 2)
+    midpoint_month = date.fromordinal(midpoint).isoformat()[:7]
+    months.append(midpoint_month)
+    return sorted(set(months))
+
+
+def _parse_treasury_yield_xml(
+    text: str,
+    *,
+    source_url: str,
+    window: MacroWindow,
+) -> list[SourceDocument]:
     namespaces = {
         "atom": "http://www.w3.org/2005/Atom",
         "m": "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata",
@@ -481,7 +827,8 @@ def _parse_treasury_yield_xml(text: str, *, source_url: str) -> list[SourceDocum
         one_month = values.get("BC_1MONTH", "")
         title = f"Treasury yield curve: 10Y {ten_year}% on {raw_date}"
         body = (
-            f"Topic: Banking Markets. Date: {raw_date}. Source: U.S. Treasury "
+            f"Topic: Banking Markets. Date: {raw_date}. Comparison window: "
+            f"{window.label} ({window.role}). Source: U.S. Treasury "
             f"daily yield curve. Public market observation: 1M {one_month}%, "
             f"2Y {two_year}%, 10Y {ten_year}%, 30Y {thirty_year}%. "
             f"Source URL: {source_url}."
@@ -496,9 +843,235 @@ def _parse_treasury_yield_xml(text: str, *, source_url: str) -> list[SourceDocum
                 url=source_url,
                 source_family="treasury_yield_curve",
                 topic="banking_markets",
+                window_id=window.window_id,
+                window_label=window.label,
+                window_role=window.role,
             )
         )
     return documents
+
+
+def _fetch_bls_documents(
+    *,
+    session: requests.Session,
+    windows: list[MacroWindow],
+    max_observations_per_series: int,
+    timeout_s: int,
+) -> tuple[list[SourceDocument], list[SourceFetchRecord]]:
+    documents: list[SourceDocument] = []
+    records: list[SourceFetchRecord] = []
+    specs_by_id = {spec.series_id: spec for spec in BLS_SERIES}
+    for window in windows:
+        payload = {
+            "seriesid": [spec.series_id for spec in BLS_SERIES],
+            "startyear": window.start_date[:4],
+            "endyear": window.end_date[:4],
+        }
+        try:
+            response = session.post(
+                BLS_PUBLIC_API_URL,
+                json=payload,
+                timeout=timeout_s,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+            payload_json = response.json()
+        except (requests.RequestException, json.JSONDecodeError) as exc:
+            records.append(
+                SourceFetchRecord(
+                    source_family="bls_public_api",
+                    url=BLS_PUBLIC_API_URL,
+                    status="error",
+                    detail=f"window={window.window_id}; {exc}",
+                )
+            )
+            continue
+        count = 0
+        for series in payload_json.get("Results", {}).get("series", []):
+            if not isinstance(series, dict):
+                continue
+            spec = specs_by_id.get(str(series.get("seriesID") or ""))
+            if spec is None:
+                continue
+            observations = []
+            for row in series.get("data") or []:
+                if not isinstance(row, dict):
+                    continue
+                observation_date = _bls_period_date(row)
+                value = str(row.get("value") or "")
+                if (
+                    observation_date
+                    and window.start_date <= observation_date <= window.end_date
+                    and _is_float(value)
+                ):
+                    observations.append((observation_date, value))
+            observations.sort(key=lambda item: item[0])
+            sampled_observations = _evenly_sample(
+                observations,
+                max_items=max_observations_per_series,
+            )
+            for index, (observation_date, value) in enumerate(sampled_observations):
+                previous = sampled_observations[index - 1] if index else None
+                documents.append(
+                    _bls_document(
+                        spec=spec,
+                        observation_date=observation_date,
+                        value=value,
+                        previous=previous,
+                        window=window,
+                    )
+                )
+                count += 1
+        records.append(
+            SourceFetchRecord(
+                source_family="bls_public_api",
+                url=BLS_PUBLIC_API_URL,
+                status=str(payload_json.get("status") or "ok").lower(),
+                record_count=count,
+                detail=f"window={window.window_id}; series={len(BLS_SERIES)}",
+            )
+        )
+    return documents, records
+
+
+def _bls_period_date(row: dict[str, Any]) -> str:
+    year = str(row.get("year") or "")
+    period = str(row.get("period") or "")
+    if not re.match(r"^\d{4}$", year) or not re.match(r"^M\d{2}$", period):
+        return ""
+    month = period[1:]
+    if not 1 <= int(month) <= 12:
+        return ""
+    return f"{year}-{month}-01"
+
+
+def _bls_document(
+    *,
+    spec: BlsSeriesSpec,
+    observation_date: str,
+    value: str,
+    previous: tuple[str, str] | None,
+    window: MacroWindow,
+) -> SourceDocument:
+    previous_text = "No prior kept BLS observation is included in this fixture."
+    if previous is not None and _is_float(previous[1]):
+        delta = float(value) - float(previous[1])
+        previous_text = (
+            f"Previous kept observation on {previous[0]} was {previous[1]}; "
+            f"change is {delta:+.3f}."
+        )
+    title = f"BLS {spec.title}: {value} on {observation_date}"
+    body = (
+        f"Topic: {_topic_label(spec.topic)}. Date: {observation_date}. "
+        f"Comparison window: {window.label} ({window.role}). Source: BLS Public "
+        f"Data API series {spec.series_id}. {spec.title} was {value} {spec.units}. "
+        f"{previous_text} Source URL: {BLS_PUBLIC_API_URL}."
+    )
+    return SourceDocument(
+        doc_id=_doc_id("bls", spec.series_id, observation_date),
+        title=title,
+        body=body,
+        created_time=_date_to_timestamp(observation_date),
+        owner="bls@public.gov",
+        url=BLS_PUBLIC_API_URL,
+        source_family="bls_public_api",
+        topic=spec.topic,
+        window_id=window.window_id,
+        window_label=window.label,
+        window_role=window.role,
+    )
+
+
+def _fetch_federal_register_documents(
+    *,
+    session: requests.Session,
+    windows: list[MacroWindow],
+    max_records_per_window: int,
+    timeout_s: int,
+) -> tuple[list[SourceDocument], list[SourceFetchRecord]]:
+    documents: list[SourceDocument] = []
+    records: list[SourceFetchRecord] = []
+    for window in windows:
+        params = {
+            "conditions[publication_date][gte]": window.start_date,
+            "conditions[publication_date][lte]": window.end_date,
+            "conditions[term]": FEDERAL_REGISTER_MACRO_QUERY,
+            "order": "newest",
+            "per_page": str(max_records_per_window),
+        }
+        url = f"{FEDERAL_REGISTER_API_URL}?{urlencode(params)}"
+        try:
+            response = session.get(url, timeout=timeout_s)
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, json.JSONDecodeError) as exc:
+            records.append(
+                SourceFetchRecord(
+                    source_family="federal_register",
+                    url=url,
+                    status="error",
+                    detail=f"window={window.window_id}; {exc}",
+                )
+            )
+            continue
+        count = 0
+        for item in payload.get("results") or []:
+            if not isinstance(item, dict):
+                continue
+            document = _federal_register_document(item=item, window=window)
+            if document is None:
+                continue
+            documents.append(document)
+            count += 1
+        records.append(
+            SourceFetchRecord(
+                source_family="federal_register",
+                url=url,
+                status="ok",
+                record_count=count,
+                detail=f"window={window.window_id}; count={payload.get('count', 0)}",
+            )
+        )
+    return documents, records
+
+
+def _federal_register_document(
+    *,
+    item: dict[str, Any],
+    window: MacroWindow,
+) -> SourceDocument | None:
+    publication_date = str(item.get("publication_date") or "")[:10]
+    title = _clean_text(str(item.get("title") or ""), max_chars=220)
+    if not publication_date or not title:
+        return None
+    abstract = _clean_text(str(item.get("abstract") or ""), max_chars=900)
+    document_type = _clean_text(str(item.get("type") or ""), max_chars=80)
+    html_url = _clean_text(str(item.get("html_url") or ""), max_chars=500)
+    agency_names = ", ".join(
+        _clean_text(str(agency.get("name") or ""), max_chars=100)
+        for agency in item.get("agencies") or []
+        if isinstance(agency, dict) and agency.get("name")
+    )
+    topic = _topic_for_text(f"{title} {abstract} {agency_names}")
+    body = (
+        f"Topic: {_topic_label(topic)}. Date: {publication_date}. Comparison "
+        f"window: {window.label} ({window.role}). Source: Federal Register "
+        f"{document_type or 'document'} from {agency_names or 'listed agency'}. "
+        f"{abstract or title} Source URL: {html_url or FEDERAL_REGISTER_API_URL}."
+    )
+    return SourceDocument(
+        doc_id=_doc_id("federal-register", title, publication_date),
+        title=title,
+        body=body,
+        created_time=_date_to_timestamp(publication_date),
+        owner="federalregister@public.gov",
+        url=html_url or FEDERAL_REGISTER_API_URL,
+        source_family="federal_register",
+        topic=topic,
+        window_id=window.window_id,
+        window_label=window.label,
+        window_role=window.role,
+    )
 
 
 def _fetch_official_release_documents(
@@ -739,6 +1312,7 @@ def _write_context_snapshot(
     fetch_records: list[SourceFetchRecord],
     as_of: str,
     start_date: str,
+    windows: list[MacroWindow],
     output_path: Path,
 ) -> None:
     captured_at = _iso_now()
@@ -760,8 +1334,10 @@ def _write_context_snapshot(
             document for document in documents if document not in mail_documents
         ]
     notes = [
-        "FRED and Treasury rows are structured public observations.",
+        "FRED, BLS, and Treasury rows are structured public observations.",
+        "Federal Register rows add public regulatory and agency-action texture.",
         "BEA and Federal Reserve rows are official public release excerpts.",
+        "The fixture mixes current macro records with similar and contrasting historical windows for better counterfactual variety.",
     ]
     if "gdelt_headlines" in source_families:
         notes.append(
@@ -776,6 +1352,12 @@ def _write_context_snapshot(
             "modified_time": document.created_time,
             "owner": document.owner,
             "url": document.url,
+            "metadata": {
+                "source_family": document.source_family,
+                "window_id": document.window_id,
+                "window_label": document.window_label,
+                "window_role": document.window_role,
+            },
         }
         for document in docs_documents
     ]
@@ -812,14 +1394,24 @@ def _write_context_snapshot(
         ],
         metadata={
             "snapshot_role": "public_history_demo",
-            "dataset": "current_public_macro_sources",
-            "source_kind": "official_macro_data_and_public_releases",
+            "dataset": "mixed_public_macro_sources",
+            "source_kind": "mixed_official_macro_data_and_public_releases",
             "as_of_date": as_of,
             "start_date": start_date,
             "end_date": documents[-1].created_time[:10] if documents else as_of,
             "selected_event_count": len(documents),
             "selected_source_count": len({document.owner for document in documents}),
             "selected_topic_count": len({document.topic for document in documents}),
+            "comparison_windows": [
+                {
+                    "window_id": window.window_id,
+                    "label": window.label,
+                    "start_date": window.start_date,
+                    "end_date": window.end_date,
+                    "role": window.role,
+                }
+                for window in windows
+            ],
             "source_families": sorted(source_families),
             "notes": notes,
             "source_fetch_records": [
@@ -861,6 +1453,9 @@ def _mail_payload(documents: list[SourceDocument]) -> dict[str, Any]:
                     "metadata": {
                         "source_family": document.source_family,
                         "url": document.url,
+                        "window_id": document.window_id,
+                        "window_label": document.window_label,
+                        "window_role": document.window_role,
                     },
                 }
             )
@@ -880,21 +1475,34 @@ def _build_public_manifest(
     documents: list[SourceDocument],
     as_of: str,
     start_date: str,
+    windows: list[MacroWindow],
 ) -> dict[str, Any]:
     first_date = documents[0].created_time[:10] if documents else start_date
     last_date = documents[-1].created_time[:10] if documents else as_of
     record_count = len(documents)
     return {
         "source_id": SOURCE_ID,
-        "title": "Public History: Current U.S. Macro World",
+        "title": "Public History: Current + Analog U.S. Macro World",
         "summary": (
-            f"Choose a point from a current {record_count:,}-record U.S. macro "
-            f"public record, {first_date} through {last_date}, then test a "
-            "branch event or policy response from that evidence state."
+            f"Choose a point from a mixed {record_count:,}-record U.S. macro "
+            f"public record, {first_date} through {last_date}, spanning current, "
+            "similar, and contrasting macro windows; then test a branch event or "
+            "policy response from that evidence state."
         ),
         "record_count": record_count,
         "date_range": {"start": first_date, "end": last_date},
         "as_of_date": as_of,
+        "comparison_windows": [
+            {
+                "window_id": window.window_id,
+                "label": window.label,
+                "start_date": window.start_date,
+                "end_date": window.end_date,
+                "role": window.role,
+            }
+            for window in windows
+        ],
+        "max_static_dates": 420,
         "launch_command": LAUNCH_COMMAND,
         "refresh_path": {
             "workspace_fixture": (
@@ -928,9 +1536,9 @@ def _build_project_manifest(public_manifest: dict[str, Any]) -> dict[str, Any]:
     return {
         "version": "1",
         "name": "current_public_history_macro",
-        "title": "Current Macro Public History",
+        "title": "Current + Analog Macro Public History",
         "description": (
-            f"Bounded {record_count:,}-record current U.S. macro public-history "
+            f"Bounded {record_count:,}-record mixed U.S. macro public-history "
             f"workspace from {date_range['start']} through {date_range['end']}."
         ),
         "created_at": _iso_now(),

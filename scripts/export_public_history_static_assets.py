@@ -221,6 +221,7 @@ def build_static_bundle(
     if default_as_of not in dates:
         dates.append(default_as_of)
         dates.sort()
+    dates = _select_static_dates(dates=dates, manifest=manifest)
 
     events: dict[str, dict[str, Any]] = {}
     states: dict[str, dict[str, Any]] = {}
@@ -346,6 +347,40 @@ def _encoded_state_base(
         "token_numeric_base": token_numeric.reshape(-1).tolist(),
         "action_index": len(contract.sequence_steps[-(_SEQUENCE_TOKEN_LIMIT - 2) :]),
     }
+
+
+def _select_static_dates(*, dates: list[str], manifest: dict[str, Any]) -> list[str]:
+    max_dates = int(manifest.get("max_static_dates") or 0)
+    if max_dates <= 0 or len(dates) <= max_dates:
+        return dates
+    required_dates = {
+        str(manifest.get("default_as_of") or ""),
+        str((manifest.get("date_range") or {}).get("start") or ""),
+        str((manifest.get("date_range") or {}).get("end") or ""),
+    }
+    for window in manifest.get("comparison_windows") or []:
+        if isinstance(window, dict):
+            required_dates.add(str(window.get("start_date") or ""))
+            required_dates.add(str(window.get("end_date") or ""))
+    required_dates = {day for day in required_dates if day in dates}
+    remaining_budget = max(max_dates - len(required_dates), 0)
+    candidates = [day for day in dates if day not in required_dates]
+    sampled = _evenly_sample_dates(candidates, remaining_budget)
+    return sorted(required_dates | set(sampled))
+
+
+def _evenly_sample_dates(dates: list[str], max_dates: int) -> list[str]:
+    if max_dates <= 0:
+        return []
+    if len(dates) <= max_dates:
+        return list(dates)
+    if max_dates == 1:
+        return [dates[-1]]
+    indexes = {
+        min(len(dates) - 1, round(index * (len(dates) - 1) / (max_dates - 1)))
+        for index in range(max_dates)
+    }
+    return [dates[index] for index in sorted(indexes)]
 
 
 def _event_payload(event: WhatIfEvent) -> dict[str, Any]:

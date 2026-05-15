@@ -1,105 +1,520 @@
 {
   "version": "1",
-  "generated_at": "2026-05-15T00:27:02Z",
-  "as_of": "2026-05-14",
+  "generated_at": "2026-05-15T08:18:02Z",
+  "as_of": "2026-05-15",
+  "comparison_windows": [
+    {
+      "window_id": "volcker_inflation_1979_1982",
+      "label": "Volcker inflation fight",
+      "start_date": "1979-01-01",
+      "end_date": "1982-12-31",
+      "role": "similar: inflation, energy, rates, recession pressure; different: policy regime and data environment"
+    },
+    {
+      "window_id": "soft_landing_1994_1995",
+      "label": "1994-95 tightening and soft landing",
+      "start_date": "1994-01-01",
+      "end_date": "1995-12-31",
+      "role": "different: tightening cycle with a less severe macro break"
+    },
+    {
+      "window_id": "dotcom_911_2000_2002",
+      "label": "Dot-com and post-9/11 slowdown",
+      "start_date": "2000-03-01",
+      "end_date": "2002-12-31",
+      "role": "different: market crash, security shock, and mild recession"
+    },
+    {
+      "window_id": "global_financial_crisis_2007_2009",
+      "label": "Global financial crisis",
+      "start_date": "2007-07-01",
+      "end_date": "2009-06-30",
+      "role": "similar: bank stress, Treasury/Fed action, credit-market confidence"
+    },
+    {
+      "window_id": "covid_policy_shock_2020_2021",
+      "label": "COVID policy shock",
+      "start_date": "2020-02-01",
+      "end_date": "2021-06-30",
+      "role": "different: public-health shock with extraordinary fiscal and monetary response"
+    },
+    {
+      "window_id": "inflation_hiking_cycle_2021_2023",
+      "label": "Inflation and hiking cycle",
+      "start_date": "2021-07-01",
+      "end_date": "2023-12-31",
+      "role": "similar: inflation, labor tightness, energy pressure, rapid rate hikes"
+    },
+    {
+      "window_id": "current_2024_now",
+      "label": "Current higher-rate macro regime",
+      "start_date": "2024-01-01",
+      "end_date": "2026-05-15",
+      "role": "current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty"
+    }
+  ],
   "source_records": [
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "CPIAUCSL"
+      "record_count": 161,
+      "detail": "CPIAUCSL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "CPILFESL"
+      "record_count": 161,
+      "detail": "CPILFESL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "PCEPI"
+      "record_count": 161,
+      "detail": "PCEPI; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "PCEPILFE"
+      "record_count": 161,
+      "detail": "PCEPILFE; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "UNRATE"
+      "record_count": 161,
+      "detail": "UNRATE; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 28,
-      "detail": "PAYEMS"
+      "record_count": 161,
+      "detail": "PAYEMS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 28,
-      "detail": "FEDFUNDS"
+      "record_count": 161,
+      "detail": "FEDFUNDS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 48,
-      "detail": "DGS2"
+      "record_count": 168,
+      "detail": "DGS2; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 48,
-      "detail": "DGS10"
+      "record_count": 168,
+      "detail": "DGS10; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 48,
-      "detail": "T10Y2Y"
+      "record_count": 168,
+      "detail": "T10Y2Y; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 28,
-      "detail": "RSAFS"
+      "record_count": 137,
+      "detail": "RSAFS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 27,
-      "detail": "INDPRO"
+      "record_count": 161,
+      "detail": "INDPRO; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDPC1&cosd=2024-01-01&coed=2026-05-14",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDPC1&cosd=1979-01-01&coed=2026-05-15",
       "status": "ok",
-      "record_count": 9,
-      "detail": "GDPC1"
+      "record_count": 67,
+      "detail": "GDPC1; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS30&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 168,
+      "detail": "DGS30; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10YIE&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 96,
+      "detail": "T10YIE; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFII10&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 96,
+      "detail": "DFII10; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 144,
+      "detail": "VIXCLS; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 144,
+      "detail": "DCOILWTICO; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GASREGW&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 144,
+      "detail": "GASREGW; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 168,
+      "detail": "MORTGAGE30US; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "UMCSENT; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=HOUST&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "HOUST; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PERMIT&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "PERMIT; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 168,
+      "detail": "ICSA; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=JTSJOL&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 113,
+      "detail": "JTSJOL; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PPIACO&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "PPIACO; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NFCI&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 168,
+      "detail": "NFCI; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=WALCL&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 98,
+      "detail": "WALCL; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "BAA; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=AAA&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 161,
+      "detail": "AAA; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "fred",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTWEXBGS&cosd=1979-01-01&coed=2026-05-15",
+      "status": "ok",
+      "record_count": 96,
+      "detail": "DTWEXBGS; windows=7; max_per_window=24"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=197901",
+      "status": "ok",
+      "record_count": 0,
+      "detail": "window=volcker_inflation_1979_1982; month=1979-01"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=198012",
+      "status": "ok",
+      "record_count": 0,
+      "detail": "window=volcker_inflation_1979_1982; month=1980-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=198212",
+      "status": "ok",
+      "record_count": 0,
+      "detail": "window=volcker_inflation_1979_1982; month=1982-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=199401",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=soft_landing_1994_1995; month=1994-01"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=199412",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=soft_landing_1994_1995; month=1994-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=199512",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=soft_landing_1994_1995; month=1995-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200003",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=dotcom_911_2000_2002; month=2000-03"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200107",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=dotcom_911_2000_2002; month=2001-07"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200212",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=dotcom_911_2000_2002; month=2002-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200707",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=global_financial_crisis_2007_2009; month=2007-07"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200806",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=global_financial_crisis_2007_2009; month=2008-06"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=200906",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=global_financial_crisis_2007_2009; month=2009-06"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202002",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=covid_policy_shock_2020_2021; month=2020-02"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202010",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=covid_policy_shock_2020_2021; month=2020-10"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202106",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=covid_policy_shock_2020_2021; month=2021-06"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202107",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=inflation_hiking_cycle_2021_2023; month=2021-07"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202209",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=inflation_hiking_cycle_2021_2023; month=2022-09"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202312",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=inflation_hiking_cycle_2021_2023; month=2023-12"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202401",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=current_2024_now; month=2024-01"
+    },
+    {
+      "source_family": "treasury_yield_curve",
+      "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202503",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=current_2024_now; month=2025-03"
     },
     {
       "source_family": "treasury_yield_curve",
       "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202605",
       "status": "ok",
-      "record_count": 10,
-      "detail": "month=202605"
+      "record_count": 8,
+      "detail": "window=current_2024_now; month=2026-05"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 54,
+      "detail": "window=volcker_inflation_1979_1982; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 54,
+      "detail": "window=soft_landing_1994_1995; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 72,
+      "detail": "window=dotcom_911_2000_2002; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 72,
+      "detail": "window=global_financial_crisis_2007_2009; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 85,
+      "detail": "window=covid_policy_shock_2020_2021; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 90,
+      "detail": "window=inflation_hiking_cycle_2021_2023; series=5"
+    },
+    {
+      "source_family": "bls_public_api",
+      "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+      "status": "request_succeeded",
+      "record_count": 90,
+      "detail": "window=current_2024_now; series=5"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=1979-01-01&conditions%5Bpublication_date%5D%5Blte%5D=1982-12-31&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 0,
+      "detail": "window=volcker_inflation_1979_1982; count=0"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=1994-01-01&conditions%5Bpublication_date%5D%5Blte%5D=1995-12-31&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 3,
+      "detail": "window=soft_landing_1994_1995; count=3"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2000-03-01&conditions%5Bpublication_date%5D%5Blte%5D=2002-12-31&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 3,
+      "detail": "window=dotcom_911_2000_2002; count=3"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2007-07-01&conditions%5Bpublication_date%5D%5Blte%5D=2009-06-30&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 8,
+      "detail": "window=global_financial_crisis_2007_2009; count=8"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2020-02-01&conditions%5Bpublication_date%5D%5Blte%5D=2021-06-30&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 6,
+      "detail": "window=covid_policy_shock_2020_2021; count=6"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2021-07-01&conditions%5Bpublication_date%5D%5Blte%5D=2023-12-31&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 16,
+      "detail": "window=inflation_hiking_cycle_2021_2023; count=25"
+    },
+    {
+      "source_family": "federal_register",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2024-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2026-05-15&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "status": "ok",
+      "record_count": 16,
+      "detail": "window=current_2024_now; count=20"
     },
     {
       "source_family": "bea_current_releases",
@@ -113,7 +528,7 @@
       "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260429a.htm",
       "status": "ok",
       "record_count": 1,
-      "detail": "as_of=2026-05-14"
+      "detail": "as_of=2026-05-15"
     }
   ]
 }

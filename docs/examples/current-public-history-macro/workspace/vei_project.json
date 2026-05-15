@@ -1,9 +1,9 @@
 {
   "version": "1",
   "name": "current_public_history_macro",
-  "title": "Current Macro Public History",
-  "description": "Bounded 416-record current U.S. macro public-history workspace from 2024-01-01 through 2026-05-14.",
-  "created_at": "2026-05-15T00:27:02Z",
+  "title": "Current + Analog Macro Public History",
+  "description": "Bounded 5,285-record mixed U.S. macro public-history workspace from 1979-01-01 through 2026-05-14.",
+  "created_at": "2026-05-15T08:18:02Z",
   "source_kind": "example",
   "source_ref": "current-public-history-macro",
   "source_registry_path": null,
@@ -14,12 +14,12 @@
     "ui_mode": "public_history",
     "public_demo": {
       "source_id": "current_macro_public_history_world",
-      "record_count": 416,
+      "record_count": 5285,
       "date_range": {
-        "start": "2024-01-01",
+        "start": "1979-01-01",
         "end": "2026-05-14"
       },
-      "as_of_date": "2026-05-14",
+      "as_of_date": "2026-05-15",
       "launch_command": "vei ui serve --root docs/examples/current-public-history-macro/workspace --host 127.0.0.1 --port 3058",
       "refresh_path": {
         "workspace_fixture": "python scripts/build_current_macro_public_history_fixture.py --workspace docs/examples/current-public-history-macro/workspace",

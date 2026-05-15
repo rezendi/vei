@@ -1,13 +1,65 @@
 {
   "source_id": "current_macro_public_history_world",
-  "title": "Public History: Current U.S. Macro World",
-  "summary": "Choose a point from a current 416-record U.S. macro public record, 2024-01-01 through 2026-05-14, then test a branch event or policy response from that evidence state.",
-  "record_count": 416,
+  "title": "Public History: Current + Analog U.S. Macro World",
+  "summary": "Choose a point from a mixed 5,285-record U.S. macro public record, 1979-01-01 through 2026-05-14, spanning current, similar, and contrasting macro windows; then test a branch event or policy response from that evidence state.",
+  "record_count": 5285,
   "date_range": {
-    "start": "2024-01-01",
+    "start": "1979-01-01",
     "end": "2026-05-14"
   },
-  "as_of_date": "2026-05-14",
+  "as_of_date": "2026-05-15",
+  "comparison_windows": [
+    {
+      "window_id": "volcker_inflation_1979_1982",
+      "label": "Volcker inflation fight",
+      "start_date": "1979-01-01",
+      "end_date": "1982-12-31",
+      "role": "similar: inflation, energy, rates, recession pressure; different: policy regime and data environment"
+    },
+    {
+      "window_id": "soft_landing_1994_1995",
+      "label": "1994-95 tightening and soft landing",
+      "start_date": "1994-01-01",
+      "end_date": "1995-12-31",
+      "role": "different: tightening cycle with a less severe macro break"
+    },
+    {
+      "window_id": "dotcom_911_2000_2002",
+      "label": "Dot-com and post-9/11 slowdown",
+      "start_date": "2000-03-01",
+      "end_date": "2002-12-31",
+      "role": "different: market crash, security shock, and mild recession"
+    },
+    {
+      "window_id": "global_financial_crisis_2007_2009",
+      "label": "Global financial crisis",
+      "start_date": "2007-07-01",
+      "end_date": "2009-06-30",
+      "role": "similar: bank stress, Treasury/Fed action, credit-market confidence"
+    },
+    {
+      "window_id": "covid_policy_shock_2020_2021",
+      "label": "COVID policy shock",
+      "start_date": "2020-02-01",
+      "end_date": "2021-06-30",
+      "role": "different: public-health shock with extraordinary fiscal and monetary response"
+    },
+    {
+      "window_id": "inflation_hiking_cycle_2021_2023",
+      "label": "Inflation and hiking cycle",
+      "start_date": "2021-07-01",
+      "end_date": "2023-12-31",
+      "role": "similar: inflation, labor tightness, energy pressure, rapid rate hikes"
+    },
+    {
+      "window_id": "current_2024_now",
+      "label": "Current higher-rate macro regime",
+      "start_date": "2024-01-01",
+      "end_date": "2026-05-15",
+      "role": "current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty"
+    }
+  ],
+  "max_static_dates": 420,
   "launch_command": "vei ui serve --root docs/examples/current-public-history-macro/workspace --host 127.0.0.1 --port 3058",
   "refresh_path": {
     "workspace_fixture": "python scripts/build_current_macro_public_history_fixture.py --workspace docs/examples/current-public-history-macro/workspace",
@@ -19,5 +71,5 @@
   "saved_result_path": "current_macro_state_point_result.json",
   "jepa_checkpoint_path": "../../news-public-history-demo/workspace/jepa_model.pt",
   "default_topic": "all_public_record",
-  "default_as_of": "2026-05-14"
+  "default_as_of": "2026-05-15"
 }
