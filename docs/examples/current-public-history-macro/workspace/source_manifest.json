@@ -1,7 +1,7 @@
 {
   "version": "1",
-  "generated_at": "2026-05-15T08:18:02Z",
-  "as_of": "2026-05-15",
+  "generated_at": "2026-05-16T13:06:16Z",
+  "as_of": "2026-05-16",
   "comparison_windows": [
     {
       "window_id": "volcker_inflation_1979_1982",
@@ -49,224 +49,224 @@
       "window_id": "current_2024_now",
       "label": "Current higher-rate macro regime",
       "start_date": "2024-01-01",
-      "end_date": "2026-05-15",
+      "end_date": "2026-05-16",
       "role": "current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty"
     }
   ],
   "source_records": [
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "CPIAUCSL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPILFESL&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "CPILFESL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPI&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "PCEPI; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PCEPILFE&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "PCEPILFE; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "UNRATE; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PAYEMS&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "PAYEMS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "FEDFUNDS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "DGS2; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "DGS10; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "T10Y2Y; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=RSAFS&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 137,
       "detail": "RSAFS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDPRO&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "INDPRO; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDPC1&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GDPC1&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 67,
       "detail": "GDPC1; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS30&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS30&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "DGS30; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10YIE&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10YIE&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 96,
       "detail": "T10YIE; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFII10&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFII10&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 96,
       "detail": "DFII10; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 144,
       "detail": "VIXCLS; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 144,
       "detail": "DCOILWTICO; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GASREGW&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=GASREGW&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 144,
       "detail": "GASREGW; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "MORTGAGE30US; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "UMCSENT; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=HOUST&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=HOUST&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "HOUST; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PERMIT&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PERMIT&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "PERMIT; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=ICSA&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "ICSA; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=JTSJOL&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=JTSJOL&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 113,
       "detail": "JTSJOL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PPIACO&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PPIACO&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "PPIACO; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NFCI&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=NFCI&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 168,
       "detail": "NFCI; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=WALCL&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=WALCL&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 98,
       "detail": "WALCL; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "BAA; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=AAA&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=AAA&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 161,
       "detail": "AAA; windows=7; max_per_window=24"
     },
     {
       "source_family": "fred",
-      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTWEXBGS&cosd=1979-01-01&coed=2026-05-15",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTWEXBGS&cosd=1979-01-01&coed=2026-05-16",
       "status": "ok",
       "record_count": 96,
       "detail": "DTWEXBGS; windows=7; max_per_window=24"
@@ -511,7 +511,7 @@
     },
     {
       "source_family": "federal_register",
-      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2024-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2026-05-15&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
+      "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bpublication_date%5D%5Bgte%5D=2024-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2026-05-16&conditions%5Bterm%5D=inflation+energy+interest+rates+labor+housing+banking+financial+stability&order=newest&per_page=16",
       "status": "ok",
       "record_count": 16,
       "detail": "window=current_2024_now; count=20"
@@ -528,7 +528,7 @@
       "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260429a.htm",
       "status": "ok",
       "record_count": 1,
-      "detail": "as_of=2026-05-15"
+      "detail": "as_of=2026-05-16"
     }
   ]
 }

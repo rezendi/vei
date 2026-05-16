@@ -1,0 +1,248 @@
+{
+  "version": "1",
+  "generated_at": "2026-05-16T13:14:56Z",
+  "source_id": "current_macro_public_history_world",
+  "as_of_date": "2026-05-16",
+  "source_date_range": {
+    "start": "1979-01-01",
+    "end": "2026-05-15"
+  },
+  "prediction_result_comparison": {
+    "prior_run": {
+      "label": "current_macro_prior_20260515",
+      "as_of": "2026-05-15",
+      "visible_history_through": "2026-05-14",
+      "candidate_ranking": [
+        {
+          "rank": 1,
+          "balanced_rank": 1,
+          "candidate_id": "candidate_1",
+          "candidate_type": "customer_status_note",
+          "label": "Publish inflation-risk bulletin",
+          "strategic_usefulness_score": 0.65232,
+          "balanced_ceo_score": 0.5842,
+          "enterprise_risk": 0.31,
+          "stakeholder_trust": 0.293,
+          "liquidity_stress": 0.327,
+          "external_confidence_pressure": 0.804,
+          "action": "Publish a dated public bulletin that separates inflation, energy, labor-market, and Treasury-yield signals visible by 2026-05-15."
+        },
+        {
+          "rank": 2,
+          "balanced_rank": 3,
+          "candidate_id": "candidate_3",
+          "candidate_type": "narrow_pilot",
+          "label": "Open household-stress watch",
+          "strategic_usefulness_score": 0.629815,
+          "balanced_ceo_score": 0.56715,
+          "enterprise_risk": 0.317,
+          "stakeholder_trust": 0.276,
+          "liquidity_stress": 0.296,
+          "external_confidence_pressure": 0.794,
+          "action": "Open a narrow household-stress watch over unemployment, payrolls, prices, mortgage rates, and retail-sales signals before recommending a broad policy move."
+        },
+        {
+          "rank": 3,
+          "balanced_rank": 2,
+          "candidate_id": "candidate_2",
+          "candidate_type": "decision_log_evidence",
+          "label": "Prepare Fed/Treasury evidence memo",
+          "strategic_usefulness_score": 0.624415,
+          "balanced_ceo_score": 0.57155,
+          "enterprise_risk": 0.322,
+          "stakeholder_trust": 0.291,
+          "liquidity_stress": 0.289,
+          "external_confidence_pressure": 0.776,
+          "action": "Prepare a dated evidence memo for Federal Reserve and Treasury watchers that separates price, jobs, GDP, imports, exports, and yield-curve evidence."
+        },
+        {
+          "rank": 4,
+          "balanced_rank": 4,
+          "candidate_id": "candidate_4",
+          "candidate_type": "hold_compliance_review",
+          "label": "Hold for next release",
+          "strategic_usefulness_score": 0.49887,
+          "balanced_ceo_score": 0.5615,
+          "enterprise_risk": 0.322,
+          "stakeholder_trust": 0.279,
+          "liquidity_stress": 0.231,
+          "external_confidence_pressure": 0.745,
+          "action": "Hold any public recommendation until the next official release confirms whether the inflation and labor-market signals persist."
+        }
+      ]
+    },
+    "observed_results": {
+      "observed_date": "2026-05-15",
+      "future_horizon_event_count": 3,
+      "events": [
+        {
+          "created_time": "2026-05-15T00:00:00Z",
+          "source_family": "fred",
+          "title": "10-Year Breakeven Inflation Rate: 2.49 on 2026-05-15",
+          "url": "https://fred.stlouisfed.org/series/T10YIE",
+          "snippet": "Topic: Banking Markets. Date: 2026-05-15. Comparison window: Current higher-rate macro regime (current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty). Source: FRED series T10YIE. Public macro observation as of 2026-05-16: 10-Year Breakeven Inflation Rate was 2.49 percent. Previous kept observation on 2026-04-09 was 2.34; change is +0.150. Source URL: https://fred.stlouisfed.org/series/T10YIE."
+        },
+        {
+          "created_time": "2026-05-15T00:00:00Z",
+          "source_family": "fred",
+          "title": "10-Year Minus 2-Year Treasury Spread: 0.50 on 2026-05-15",
+          "url": "https://fred.stlouisfed.org/series/T10Y2Y",
+          "snippet": "Topic: Banking Markets. Date: 2026-05-15. Comparison window: Current higher-rate macro regime (current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty). Source: FRED series T10Y2Y. Public macro observation as of 2026-05-16: 10-Year Minus 2-Year Treasury Spread was 0.50 percentage points. Previous kept observation on 2026-04-09 was 0.51; change is -0.010. Source URL: https://fred.stlouisfed.org/series/T10Y2Y."
+        },
+        {
+          "created_time": "2026-05-15T00:00:00Z",
+          "source_family": "treasury_yield_curve",
+          "title": "Treasury yield curve: 10Y 4.59% on 2026-05-15",
+          "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202605",
+          "snippet": "Topic: Banking Markets. Date: 2026-05-15. Comparison window: Current higher-rate macro regime (current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty). Source: U.S. Treasury daily yield curve. Public market observation: 1M 3.71%, 2Y 4.09%, 10Y 4.59%, 30Y 5.12%. Source URL: https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month=202605."
+        }
+      ]
+    },
+    "assessment": {
+      "top_ranked_prior_candidate": "Publish inflation-risk bulletin",
+      "rank_change_after_observation": "none",
+      "interpretation": "The newly observed May 15 records are market/inflation-expectations signals: Treasury 10Y at 4.59%, 10Y-2Y spread at 0.50 percentage points, and 10Y breakeven inflation at 2.49%. That is directionally consistent with the prior top-ranked active bulletin/watch posture and does not support promoting a pure hold as the preferred public action.",
+      "caveat": "This is one additional observed day, not a statistically meaningful retraining label. The evaluation is useful as an audit point and calibration sample, not causal proof."
+    }
+  },
+  "current_prediction_run": {
+    "label": "current_macro_current_20260516",
+    "as_of": "2026-05-16",
+    "visible_history_through": "2026-05-15",
+    "candidate_ranking": [
+      {
+        "rank": 1,
+        "balanced_rank": 1,
+        "candidate_id": "candidate_1",
+        "candidate_type": "customer_status_note",
+        "label": "Publish inflation-risk bulletin",
+        "strategic_usefulness_score": 0.65232,
+        "balanced_ceo_score": 0.5842,
+        "enterprise_risk": 0.31,
+        "stakeholder_trust": 0.293,
+        "liquidity_stress": 0.327,
+        "external_confidence_pressure": 0.804,
+        "action": "Publish a dated public bulletin that separates inflation, energy, labor-market, and Treasury-yield signals visible by 2026-05-16."
+      },
+      {
+        "rank": 2,
+        "balanced_rank": 3,
+        "candidate_id": "candidate_3",
+        "candidate_type": "narrow_pilot",
+        "label": "Open household-stress watch",
+        "strategic_usefulness_score": 0.629815,
+        "balanced_ceo_score": 0.56715,
+        "enterprise_risk": 0.317,
+        "stakeholder_trust": 0.276,
+        "liquidity_stress": 0.295,
+        "external_confidence_pressure": 0.794,
+        "action": "Open a narrow household-stress watch over unemployment, payrolls, prices, mortgage rates, and retail-sales signals before recommending a broad policy move."
+      },
+      {
+        "rank": 3,
+        "balanced_rank": 2,
+        "candidate_id": "candidate_2",
+        "candidate_type": "decision_log_evidence",
+        "label": "Prepare Fed/Treasury evidence memo",
+        "strategic_usefulness_score": 0.624415,
+        "balanced_ceo_score": 0.57155,
+        "enterprise_risk": 0.322,
+        "stakeholder_trust": 0.291,
+        "liquidity_stress": 0.289,
+        "external_confidence_pressure": 0.776,
+        "action": "Prepare a dated evidence memo for Federal Reserve and Treasury watchers that separates price, jobs, GDP, imports, exports, and yield-curve evidence."
+      },
+      {
+        "rank": 4,
+        "balanced_rank": 4,
+        "candidate_id": "candidate_4",
+        "candidate_type": "hold_compliance_review",
+        "label": "Hold for next release",
+        "strategic_usefulness_score": 0.498735,
+        "balanced_ceo_score": 0.56135,
+        "enterprise_risk": 0.322,
+        "stakeholder_trust": 0.279,
+        "liquidity_stress": 0.231,
+        "external_confidence_pressure": 0.745,
+        "action": "Hold any public recommendation until the next official release confirms whether the inflation and labor-market signals persist."
+      }
+    ]
+  },
+  "observed_eval_run": {
+    "label": "current_macro_observed_20260514_to_20260515",
+    "as_of": "2026-05-14",
+    "future_event_count": 3,
+    "candidate_ranking": [
+      {
+        "rank": 1,
+        "balanced_rank": 1,
+        "candidate_id": "candidate_1",
+        "candidate_type": "customer_status_note",
+        "label": "Publish inflation-risk bulletin",
+        "strategic_usefulness_score": 0.65232,
+        "balanced_ceo_score": 0.5842,
+        "enterprise_risk": 0.31,
+        "stakeholder_trust": 0.293,
+        "liquidity_stress": 0.327,
+        "external_confidence_pressure": 0.804,
+        "action": "Publish a dated public bulletin that separates inflation, energy, labor-market, and Treasury-yield signals visible by 2026-05-14."
+      },
+      {
+        "rank": 2,
+        "balanced_rank": 3,
+        "candidate_id": "candidate_3",
+        "candidate_type": "narrow_pilot",
+        "label": "Open household-stress watch",
+        "strategic_usefulness_score": 0.629815,
+        "balanced_ceo_score": 0.56715,
+        "enterprise_risk": 0.317,
+        "stakeholder_trust": 0.276,
+        "liquidity_stress": 0.296,
+        "external_confidence_pressure": 0.794,
+        "action": "Open a narrow household-stress watch over unemployment, payrolls, prices, mortgage rates, and retail-sales signals before recommending a broad policy move."
+      },
+      {
+        "rank": 3,
+        "balanced_rank": 2,
+        "candidate_id": "candidate_2",
+        "candidate_type": "decision_log_evidence",
+        "label": "Prepare Fed/Treasury evidence memo",
+        "strategic_usefulness_score": 0.624415,
+        "balanced_ceo_score": 0.57155,
+        "enterprise_risk": 0.322,
+        "stakeholder_trust": 0.291,
+        "liquidity_stress": 0.289,
+        "external_confidence_pressure": 0.776,
+        "action": "Prepare a dated evidence memo for Federal Reserve and Treasury watchers that separates price, jobs, GDP, imports, exports, and yield-curve evidence."
+      },
+      {
+        "rank": 4,
+        "balanced_rank": 4,
+        "candidate_id": "candidate_4",
+        "candidate_type": "hold_compliance_review",
+        "label": "Hold for next release",
+        "strategic_usefulness_score": 0.49887,
+        "balanced_ceo_score": 0.5615,
+        "enterprise_risk": 0.322,
+        "stakeholder_trust": 0.279,
+        "liquidity_stress": 0.231,
+        "external_confidence_pressure": 0.745,
+        "action": "Hold any public recommendation until the next official release confirms whether the inflation and labor-market signals persist."
+      }
+    ]
+  },
+  "champion_challenger": {
+    "champion_model_id": "news-public-history-demo/jepa_model.pt@fcc219a6312",
+    "public_model_action": "kept_champion",
+    "challenger_status": "not_trained_insufficient_new_signal",
+    "reason": "Only three new same-day public observations were added. The public fixture and ranking surface refreshed, but there was not enough new outcome signal to justify a full JEPA retrain or public model promotion."
+  },
+  "data_sources": [
+    "bea_current_releases",
+    "bls_public_api",
+    "federal_register",
+    "federal_reserve_fomc",
+    "fred",
+    "treasury_yield_curve"
+  ]
+}
