@@ -103,6 +103,9 @@ def run_codex_exec(
     timeout_s: int = 240,
 ) -> CodexExecOutput:
     resolved_cwd = None if cwd is None else str(Path(cwd).expanduser().resolve())
+    codex_home = Path(
+        os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
+    ).expanduser()
     with tempfile.NamedTemporaryFile(
         prefix="codex_output_schema_",
         suffix=".json",
@@ -133,6 +136,8 @@ def run_codex_exec(
             "--ephemeral",
             "--sandbox",
             "read-only",
+            "--add-dir",
+            str(codex_home),
             "-m",
             model,
             "--output-schema",
