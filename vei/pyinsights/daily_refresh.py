@@ -16,7 +16,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from vei.context.api import (
+    CanonicalHistoryIndexRow,
     ContextSnapshot,
+    ContextSourceResult,
+    build_canonical_history_bundle_from_rows,
     capture_pipeshub_context_from_env,
     capture_teams_graph_context_from_env,
     context_iso_now,
@@ -24,6 +27,7 @@ from vei.context.api import (
     new_pipeshub_capture_run_id,
     new_teams_graph_capture_run_id,
     verify_context_snapshot,
+    write_canonical_history_bundle,
     write_canonical_history_sidecars,
     write_pipeshub_capture_outputs,
     write_teams_graph_capture_outputs,
@@ -167,6 +171,7 @@ def run_validated_daily_refresh(
     if fresh_capture:
         capture_result = _capture_fresh_context_for_as_of(
             existing_context_path=context_path,
+            previous_context_path=_previous_context_bundle_path(previous_valid),
             as_of_date=as_of_date,
             run_root=run_root,
             capture_workspace=(
@@ -371,17 +376,10 @@ def run_validated_daily_refresh(
     workflow_manifest_path = workflow_root / "workflow_mining_manifest.json"
     workflows_payload = _read_json_or_empty(workflow_result_path)
     skill_payload = _read_json_or_empty(effective_skill_path)
-    skill_reference_event_ids = set(index_event_ids)
-    if skill_path.is_file():
-        skill_context_root = skill_path.parent.parent
-        skill_event_index_path = skill_context_root / "canonical_event_index.json"
-        if skill_event_index_path.is_file():
-            skill_event_index = _read_json_or_empty(skill_event_index_path)
-            skill_reference_event_ids |= {
-                str(row.get("event_id", ""))
-                for row in skill_event_index.get("rows", []) or []
-                if isinstance(row, dict) and row.get("event_id")
-            }
+    skill_reference_event_ids = _skill_reference_event_ids_for_map(
+        skill_path,
+        base_event_ids=set(index_event_ids),
+    )
     _validate_workflows(
         checks,
         workflows_payload=workflows_payload,
@@ -540,9 +538,97 @@ def _resolve_skill_map_path(
     raise FileNotFoundError(f"skill map not found; tried:\n{joined}")
 
 
+def _previous_context_bundle_path(previous_valid: Path | None) -> Path | None:
+    if previous_valid is None:
+        return None
+    manifest = _read_json_or_empty(previous_valid / "validation_manifest.json")
+    references = manifest.get("references", {}) if isinstance(manifest, dict) else {}
+    candidates: list[Path] = []
+    if isinstance(references, dict):
+        for key in ("source_capture_context", "context_bundle"):
+            value = str(references.get(key) or "").strip()
+            if value:
+                candidates.append(Path(value).expanduser())
+    candidates.extend(
+        [
+            previous_valid / "source_capture" / "context_snapshot.json",
+            previous_valid / "context_snapshot.json",
+        ]
+    )
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def _context_snapshot_from_payload(
+    payload: dict[str, Any],
+) -> ContextSnapshot | None:
+    if not isinstance(payload, dict) or not isinstance(payload.get("sources"), list):
+        return None
+    try:
+        return ContextSnapshot.model_validate(payload)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _skill_reference_event_ids_for_map(
+    skill_path: Path,
+    *,
+    base_event_ids: set[str],
+) -> set[str]:
+    event_ids = set(base_event_ids)
+    seen_skill_paths: set[Path] = set()
+
+    def visit_skill_map(candidate: Path, *, depth: int = 0) -> None:
+        if depth > 4:
+            return
+        resolved = candidate.expanduser().resolve()
+        if not resolved.is_file() or resolved in seen_skill_paths:
+            return
+        seen_skill_paths.add(resolved)
+        skill_context_root = resolved.parent.parent
+        for index_path in (
+            skill_context_root / "canonical_event_index.json",
+            skill_context_root / "source_capture" / "canonical_event_index.json",
+        ):
+            event_ids.update(_event_ids_from_index_path(index_path))
+
+        manifest = _read_json_or_empty(skill_context_root / "validation_manifest.json")
+        references = (
+            manifest.get("references", {}) if isinstance(manifest, dict) else {}
+        )
+        if not isinstance(references, dict):
+            return
+        for key in ("canonical_event_index", "source_capture_canonical_event_index"):
+            reference = str(references.get(key) or "").strip()
+            if reference:
+                event_ids.update(_event_ids_from_index_path(Path(reference)))
+        for key in ("source_skill_map", "skill_map"):
+            reference = str(references.get(key) or "").strip()
+            if reference:
+                visit_skill_map(Path(reference), depth=depth + 1)
+
+    visit_skill_map(skill_path)
+    return event_ids
+
+
+def _event_ids_from_index_path(index_path: Path) -> set[str]:
+    if not index_path.expanduser().is_file():
+        return set()
+    payload = _read_json_or_empty(index_path.expanduser().resolve())
+    return {
+        str(row.get("event_id", ""))
+        for row in payload.get("rows", []) or []
+        if isinstance(row, dict) and row.get("event_id")
+    }
+
+
 def _capture_fresh_context_for_as_of(
     *,
     existing_context_path: Path,
+    previous_context_path: Path | None,
     as_of_date: date,
     run_root: Path,
     capture_workspace: Path | None,
@@ -582,6 +668,7 @@ def _capture_fresh_context_for_as_of(
         capture_result = _run_live_context_capture(
             workspace=workspace,
             existing_context_payload=existing_payload,
+            previous_context_path=previous_context_path,
             as_of_date=as_of_date,
             expected_providers=expected_providers,
             capture_connectors=capture_connectors,
@@ -627,6 +714,7 @@ def _run_live_context_capture(
     *,
     workspace: Path,
     existing_context_payload: dict[str, Any],
+    previous_context_path: Path | None,
     as_of_date: date,
     expected_providers: set[str],
     capture_connectors: list[str] | None,
@@ -729,6 +817,21 @@ def _run_live_context_capture(
             notes=notes,
         )
 
+    fresh_providers = _snapshot_provider_names(snapshots)
+    previous_context_payload = (
+        _read_json_or_empty(previous_context_path)
+        if previous_context_path is not None and previous_context_path.is_file()
+        else {}
+    )
+    previous_snapshot = _context_snapshot_from_payload(previous_context_payload)
+    if previous_snapshot is not None:
+        snapshots.insert(0, previous_snapshot)
+        references["source_capture_previous_context_seed"] = str(previous_context_path)
+        notes.append(
+            "Previous validated context bundle was merged into fresh capture to "
+            "preserve immutable history event ids."
+        )
+
     combined_path = workspace / "context_snapshot.json"
     combined_snapshot = _combine_context_snapshots(
         snapshots,
@@ -742,6 +845,17 @@ def _run_live_context_capture(
     )
 
     paths = write_canonical_history_sidecars(combined_snapshot, combined_path)
+    previous_event_index_path = (
+        _canonical_event_index_for_context(previous_context_path)
+        if previous_context_path is not None
+        else None
+    )
+    if previous_event_index_path is not None:
+        paths = _merge_previous_canonical_history_sidecars(
+            current_snapshot=combined_snapshot,
+            current_paths=paths,
+            previous_event_index_path=previous_event_index_path,
+        )
     verify_result = verify_context_snapshot(
         combined_snapshot,
         snapshot_path=combined_path,
@@ -753,19 +867,23 @@ def _run_live_context_capture(
     )
 
     final_providers = _snapshot_provider_names([combined_snapshot])
-    missing_providers = sorted(expected_providers - final_providers)
+    missing_providers = sorted(expected_providers - fresh_providers)
     checks = [
         DailyRefreshCheck(
             code="source.fresh_capture_for_as_of",
             passed=True,
-            detail=f"context={combined_path} providers={sorted(final_providers)}",
+            detail=(
+                f"context={combined_path} "
+                f"fresh_providers={sorted(fresh_providers)} "
+                f"bundle_providers={sorted(final_providers)}"
+            ),
         ),
         DailyRefreshCheck(
             code="source.fresh_capture_expected_providers_present",
             passed=not missing_providers,
             detail=(
                 f"expected={sorted(expected_providers)} "
-                f"captured={sorted(final_providers)} missing={missing_providers}"
+                f"captured={sorted(fresh_providers)} missing={missing_providers}"
             ),
         ),
     ]
@@ -888,17 +1006,238 @@ def _combine_context_snapshots(
     sources = []
     for snapshot in snapshots:
         sources.extend(list(snapshot.sources))
+    merged_sources = _dedupe_context_source_records(
+        merge_context_source_results(sources)
+    )
     return ContextSnapshot(
         organization_name=organization_name,
         organization_domain=organization_domain,
         captured_at=context_iso_now(),
-        sources=merge_context_source_results(sources),
+        sources=merged_sources,
         metadata={
             "snapshot_role": "company_history_bundle",
             "fresh_capture_for_as_of": as_of_date.isoformat(),
             "capture_source": "pyinsights_daily_refresh",
         },
     )
+
+
+def _canonical_event_index_for_context(context_path: Path | None) -> Path | None:
+    if context_path is None:
+        return None
+    candidate = (
+        context_path.expanduser().resolve().parent / "canonical_event_index.json"
+    )
+    return candidate if candidate.is_file() else None
+
+
+def _merge_previous_canonical_history_sidecars(
+    *,
+    current_snapshot: ContextSnapshot,
+    current_paths: Any,
+    previous_event_index_path: Path,
+) -> Any:
+    current_index = _read_json_or_empty(current_paths.index_path)
+    previous_index = _read_json_or_empty(previous_event_index_path)
+    rows_by_event_id: dict[str, dict[str, Any]] = {}
+    for payload in (previous_index, current_index):
+        for row in payload.get("rows", []) or []:
+            if not isinstance(row, dict):
+                continue
+            event_id = str(row.get("event_id") or "").strip()
+            if event_id:
+                rows_by_event_id[event_id] = row
+    if not rows_by_event_id:
+        return current_paths
+
+    source_providers = {
+        str(provider).strip().lower()
+        for payload in (previous_index, current_index)
+        for provider in payload.get("source_providers", []) or []
+        if str(provider).strip()
+    }
+    row_models = [
+        CanonicalHistoryIndexRow.model_validate(row)
+        for row in rows_by_event_id.values()
+    ]
+    bundle = build_canonical_history_bundle_from_rows(
+        organization_name=current_snapshot.organization_name,
+        organization_domain=current_snapshot.organization_domain,
+        captured_at=current_snapshot.captured_at,
+        snapshot_role=str(
+            current_snapshot.metadata.get("snapshot_role", "company_history_bundle")
+        ),
+        source_providers=sorted(source_providers),
+        rows=row_models,
+    )
+    return write_canonical_history_bundle(bundle, current_paths.snapshot_path)
+
+
+_TOP_LEVEL_RECORD_KEYS = {
+    "threads": ("thread_id", "id"),
+    "documents": ("doc_id", "page_id", "id", "web_url"),
+    "pages": ("page_id", "id", "url"),
+    "blocks": ("block_id", "id"),
+    "channels": ("channel_id", "channel", "id"),
+    "users": ("user_id", "id", "email"),
+    "drive_shares": ("share_id", "id", "doc_id", "web_url"),
+    "issues": ("ticket_id", "key", "number", "id"),
+    "companies": ("company_id", "id", "domain", "name"),
+    "contacts": ("contact_id", "id", "email"),
+    "deals": ("deal_id", "id", "name"),
+}
+
+_NESTED_RECORD_KEYS = {
+    "messages": ("message_id", "id", "internet_message_id", "web_url"),
+    "comments": ("comment_id", "id"),
+    "permissions": ("permission_id", "id"),
+    "notes": ("note_id", "id"),
+}
+
+
+def _dedupe_context_source_records(
+    sources: list[ContextSourceResult],
+) -> list[ContextSourceResult]:
+    deduped_sources: list[ContextSourceResult] = []
+    for source in sources:
+        source_payload = source.model_dump(mode="python")
+        data = source_payload.get("data")
+        if not isinstance(data, dict):
+            deduped_sources.append(source)
+            continue
+        deduped_data = _dedupe_source_data(data)
+        source_payload["data"] = deduped_data
+        source_payload["record_counts"] = _record_counts_for_source(
+            provider=str(source.provider),
+            data=deduped_data,
+            fallback=source.record_counts,
+        )
+        deduped_sources.append(ContextSourceResult.model_validate(source_payload))
+    return deduped_sources
+
+
+def _dedupe_source_data(data: dict[str, Any]) -> dict[str, Any]:
+    deduped = dict(data)
+    for field_name, key_fields in _TOP_LEVEL_RECORD_KEYS.items():
+        value = deduped.get(field_name)
+        if isinstance(value, list):
+            deduped[field_name] = _dedupe_record_list(value, key_fields=key_fields)
+    return deduped
+
+
+def _dedupe_record_list(
+    records: list[Any],
+    *,
+    key_fields: tuple[str, ...],
+) -> list[Any]:
+    deduped: list[Any] = []
+    positions_by_key: dict[str, int] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            deduped.append(record)
+            continue
+        record_key = _record_key(record, key_fields)
+        if not record_key:
+            deduped.append(record)
+            continue
+        existing_position = positions_by_key.get(record_key)
+        if existing_position is None:
+            positions_by_key[record_key] = len(deduped)
+            deduped.append(record)
+            continue
+        existing = deduped[existing_position]
+        if isinstance(existing, dict):
+            deduped[existing_position] = _merge_record(existing, record)
+    return deduped
+
+
+def _merge_record(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(existing)
+    for key, value in incoming.items():
+        current = merged.get(key)
+        nested_key_fields = _NESTED_RECORD_KEYS.get(key)
+        if (
+            nested_key_fields is not None
+            and isinstance(current, list)
+            and isinstance(value, list)
+        ):
+            merged[key] = _dedupe_record_list(
+                [*current, *value],
+                key_fields=nested_key_fields,
+            )
+            continue
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = {**current, **value}
+            continue
+        if value not in ("", None, [], {}):
+            merged[key] = value
+        elif key not in merged:
+            merged[key] = value
+    return merged
+
+
+def _record_key(record: dict[str, Any], key_fields: tuple[str, ...]) -> str:
+    for key_field in key_fields:
+        value = str(record.get(key_field) or "").strip()
+        if value:
+            return f"{key_field}:{value}"
+    return ""
+
+
+def _record_counts_for_source(
+    *,
+    provider: str,
+    data: dict[str, Any],
+    fallback: dict[str, int],
+) -> dict[str, int]:
+    counts = dict(fallback)
+    if provider in {"mail_archive", "gmail", "outlook"}:
+        threads = data.get("threads")
+        if isinstance(threads, list):
+            counts["threads"] = len(threads)
+            counts["messages"] = sum(
+                len(thread.get("messages", []) or [])
+                for thread in threads
+                if isinstance(thread, dict)
+            )
+        documents = data.get("documents")
+        if isinstance(documents, list):
+            counts["documents"] = len(documents)
+    elif provider in {"teams", "slack"}:
+        channels = data.get("channels")
+        if isinstance(channels, list):
+            channel_records = [
+                channel for channel in channels if isinstance(channel, dict)
+            ]
+            if any("source_kind" in channel for channel in channel_records):
+                counts["channels"] = sum(
+                    1
+                    for channel in channel_records
+                    if str(channel.get("source_kind") or "channel") != "chat"
+                )
+                counts["chats"] = sum(
+                    1
+                    for channel in channel_records
+                    if str(channel.get("source_kind") or "") == "chat"
+                )
+            else:
+                counts["channels"] = len(channel_records)
+            counts["messages"] = sum(
+                len(channel.get("messages", []) or []) for channel in channel_records
+            )
+    elif provider in {
+        "google",
+        "confluence",
+        "notion",
+        "onedrive",
+        "sharepoint",
+        "box",
+        "dropbox",
+    }:
+        documents = data.get("documents")
+        if isinstance(documents, list):
+            counts["documents"] = len(documents)
+    return counts
 
 
 def _expected_capture_providers(

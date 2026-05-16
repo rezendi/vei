@@ -225,6 +225,7 @@ def test_fresh_capture_runs_pipeshub_per_connector(
             "organization_name": "Py Insights",
             "organization_domain": "py-insights.com",
         },
+        previous_context_path=None,
         as_of_date=daily_refresh_module.date(2026, 5, 15),
         expected_providers={"onedrive", "outlook"},
         capture_connectors=None,
@@ -243,6 +244,133 @@ def test_fresh_capture_runs_pipeshub_per_connector(
         if check.code == "source.fresh_capture_expected_providers_present"
     )
     assert provider_check.passed is True
+
+
+def test_fresh_capture_merges_previous_valid_context_without_duplicate_events(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    def snapshot_for_docs(doc_ids: list[str], *, captured_at: str):
+        return daily_refresh_module.ContextSnapshot(
+            organization_name="Py Insights",
+            organization_domain="py-insights.com",
+            captured_at=captured_at,
+            sources=[
+                ContextSourceResult(
+                    provider="onedrive",
+                    captured_at=captured_at,
+                    record_counts={"documents": len(doc_ids)},
+                    data={
+                        "documents": [
+                            {
+                                "doc_id": doc_id,
+                                "title": f"Doc {doc_id}",
+                                "body": f"{doc_id} body",
+                                "owner": "ops",
+                                "modified_time": captured_at,
+                            }
+                            for doc_id in doc_ids
+                        ]
+                    },
+                )
+            ],
+        )
+
+    previous_context_path = tmp_path / "previous" / "context_snapshot.json"
+    previous_context_path.parent.mkdir()
+    previous_snapshot = snapshot_for_docs(
+        ["doc-1", "doc-2"],
+        captured_at="2026-05-14T12:00:00+00:00",
+    )
+    previous_context_path.write_text(
+        previous_snapshot.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    daily_refresh_module.write_canonical_history_sidecars(
+        previous_snapshot,
+        previous_context_path,
+    )
+
+    def fake_capture(**kwargs):
+        return SimpleNamespace(
+            snapshot=snapshot_for_docs(
+                ["doc-2", "doc-3"],
+                captured_at="2026-05-15T12:00:00+00:00",
+            )
+        )
+
+    monkeypatch.setattr(daily_refresh_module, "_load_dotenv_if_available", lambda: None)
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "_pipeshub_capture_configured",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "_teams_graph_capture_configured",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "capture_pipeshub_context_from_env",
+        fake_capture,
+    )
+    monkeypatch.setattr(
+        daily_refresh_module,
+        "write_pipeshub_capture_outputs",
+        lambda *args, **kwargs: None,
+    )
+
+    workspace = tmp_path / "capture"
+    workspace.mkdir()
+    result = daily_refresh_module._run_live_context_capture(
+        workspace=workspace,
+        existing_context_payload={
+            "organization_name": "Py Insights",
+            "organization_domain": "py-insights.com",
+        },
+        previous_context_path=previous_context_path,
+        as_of_date=daily_refresh_module.date(2026, 5, 15),
+        expected_providers={"onedrive"},
+        capture_connectors=["onedrive"],
+        limit=5000,
+        timeout_s=30,
+        include_content=False,
+    )
+
+    assert result.context_path is not None
+    previous_index = json.loads(
+        (previous_context_path.parent / "canonical_event_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    current_index = json.loads(
+        (result.context_path.parent / "canonical_event_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    previous_event_ids = {
+        row["event_id"] for row in previous_index["rows"] if row.get("event_id")
+    }
+    current_event_ids = [
+        row["event_id"] for row in current_index["rows"] if row.get("event_id")
+    ]
+    assert previous_event_ids.issubset(set(current_event_ids))
+    assert len(current_event_ids) == len(set(current_event_ids))
+
+    combined_payload = json.loads(result.context_path.read_text(encoding="utf-8"))
+    documents = combined_payload["sources"][0]["data"]["documents"]
+    assert [document["doc_id"] for document in documents] == [
+        "doc-1",
+        "doc-2",
+        "doc-3",
+    ]
+    verify_payload = json.loads(
+        (result.context_path.parent / "context_verify_20260515.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert verify_payload["ok"] is True
 
 
 def test_latest_valid_ignores_current_run_for_skill_map_resolution(
@@ -302,6 +430,57 @@ def test_latest_valid_ignores_current_run_for_skill_map_resolution(
     assert manifest.references["source_skill_map"] == str(
         fixture["skill_map"].resolve()
     )
+
+
+def test_skill_map_validation_follows_prior_source_skill_map_citation_index(
+    tmp_path: Path,
+) -> None:
+    fixture = _write_daily_fixture(tmp_path, guard_passed=True)
+    source_context_root = tmp_path / "source_skill_context"
+    source_skill_map = source_context_root / "skill_map" / "company_skill_map.json"
+    source_skill_map.parent.mkdir(parents=True)
+    source_skill_map.write_text(
+        json.dumps({"schema_version": "company_skill_map_v1", "skills": []}) + "\n",
+        encoding="utf-8",
+    )
+    source_context_root.joinpath("canonical_event_index.json").write_text(
+        json.dumps({"rows": [{"event_id": "legacy-evt"}]}) + "\n",
+        encoding="utf-8",
+    )
+
+    prior_run = tmp_path / "prior_daily"
+    prior_skill_map = prior_run / "skill_map" / "company_skill_map.json"
+    prior_skill_map.parent.mkdir(parents=True)
+    skill_payload = json.loads(fixture["skill_map"].read_text(encoding="utf-8"))
+    skill_payload["skills"][0]["evidence_refs"] = [
+        {"ref_type": "event", "ref_id": "legacy-evt"}
+    ]
+    prior_skill_map.write_text(json.dumps(skill_payload) + "\n", encoding="utf-8")
+    prior_run.joinpath("validation_manifest.json").write_text(
+        json.dumps({"references": {"source_skill_map": str(source_skill_map)}}) + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = run_validated_daily_refresh(
+        as_of="2026-05-13",
+        previous="none",
+        context_bundle=fixture["context"],
+        output_root=tmp_path / "daily",
+        model_run_root=fixture["model"],
+        strategic_run_root=fixture["strategic"],
+        workflow_output=fixture["workflow"],
+        skill_map_path=prior_skill_map,
+        refresh_workflows=False,
+        fresh_capture=False,
+    )
+
+    assert manifest.status == "validated"
+    cited_check = next(
+        check
+        for check in manifest.checks
+        if check.code == "skillmap.cited_events_exist"
+    )
+    assert cited_check.passed is True
 
 
 def test_pyinsights_daily_refresh_cli_returns_nonzero_on_unvalidated_run(
