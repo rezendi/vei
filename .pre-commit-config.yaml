@@ -23,6 +23,6 @@ repos:
         pass_filenames: false
       - id: detect-secrets
         name: detect-secrets
-        entry: .venv/bin/detect-secrets-hook --baseline .secrets.baseline
+        entry: .venv/bin/detect-secrets-hook --baseline .secrets.baseline --no-verify
         language: system
-        exclude: ^\.secrets\.baseline$
+        exclude: ^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)|\.(gif|jpe?g|png|pdf|parquet|pt|svg|zip|gz|tar|mp4|mov|ico)$

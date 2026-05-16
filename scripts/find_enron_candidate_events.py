@@ -84,8 +84,7 @@ def _load_content_map(rosetta_dir: Path) -> dict[str, str]:
         columns=["event_id", "content"],
     )
     return {
-        str(row["event_id"]): str(row.get("content") or "")
-        for row in table.to_pylist()
+        str(row["event_id"]): str(row.get("content") or "") for row in table.to_pylist()
     }
 
 

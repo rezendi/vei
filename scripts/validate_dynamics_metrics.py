@@ -71,9 +71,7 @@ def validate_dynamics_metrics(
             f"factual_next_event_auroc={factual_auroc:.3f}<{factual_threshold:.3f}"
         )
     if rank_pct < rank_threshold:
-        failures.append(
-            f"counterfactual_rank_pct={rank_pct:.3f}<{rank_threshold:.3f}"
-        )
+        failures.append(f"counterfactual_rank_pct={rank_pct:.3f}<{rank_threshold:.3f}")
     if calibration_ece > ece_threshold:
         failures.append(f"calibration_ece={calibration_ece:.3f}>{ece_threshold:.3f}")
 

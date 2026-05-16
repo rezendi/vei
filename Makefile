@@ -12,6 +12,7 @@ SETUP_EXTRAS := dev,sse,ui
 SETUP_FULL_EXTRAS := dev,llm,sse,ui,test,rl,browser,worldmodel,jepa
 COVERAGE_FAIL_UNDER ?= $(or $(shell awk 'BEGIN { section = 0 } $$1 == "coverage:" { section = 1; next } section && $$1 == "global:" { print int($$2 * 100); exit }' $(AGENTS_FILE) 2>/dev/null),80)
 PIPAPI_PYTHON := $(abspath $(VENV_BIN)/python)
+DETECT_SECRETS_EXCLUDE_RE := ^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)|\.(gif|jpe?g|png|pdf|parquet|pt|svg|zip|gz|tar|mp4|mov|ico)$$
 
 ifeq ($(strip $(UV)),)
 CREATE_VENV := $(PYTHON) -m venv $(VENV)
@@ -63,11 +64,10 @@ check-full: check
 		$(VENV_BIN)/semgrep --config p/python --config p/security-audit --config .semgrep.yml --error vei scripts || true; \
 	fi
 	@mkdir -p .artifacts
-	@DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -Ev '^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)' || true)"; \
-	$(VENV_BIN)/detect-secrets scan $$DETECT_SECRETS_FILES > .artifacts/detect-secrets.json
+	@DETECT_SECRETS_FILES="$$(DETECT_SECRETS_EXCLUDE_RE='$(DETECT_SECRETS_EXCLUDE_RE)' $(VENV_BIN)/python scripts/list_detect_secrets_files.py)"; \
+	$(VENV_BIN)/detect-secrets scan --no-verify --exclude-files '$(DETECT_SECRETS_EXCLUDE_RE)' $$DETECT_SECRETS_FILES > .artifacts/detect-secrets.json
 	@if [ -f .secrets.baseline ]; then \
-		DETECT_SECRETS_FILES="$$(git ls-files --cached --others --exclude-standard | grep -Ev '^(\.secrets\.baseline|\.artifacts/|\.playwright-cli/|_vei_out/|\.pytest_cache/|\.mypy_cache/|htmlcov/)' || true)"; \
-		$(VENV_BIN)/detect-secrets-hook --baseline .secrets.baseline $$DETECT_SECRETS_FILES; \
+		$(VENV_BIN)/python scripts/check_detect_secrets_baseline.py .secrets.baseline .artifacts/detect-secrets.json; \
 	else \
 		echo "No .secrets.baseline found; detect-secrets check is advisory-only."; \
 	fi

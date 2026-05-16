@@ -3678,23 +3678,29 @@ def _skillmap_llm_attempts(
     primary_provider: str, primary_model: str
 ) -> list[tuple[str, str]]:
     attempts: list[tuple[str, str]] = [(primary_provider, primary_model)]
-    for candidate in _configured_skillmap_fallbacks(primary_provider):
+    configured_fallbacks = _configured_skillmap_fallbacks(primary_provider)
+    if configured_fallbacks is None:
+        fallback_candidates: list[tuple[str, str]] = []
+        if primary_provider.strip().lower() == "codex":
+            fallback_candidates = [
+                ("codex", "gpt-5.4"),
+                ("codex", "gpt-5.4-mini"),
+                ("codex", "gpt-5.2"),
+            ]
+    else:
+        fallback_candidates = configured_fallbacks
+    for candidate in fallback_candidates:
         if candidate not in attempts:
             attempts.append(candidate)
-    if primary_provider.strip().lower() == "codex":
-        for fallback_model in ("gpt-5.4", "gpt-5.4-mini", "gpt-5.2"):
-            candidate = ("codex", fallback_model)
-            if candidate not in attempts:
-                attempts.append(candidate)
     return attempts
 
 
 def _configured_skillmap_fallbacks(
     primary_provider: str,
-) -> list[tuple[str, str]]:
+) -> list[tuple[str, str]] | None:
     raw = os.environ.get("VEI_SKILLMAP_LLM_FALLBACKS", "").strip()
     if not raw:
-        return []
+        return None
     if raw.lower() in {"0", "false", "none", "off", "disabled"}:
         return []
     fallbacks: list[tuple[str, str]] = []

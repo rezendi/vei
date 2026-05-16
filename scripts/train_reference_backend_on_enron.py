@@ -150,7 +150,9 @@ def _write_metrics_card(
     _write_metrics_card_json(output_root=output_root, observed=observed)
 
 
-def _prune_output_root(output_root: Path, eval_result: dict[str, Any]) -> dict[str, Any]:
+def _prune_output_root(
+    output_root: Path, eval_result: dict[str, Any]
+) -> dict[str, Any]:
     artifacts = dict(eval_result.get("artifacts") or {})
     prediction_path = str(artifacts.get("prediction_jsonl_path") or "").strip()
     if prediction_path:
@@ -267,7 +269,12 @@ def main() -> None:
         eval_result=eval_result,
         rosetta_dir=rosetta_dir,
     )
-    print(json.dumps({"output_root": str(output_root), "build_root": str(build.artifacts.root)}, indent=2))
+    print(
+        json.dumps(
+            {"output_root": str(output_root), "build_root": str(build.artifacts.root)},
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

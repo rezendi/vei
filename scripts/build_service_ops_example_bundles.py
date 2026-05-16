@@ -399,8 +399,7 @@ def rewrite_public_story_files(
             story_overview,
             prefix="- Presentation guide:",
             replacement=(
-                "- Presentation guide: "
-                f"`{SERVICE_OPS_PRESENTATION_GUIDE_FILE}`"
+                "- Presentation guide: " f"`{SERVICE_OPS_PRESENTATION_GUIDE_FILE}`"
             ),
         )
         story_overview = _replace_markdown_line(

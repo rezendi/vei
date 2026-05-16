@@ -228,7 +228,9 @@ FRED_SERIES: tuple[FredSeriesSpec, ...] = (
         "percent",
         "banking_markets",
     ),
-    FredSeriesSpec("DFII10", "10-Year Real Treasury Rate", "percent", "banking_markets"),
+    FredSeriesSpec(
+        "DFII10", "10-Year Real Treasury Rate", "percent", "banking_markets"
+    ),
     FredSeriesSpec(
         "VIXCLS",
         "CBOE Volatility Index",
@@ -296,8 +298,12 @@ FRED_SERIES: tuple[FredSeriesSpec, ...] = (
         "millions of dollars",
         "government_policy",
     ),
-    FredSeriesSpec("BAA", "Moody's Baa Corporate Bond Yield", "percent", "banking_markets"),
-    FredSeriesSpec("AAA", "Moody's Aaa Corporate Bond Yield", "percent", "banking_markets"),
+    FredSeriesSpec(
+        "BAA", "Moody's Baa Corporate Bond Yield", "percent", "banking_markets"
+    ),
+    FredSeriesSpec(
+        "AAA", "Moody's Aaa Corporate Bond Yield", "percent", "banking_markets"
+    ),
     FredSeriesSpec(
         "DTWEXBGS",
         "Nominal Broad U.S. Dollar Index",
@@ -608,9 +614,14 @@ def _fetch_fred_documents(
             windows=windows,
             max_observations_per_window=max_observations_per_series,
         )
-        for index, (observation_date, value, window) in enumerate(selected_observations):
+        for index, (observation_date, value, window) in enumerate(
+            selected_observations
+        ):
             previous = (
-                (selected_observations[index - 1][0], selected_observations[index - 1][1])
+                (
+                    selected_observations[index - 1][0],
+                    selected_observations[index - 1][1],
+                )
                 if index
                 else None
             )
@@ -756,7 +767,9 @@ def _fetch_treasury_yield_documents(
                 month_documents = [
                     document
                     for document in month_documents
-                    if window.start_date <= document.created_time[:10] <= window.end_date
+                    if window.start_date
+                    <= document.created_time[:10]
+                    <= window.end_date
                     and document.created_time[:10] <= as_of
                 ]
                 month_documents = _evenly_sample(

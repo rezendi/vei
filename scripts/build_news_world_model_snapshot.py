@@ -364,9 +364,7 @@ def _looks_like_usable_english(
     ascii_alpha = sum(1 for char in alpha_chars if "a" <= char <= "z")
     ascii_alpha_ratio = ascii_alpha / max(1, len(alpha_chars))
     padded = f" {sample} "
-    common_word_hits = sum(
-        padded.count(f" {word} ") for word in _ENGLISH_COMMON_WORDS
-    )
+    common_word_hits = sum(padded.count(f" {word} ") for word in _ENGLISH_COMMON_WORDS)
     return (
         ascii_alpha_ratio >= min_ascii_alpha_ratio
         and common_word_hits >= min_common_word_hits
@@ -542,8 +540,7 @@ def _americanstories_articles_from_page(
         if not body_parts:
             continue
         headline_parts = [
-            text
-            for _order, text in sorted(parts["headline"], key=lambda item: item[0])
+            text for _order, text in sorted(parts["headline"], key=lambda item: item[0])
         ]
         body = _clean_text(" ".join(body_parts), limit=body_excerpt_chars)
         fallback_title = _title_from_text(body, fallback=newspaper_title)
@@ -687,9 +684,7 @@ def _write_snapshot(
         else "PleIAs Historical News Sample"
     )
     source_kind = (
-        "historical_news_articles"
-        if is_americanstories
-        else "historical_news_pages"
+        "historical_news_articles" if is_americanstories else "historical_news_pages"
     )
     license_name = "cc-by-4.0" if is_americanstories else "cc0-1.0"
     snapshot = ContextSnapshot(
@@ -717,7 +712,8 @@ def _write_snapshot(
                 record_counts={
                     "pages": len(notion_payload["pages"]),
                     "comments": sum(
-                        len(page.get("comments") or []) for page in notion_payload["pages"]
+                        len(page.get("comments") or [])
+                        for page in notion_payload["pages"]
                     ),
                 },
                 data=notion_payload,

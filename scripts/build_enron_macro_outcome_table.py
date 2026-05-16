@@ -22,7 +22,9 @@ def _load_rosetta_events(rosetta_dir: Path):
     try:
         import pyarrow.parquet as pq
     except ImportError as exc:  # pragma: no cover - guarded by extras
-        raise RuntimeError("pyarrow is required for macro outcome table builds") from exc
+        raise RuntimeError(
+            "pyarrow is required for macro outcome table builds"
+        ) from exc
 
     metadata_path = rosetta_dir / "enron_rosetta_events_metadata.parquet"
     rows = pq.read_table(
@@ -37,7 +39,9 @@ def _load_rosetta_events(rosetta_dir: Path):
             "artifacts",
         ],
     ).to_pylist()
-    events = [event for event in (build_event(row, "") for row in rows) if event is not None]
+    events = [
+        event for event in (build_event(row, "") for row in rows) if event is not None
+    ]
     events.sort(key=lambda item: (item.timestamp_ms, item.event_id))
     return assign_case_ids(events)
 
@@ -139,7 +143,11 @@ def build_macro_outcome_rows(
             continue
         timeline = grouped_events.get(branch_event.thread_id, [])
         branch_index = next(
-            (index for index, event in enumerate(timeline) if event.event_id == event_id),
+            (
+                index
+                for index, event in enumerate(timeline)
+                if event.event_id == event_id
+            ),
             None,
         )
         if branch_index is None:

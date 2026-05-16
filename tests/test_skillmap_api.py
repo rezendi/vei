@@ -299,6 +299,31 @@ def test_skill_map_retries_codex_quota_with_fallback_model(
     assert not any(gap.severity == "error" for gap in gaps)
 
 
+def test_skill_map_fallback_env_overrides_default_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "VEI_SKILLMAP_LLM_FALLBACKS",
+        "codex:gpt-5.5; openai:gpt-5-mini",
+    )
+
+    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.3-codex-spark") == [
+        ("codex", "gpt-5.3-codex-spark"),
+        ("codex", "gpt-5.5"),
+        ("openai", "gpt-5-mini"),
+    ]
+
+
+def test_skill_map_fallback_env_can_disable_default_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VEI_SKILLMAP_LLM_FALLBACKS", "none")
+
+    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.3-codex-spark") == [
+        ("codex", "gpt-5.3-codex-spark")
+    ]
+
+
 def _usage(model: str) -> SimpleNamespace:
     return SimpleNamespace(
         provider="codex",

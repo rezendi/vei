@@ -136,8 +136,12 @@ def render_timeline_image(path: Path = TIMELINE_IMAGE_PATH) -> Path:
     for index, event in enumerate(TIMELINE_EVENTS):
         offset_days = (_parse_date(event.when) - start_date).days
         x = start_x + int((offset_days / total_days) * (end_x - start_x))
-        draw.ellipse((x - 11, timeline_y - 11, x + 11, timeline_y + 11), fill=event.color)
-        draw.text((x - 35, timeline_y + 22), event.when, fill="#333333", font=small_font)
+        draw.ellipse(
+            (x - 11, timeline_y - 11, x + 11, timeline_y + 11), fill=event.color
+        )
+        draw.text(
+            (x - 35, timeline_y + 22), event.when, fill="#333333", font=small_font
+        )
 
         box_width = 360
         detail_text = _wrap_text(
@@ -161,7 +165,9 @@ def render_timeline_image(path: Path = TIMELINE_IMAGE_PATH) -> Path:
         )
         connector_y = box_bottom if index % 2 == 0 else box_top
         draw.line((x, timeline_y, x, connector_y), fill=event.color, width=3)
-        draw.text((box_left + 16, box_top + 14), event.label, fill="#171717", font=body_font)
+        draw.text(
+            (box_left + 16, box_top + 14), event.label, fill="#171717", font=body_font
+        )
         draw.multiline_text(
             (box_left + 16, box_top + 48),
             detail_text,

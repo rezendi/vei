@@ -105,7 +105,11 @@ def main() -> None:
 
 def resolve_rosetta_dir() -> Path:
     configured = os.environ.get("VEI_WHATIF_ROSETTA_DIR", "").strip()
-    candidate = Path(configured).expanduser() if configured else resolve_whatif_rosetta_dir(ROOT)
+    candidate = (
+        Path(configured).expanduser()
+        if configured
+        else resolve_whatif_rosetta_dir(ROOT)
+    )
     if candidate is None:
         raise SystemExit(
             "could not find an Enron Rosetta dataset. "

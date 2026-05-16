@@ -55,8 +55,7 @@ def _rank(values: list[float]) -> list[float]:
     while cursor < len(indexed):
         next_cursor = cursor + 1
         while (
-            next_cursor < len(indexed)
-            and indexed[next_cursor][1] == indexed[cursor][1]
+            next_cursor < len(indexed) and indexed[next_cursor][1] == indexed[cursor][1]
         ):
             next_cursor += 1
         average_rank = (cursor + next_cursor - 1) / 2 + 1
@@ -72,14 +71,13 @@ def _pearson(left: list[float], right: list[float]) -> float | None:
     mean_left = sum(left) / len(left)
     mean_right = sum(right) / len(right)
     numerator = sum(
-        (lval - mean_left) * (rval - mean_right)
-        for lval, rval in zip(left, right)
+        (lval - mean_left) * (rval - mean_right) for lval, rval in zip(left, right)
     )
     left_var = sum((value - mean_left) ** 2 for value in left)
     right_var = sum((value - mean_right) ** 2 for value in right)
     if left_var == 0 or right_var == 0:
         return None
-    return numerator / ((left_var ** 0.5) * (right_var ** 0.5))
+    return numerator / ((left_var**0.5) * (right_var**0.5))
 
 
 def _spearman(left: list[float], right: list[float]) -> float | None:
