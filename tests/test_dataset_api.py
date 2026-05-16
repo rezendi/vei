@@ -217,19 +217,19 @@ def test_dataset_small_helpers_cover_split_reward_and_workspace_views(
 
     monkeypatch.setattr(
         dataset_api,
-        "sha1",
+        "sha256",
         lambda payload, usedforsecurity=False: SimpleNamespace(hexdigest=lambda: "00"),
     )
     assert dataset_api._assign_split("variant-1") == "train"
     monkeypatch.setattr(
         dataset_api,
-        "sha1",
+        "sha256",
         lambda payload, usedforsecurity=False: SimpleNamespace(hexdigest=lambda: "b4"),
     )
     assert dataset_api._assign_split("variant-1") == "validation"
     monkeypatch.setattr(
         dataset_api,
-        "sha1",
+        "sha256",
         lambda payload, usedforsecurity=False: SimpleNamespace(hexdigest=lambda: "ff"),
     )
     assert dataset_api._assign_split("variant-1") == "test"

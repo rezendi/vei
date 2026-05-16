@@ -15,6 +15,7 @@ from vei.dynamics.api import (
     register_backend,
     reset_registry,
 )
+from vei.dynamics.backends.external_subprocess import ExternalSubprocessBackend
 from vei.dynamics.backends.heuristic import HeuristicBaseline
 from vei.dynamics.backends.null import NullBackend
 from vei.dynamics.backends.reference import ReferenceBackend
@@ -300,3 +301,14 @@ class TestExternalSubprocessRegistry:
         finally:
             reset_registry()
             ensure_builtin_backends_registered()
+
+    def test_rejects_unresolved_executable_before_subprocess_call(self) -> None:
+        backend = ExternalSubprocessBackend(
+            executable="__VEI_MISSING_EXTERNAL_BACKEND__",
+            name="external_subprocess",
+        )
+
+        response = backend.forecast(DynamicsRequest(seed=42042))
+
+        assert response.backend_id == "external_subprocess"
+        assert "executable not found" in response.state_delta_summary["error"]

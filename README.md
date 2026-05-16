@@ -64,7 +64,7 @@ vei quickstart run    # launches Studio + Twin Gateway
 - a seeded workspace with visible activity already in motion
 - connection details in `.vei/quickstart.json`
 
-**Requirements:** Python 3.11, ports 3011 and 3012 free. Local interactive LLM generation defaults to the Codex CLI (`gpt-5.3-codex-spark`). `OPENAI_API_KEY` in `.env` is only needed for explicit direct-provider runs or CI-style `llm-live`.
+**Requirements:** Python 3.11, ports 3011 and 3012 free. Local interactive LLM generation defaults to the Codex CLI (`gpt-5.4`). `OPENAI_API_KEY` in `.env` is only needed for explicit direct-provider runs or CI-style `llm-live`.
 
 For the optional JEPA backend by itself:
 

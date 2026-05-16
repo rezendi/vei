@@ -36,6 +36,7 @@ class WhatIfArtifactFlags(BaseModel):
     cc_recipients: list[str] = Field(default_factory=list)
     subject: str = ""
     norm_subject: str = ""
+    body_sha256: str = ""
     body_sha1: str = ""
     custodian_id: str = ""
     message_id: str = ""

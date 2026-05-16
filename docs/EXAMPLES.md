@@ -378,11 +378,11 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.3-codex-spark
+  --proposal-model gpt-5.4
 ```
 
 Strategic proposal models route through Codex by default. The current default is
-`gpt-5.3-codex-spark`; override `--proposal-model` when a newer
+`gpt-5.4`; override `--proposal-model` when a newer
 Codex-supported model is available. Set `VEI_STRATEGIC_PROPOSAL_BACKEND=api`
 only when an explicit direct-provider API run is intended.
 

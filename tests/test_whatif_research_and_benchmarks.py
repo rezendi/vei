@@ -2838,7 +2838,7 @@ def test_vei_whatif_cli_benchmark_commands(tmp_path: Path, monkeypatch) -> None:
     )
     judge_result = WhatIfBenchmarkJudgeResult(
         build_root=build.artifacts.root,
-        judge_model="gpt-5.3-codex-spark",
+        judge_model="gpt-5.4",
         judgments=[],
         audit_queue=[],
         artifacts=WhatIfBenchmarkJudgeArtifacts(
@@ -2938,7 +2938,7 @@ def test_vei_whatif_cli_benchmark_commands(tmp_path: Path, monkeypatch) -> None:
         ],
     )
     assert judge_cli_result.exit_code == 0, judge_cli_result.output
-    assert json.loads(judge_cli_result.output)["judge_model"] == ("gpt-5.3-codex-spark")
+    assert json.loads(judge_cli_result.output)["judge_model"] == "gpt-5.4"
 
     eval_cli_result = runner.invoke(
         cli_app,

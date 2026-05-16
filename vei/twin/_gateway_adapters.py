@@ -52,12 +52,12 @@ def slack_channel(channel: str) -> dict[str, Any]:
 
 
 def slack_channel_id(channel: str) -> str:
-    digest = hashlib.sha1(channel.encode("utf-8"), usedforsecurity=False)
+    digest = hashlib.sha256(channel.encode("utf-8"), usedforsecurity=False)
     return "C" + digest.hexdigest()[:8].upper()
 
 
 def slack_user_id(user: str) -> str:
-    digest = hashlib.sha1(user.encode("utf-8"), usedforsecurity=False)
+    digest = hashlib.sha256(user.encode("utf-8"), usedforsecurity=False)
     return "U" + digest.hexdigest()[:8].upper()
 
 

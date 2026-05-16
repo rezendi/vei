@@ -302,7 +302,7 @@ def _exit_skillmap_failure(action: str, exc: Exception) -> None:
     typer.echo(f"Skill map {action} failed: {message}", err=True)
     typer.echo(
         "Try the Codex-backed default "
-        "`--provider codex --model gpt-5.3-codex-spark`, increase "
+        "`--provider codex --model gpt-5.4`, increase "
         "`--timeout-s`, or pass a direct API provider/model explicitly.",
         err=True,
     )

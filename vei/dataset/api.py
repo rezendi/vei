@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from hashlib import sha1
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -273,7 +273,7 @@ def _run_external_sample(workspace_root: Path) -> str | None:
 
 
 def _assign_split(variant_id: str) -> DatasetSplitName:
-    digest = sha1(variant_id.encode("utf-8"), usedforsecurity=False).hexdigest()
+    digest = sha256(variant_id.encode("utf-8"), usedforsecurity=False).hexdigest()
     bucket = int(digest[:2], 16)
     if bucket < 179:
         return "train"

@@ -83,7 +83,7 @@ VEI supports two compare paths:
   - supports mail, Slack or Teams-style chat, and Jira-style ticket comments
   - derives shared case ids across those surfaces and attaches linked docs or CRM records when the bundle includes them
   - limited to the known thread participants and allowed targets
-  - defaults to the Codex-session model `gpt-5.3-codex-spark` for local interactive runs
+  - defaults to the Codex-session model `gpt-5.4` for local interactive runs
   - useful for “what would someone have said or done next?”
 - **Learned backend forecast (optional, pluggable)**
   - real checkpoint-backed forecast for risk and volume deltas when the repo-local reference checkpoint or the optional JEPA runtime is available
@@ -133,7 +133,7 @@ vei whatif experiment \
   --artifacts-root _vei_out/whatif_experiments \
   --label master_agreement_internal_review \
   --event-id evt_1234 \
-  --provider codex --model gpt-5.3-codex-spark \
+  --provider codex --model gpt-5.4 \
   --forecast-backend reference \
   --counterfactual-prompt "Keep the draft inside Enron, loop in Gerald Nemec for legal review, and hold the outside send until the clean version is approved."
 ```
@@ -428,7 +428,7 @@ vei whatif benchmark train \
 # Judge the held-out counterfactual cases from dossiers only
 vei whatif benchmark judge \
   --root _vei_out/whatif_benchmarks/branch_point_ranking_v2/enron_business_outcome_public_context_20260412 \
-  --model gpt-5.3-codex-spark
+  --model gpt-5.4
 
 # Evaluate the trained model against factual futures and judged rankings
 vei whatif benchmark eval \
@@ -513,7 +513,7 @@ packet, so transfer checks do not require manual split surgery.
 
 The default `template` candidate mode is deterministic and CI-safe. Live LLM
 generation is available as an explicit opt-in with `--candidate-mode llm` and
-defaults to the Codex-session model `gpt-5.3-codex-spark`. Set
+defaults to the Codex-session model `gpt-5.4`. Set
 `VEI_STRATEGIC_PROPOSAL_BACKEND=api` only for an explicit direct-provider API
 run.
 
@@ -600,7 +600,7 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.3-codex-spark
+  --proposal-model gpt-5.4
 ```
 
 The doctrine packet is saved as `doctrine_packet.json` with mission, business
@@ -665,7 +665,7 @@ The latest local strategic state-point run selected `12` LLM-proposed decisions
 and scored `96` candidate actions under
 `_vei_out/world_model_strategic_state_points/current/`.
 The saved proposal manifest records the exact proposal model used for that run.
-New strategic proposal reruns default to `gpt-5.3-codex-spark` through Codex and use the
+New strategic proposal reruns default to `gpt-5.4` through Codex and use the
 pooled action-conditioned JEPA checkpoint for scoring. Treat the current
 four-group export as a frontier shortlist with predicted deltas and observables,
 not as causal proof of what would definitely have happened.

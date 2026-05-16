@@ -8,6 +8,8 @@ from urllib import parse as urlparse
 from urllib import request as urlrequest
 from typing import Any, Callable, Dict, Mapping, Optional
 
+from vei.security.api import safe_urlopen
+
 from .api import AdapterTriplet, ConnectorAdapter
 from .models import (
     ConnectorError,
@@ -519,7 +521,7 @@ def _perform_live_http_json(
         },
         method="POST",
     )
-    with urlrequest.urlopen(req, timeout=15) as response:  # nosec B310
+    with safe_urlopen(req, timeout=15) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not payload.get("ok", False):
         raise RuntimeError(str(payload.get("error", "unknown_slack_error")))

@@ -10,13 +10,14 @@ from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from pydantic import BaseModel, Field
 
 from vei.context.api import ContextSnapshot, ContextSourceResult
 from vei.context.api import write_canonical_history_sidecars
 from vei.context.providers.base import iso_now, join_url
+from vei.security.api import safe_urlopen as urlopen
 
 DEFAULT_PIPESHUB_BASE_URL = "http://127.0.0.1:3000"
 DEFAULT_PIPESHUB_TOKEN_ENV = "PIPESHUB_BEARER_AUTH"
@@ -391,7 +392,7 @@ class PipesHubClient:
         )
         request = Request(url, headers=self.headers(), method="GET")
         try:
-            with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+            with urlopen(request, timeout=self.timeout_s) as response:
                 return response.read().decode("utf-8", errors="replace")
         except HTTPError as exc:
             raise RuntimeError(_http_error_message(exc)) from exc
@@ -402,7 +403,7 @@ class PipesHubClient:
         )
         for attempt in range(4):
             try:
-                with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+                with urlopen(request, timeout=self.timeout_s) as response:
                     return json.loads(response.read().decode("utf-8"))
             except HTTPError as exc:
                 if exc.code == 429 and attempt < 3:

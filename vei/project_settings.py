@@ -16,7 +16,7 @@ _DEFAULT_SETTINGS: dict[str, Any] = {
         "provider": "openai",
         "model": "gpt-5-mini",
         "interactive_provider": "codex",
-        "interactive_model": "gpt-5.3-codex-spark",
+        "interactive_model": "gpt-5.4",
         "interactive_timeout_s": 240,
         "temperature": 0,
         "top_p": 1,
@@ -30,7 +30,7 @@ _DEFAULT_SETTINGS: dict[str, Any] = {
 
 _PROVIDER_MODEL_FALLBACKS = {
     "openai": "gpt-5-mini",
-    "codex": "gpt-5.3-codex-spark",
+    "codex": "gpt-5.4",
     "anthropic": "claude-sonnet-4-5",
     "google": "gemini-2.5-pro",
     "openrouter": "grok-4",

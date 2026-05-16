@@ -6,9 +6,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from pydantic import BaseModel, Field
+
+from vei.security.api import safe_urlopen as urlopen
 
 from .models import ImportPackage, ImportSourceManifest
 
@@ -249,7 +251,7 @@ def _okta_get_json(url: str, *, token: str, timeout_s: int) -> tuple[Any, str | 
         },
         method="GET",
     )
-    with urlopen(request, timeout=timeout_s) as response:  # nosec B310
+    with urlopen(request, timeout=timeout_s) as response:
         payload = json.loads(response.read().decode("utf-8"))
         link_header = response.headers.get("Link")
     return payload, _parse_next_link(link_header)

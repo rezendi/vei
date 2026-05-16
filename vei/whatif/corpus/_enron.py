@@ -529,6 +529,7 @@ def artifact_flags(raw: Any) -> WhatIfArtifactFlags:
         cc_recipients=string_list(payload.get("cc_recipients")),
         subject=str(payload.get("subject", "") or ""),
         norm_subject=str(payload.get("norm_subject", "") or ""),
+        body_sha256=str(payload.get("body_sha256", "") or ""),
         body_sha1=str(payload.get("body_sha1", "") or ""),
         custodian_id=str(payload.get("custodian_id", "") or ""),
         message_id=str(payload.get("message_id", "") or ""),

@@ -5,9 +5,10 @@ import os
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from vei.context.models import ContextProviderConfig, ContextSourceResult
+from vei.security.api import safe_urlopen as urlopen
 
 
 class ContextProvider(Protocol):
@@ -39,7 +40,7 @@ def api_get_json(
     timeout_s: int = 30,
 ) -> Any:
     request = Request(url, headers=headers, method="GET")
-    with urlopen(request, timeout=timeout_s) as response:  # nosec B310
+    with urlopen(request, timeout=timeout_s) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -50,7 +51,7 @@ def api_get_json_with_headers(
     timeout_s: int = 30,
 ) -> tuple[Any, dict[str, str]]:
     request = Request(url, headers=headers, method="GET")
-    with urlopen(request, timeout=timeout_s) as response:  # nosec B310
+    with urlopen(request, timeout=timeout_s) as response:
         payload = json.loads(response.read().decode("utf-8"))
         resp_headers = {k.lower(): v for k, v in response.headers.items()}
     return payload, resp_headers

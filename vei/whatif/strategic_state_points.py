@@ -46,7 +46,7 @@ from .target_layer import (
 
 StrategicProposalMode = Literal["llm", "template"]
 SaturationGuardStatus = Literal["passed", "warning", "failed"]
-DEFAULT_STRATEGIC_PROPOSAL_MODEL = "gpt-5.3-codex-spark"
+DEFAULT_STRATEGIC_PROPOSAL_MODEL = "gpt-5.4"
 OPERATOR_SCORE_FORMULA_VERSION = "balanced_operator_v1"
 OPERATOR_SCORE_FORMULA = (
     "mean(1-enterprise_risk, commercial_position, 1-org_strain, "

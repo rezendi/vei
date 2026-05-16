@@ -14,6 +14,7 @@ import urllib.request
 from typing import Any, Iterable
 
 from vei.events.api import CanonicalEvent, build_llm_usage_observed, stable_event_id
+from vei.security.api import safe_urlopen
 
 from .api import RawAgentActivity
 
@@ -49,7 +50,7 @@ class OpenAIOrgAdapter:
             headers={"Authorization": f"Bearer {token}"},
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:  # nosec B310
+        with safe_urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
         for idx, bucket in enumerate(payload.get("data", [])):
             yield self._raw_from_record(bucket, idx)

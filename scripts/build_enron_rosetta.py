@@ -188,7 +188,7 @@ def dedupe_targets(
 
 
 def hash_short(value: str) -> str:
-    return hashlib.sha1(  # noqa: S324
+    return hashlib.sha256(
         value.encode("utf-8"),
         usedforsecurity=False,
     ).hexdigest()[:16]
@@ -573,7 +573,7 @@ def build_rosetta_events(
             "consult_legal_specialist": bool(row["consult_legal_specialist"]),
             "consult_trading_specialist": bool(row["consult_trading_specialist"]),
             "has_attachment_reference": bool(row["has_attachment_reference"]),
-            "body_sha1": hashlib.sha1(  # noqa: S324
+            "body_sha256": hashlib.sha256(
                 str(row["body_snippet"]).encode("utf-8"),
                 usedforsecurity=False,
             ).hexdigest(),

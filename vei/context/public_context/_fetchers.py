@@ -14,9 +14,11 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from defusedxml import ElementTree as SafeElementTree  # type: ignore[import-untyped]
+
+from vei.security.api import safe_urlopen as urlopen
 
 from .models import (
     WhatIfPublicFinancialSnapshot,
@@ -471,13 +473,13 @@ def _google_news_events(
 
 def _fetch_json(url: str) -> Any:
     request = Request(url, headers=_public_fetch_headers(), method="GET")
-    with urlopen(request, timeout=_DEFAULT_FETCH_TIMEOUT_S) as response:  # nosec B310
+    with urlopen(request, timeout=_DEFAULT_FETCH_TIMEOUT_S) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def _fetch_text(url: str) -> str:
     request = Request(url, headers=_public_fetch_headers(), method="GET")
-    with urlopen(request, timeout=_DEFAULT_FETCH_TIMEOUT_S) as response:  # nosec B310
+    with urlopen(request, timeout=_DEFAULT_FETCH_TIMEOUT_S) as response:
         return response.read().decode("utf-8")
 
 

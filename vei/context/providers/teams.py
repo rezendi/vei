@@ -12,13 +12,14 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from pydantic import BaseModel, Field
 
 from vei.context.api import ContextSnapshot, ContextSourceResult
 from vei.context.api import write_canonical_history_sidecars
 from vei.context.models import ContextProviderConfig
+from vei.security.api import safe_urlopen as urlopen
 
 from .base import api_get_json, iso_now, resolve_token
 
@@ -1182,7 +1183,7 @@ def _request_json(request: Request, *, timeout_s: int) -> Any:
     last_exc: Exception | None = None
     for attempt in range(3):
         try:
-            with urlopen(request, timeout=timeout_s) as response:  # nosec B310
+            with urlopen(request, timeout=timeout_s) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             last_exc = exc

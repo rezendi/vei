@@ -145,8 +145,8 @@ def test_skill_map_retries_codex_quota_with_fallback_model(
     async def fake_plan_once_with_usage(**kwargs: object) -> SimpleNamespace:
         model = str(kwargs["model"])
         models.append(model)
-        if model == "gpt-5.3-codex-spark":
-            raise RuntimeError("You've hit your usage limit for GPT-5.3-Codex-Spark.")
+        if model == "gpt-5.4":
+            raise RuntimeError("You've hit your usage limit for GPT-5.4.")
         payload = json.loads(str(kwargs["user"]))
         if "evidence_catalog" in payload:
             return SimpleNamespace(
@@ -291,11 +291,11 @@ def test_skill_map_retries_codex_quota_with_fallback_model(
         catalog_shard_size=80,
     )
 
-    assert [models[0], models[1]] == ["gpt-5.3-codex-spark", "gpt-5.4"]
+    assert [models[0], models[1]] == ["gpt-5.4", "gpt-5.4-mini"]
     assert skills
     assert metadata["llm_fallback_used"] is True
-    assert metadata["llm_model"] == "gpt-5.4"
-    assert metadata["llm_failed_attempts"][0]["model"] == "gpt-5.3-codex-spark"
+    assert metadata["llm_model"] == "gpt-5.4-mini"
+    assert metadata["llm_failed_attempts"][0]["model"] == "gpt-5.4"
     assert not any(gap.severity == "error" for gap in gaps)
 
 
@@ -307,8 +307,8 @@ def test_skill_map_fallback_env_overrides_default_models(
         "codex:gpt-5.5; openai:gpt-5-mini",
     )
 
-    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.3-codex-spark") == [
-        ("codex", "gpt-5.3-codex-spark"),
+    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.4") == [
+        ("codex", "gpt-5.4"),
         ("codex", "gpt-5.5"),
         ("openai", "gpt-5-mini"),
     ]
@@ -319,8 +319,8 @@ def test_skill_map_fallback_env_can_disable_default_models(
 ) -> None:
     monkeypatch.setenv("VEI_SKILLMAP_LLM_FALLBACKS", "none")
 
-    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.3-codex-spark") == [
-        ("codex", "gpt-5.3-codex-spark")
+    assert skill_pipeline._skillmap_llm_attempts("codex", "gpt-5.4") == [
+        ("codex", "gpt-5.4")
     ]
 
 

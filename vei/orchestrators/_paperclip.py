@@ -5,7 +5,9 @@ import os
 from datetime import UTC, datetime
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request
+
+from vei.security.api import safe_urlopen as urlopen
 
 from .models import (
     OrchestratorActivityItem,
@@ -383,7 +385,7 @@ class PaperclipOrchestratorClient:
             headers["Content-Type"] = "application/json"
         request = Request(f"{base}{path}", data=body, headers=headers, method=method)
         try:
-            with urlopen(request, timeout=self.timeout_s) as response:  # nosec B310
+            with urlopen(request, timeout=self.timeout_s) as response:
                 raw = response.read().decode("utf-8")
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")

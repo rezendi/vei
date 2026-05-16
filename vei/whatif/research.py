@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
-from hashlib import sha1
+from hashlib import sha256
 from math import sqrt
 from pathlib import Path
 from typing import Collection, Sequence
@@ -1378,7 +1378,7 @@ def _split_timeline(
 
 
 def _assign_split(thread_id: str) -> str:
-    digest = sha1(thread_id.encode("utf-8"), usedforsecurity=False).hexdigest()
+    digest = sha256(thread_id.encode("utf-8"), usedforsecurity=False).hexdigest()
     bucket = int(digest[:2], 16)
     if bucket < 179:
         return "train"

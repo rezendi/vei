@@ -86,7 +86,7 @@ def test_skillmap_cli_reports_llm_failures_without_traceback(
 
     assert result.exit_code == 1
     assert "Skill map build failed: codex call timed out" in result.output
-    assert "--provider codex --model gpt-5.3-codex-spark" in result.output
+    assert "--provider codex --model gpt-5.4" in result.output
     assert "Traceback" not in result.output
     assert (tmp_path / ".artifacts" / "skillmap_build_error.txt").exists()
 

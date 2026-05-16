@@ -122,7 +122,7 @@ def build_multitenant_world_model_benchmark(
     label: str,
     heldout_cases_per_tenant: int = 4,
     candidate_generation_mode: CandidateGenerationMode = "template",
-    candidate_model: str = "gpt-5.3-codex-spark",
+    candidate_model: str = "gpt-5.4",
     future_horizon_events: int = 12,
     max_branch_rows_per_thread: int = 512,
 ) -> WhatIfBenchmarkBuildResult:

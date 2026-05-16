@@ -12,13 +12,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from vei.context.api import (
     ContextProviderConfig,
     ContextSnapshot,
     ContextSourceResult,
 )
+from vei.security.api import safe_urlopen as urlopen
 from vei.whatif.filenames import CONTEXT_SNAPSHOT_FILE
 from vei.governor import default_governor_workspace_config, governor_metadata_payload
 from vei.orchestrators.api import (
@@ -1911,7 +1912,7 @@ def _wait_for_ready(url: str, *, timeout_s: float = 20.0) -> None:
     last_error: str | None = None
     while time.time() < deadline:
         try:
-            with urlopen(url, timeout=2.0) as response:  # nosec B310
+            with urlopen(url, timeout=2.0) as response:
                 if 200 <= response.status < 500:
                     return
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -1941,7 +1942,7 @@ def _request_json(
         merged_headers["Content-Type"] = "application/json"
     request = Request(url, data=body, headers=merged_headers, method=method)
     try:
-        with urlopen(request, timeout=timeout_s) as response:  # nosec B310
+        with urlopen(request, timeout=timeout_s) as response:
             raw = response.read().decode("utf-8")
     except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
         return None

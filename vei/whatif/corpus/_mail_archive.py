@@ -380,6 +380,7 @@ def build_archive_event(
         cc_recipients=cc_recipients,
         subject=subject,
         norm_subject=subject.lower().strip(),
+        body_sha256=str(message.get("body_sha256", "") or ""),
         body_sha1=str(message.get("body_sha1", "") or ""),
         custodian_id=str(message.get("custodian_id", "") or ""),
         message_id=str(

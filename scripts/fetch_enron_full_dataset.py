@@ -8,10 +8,10 @@ import os
 import shutil
 import tarfile
 import tempfile
-import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
+from vei.security.api import safe_urlopen
 from vei.whatif._enron_dataset import (
     enron_dataset_marker_path,
     load_enron_full_dataset_release,
@@ -89,10 +89,12 @@ def _validated_download_url(url: str) -> str:
 def _download_asset(*, url: str, target_path: Path) -> None:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     safe_url = _validated_download_url(url)
-    with (
-        urllib.request.urlopen(safe_url) as response,
-        target_path.open("wb") as handle,
-    ):  # nosec B310
+    parsed = urlparse(safe_url)
+    if parsed.scheme.strip().lower() == "file":
+        source_path = Path(unquote(parsed.path)).expanduser().resolve()
+        shutil.copyfile(source_path, target_path)
+        return
+    with safe_urlopen(safe_url) as response, target_path.open("wb") as handle:
         shutil.copyfileobj(response, handle)
 
 

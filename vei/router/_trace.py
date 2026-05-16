@@ -10,6 +10,8 @@ import threading
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+from vei.security.api import safe_urlopen
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,7 +75,7 @@ class TraceLogger:
                     headers={"Content-Type": "application/json"},
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=1.0) as _:  # nosec B310
+                with safe_urlopen(req, timeout=1.0) as _:
                     pass
             except Exception:
                 logger.warning(
