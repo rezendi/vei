@@ -98,7 +98,7 @@ def test_current_macro_public_demo_manifest_matches_snapshot() -> None:
     assert manifest["source_id"] == "current_macro_public_history_world"
     assert manifest["record_count"] == expected_count
     assert manifest["date_range"] == expected_date_range
-    assert manifest["default_as_of"] == metadata["as_of_date"] == "2026-05-16"
+    assert manifest["default_as_of"] == metadata["as_of_date"] == "2026-05-17"
     assert manifest["max_static_dates"] == 420
     assert len(manifest["comparison_windows"]) >= 7
     assert manifest["jepa_checkpoint_path"].endswith("jepa_model.pt")
@@ -227,7 +227,7 @@ def test_current_macro_public_demo_status_uses_current_cutoff() -> None:
     status = response.json()
     assert status["available"] is True
     assert status["source"]["source_id"] == "current_macro_public_history_world"
-    assert status["source"]["default_as_of"] == "2026-05-16"
+    assert status["source"]["default_as_of"] == "2026-05-17"
     assert status["source"]["event_count"] >= 5000
     assert status["source"]["first_timestamp"].startswith("1979-")
     assert status["source"]["last_timestamp"].startswith("2026-05-15")
