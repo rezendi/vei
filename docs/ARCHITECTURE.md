@@ -478,7 +478,7 @@ proxy heads are supported enough to train or rank on.
 - The reference backend (`vei.dynamics.backends.reference`) and benchmark bridge are real PyTorch forecasting paths trained on canonical event sequences with AUROC, ECE, business-head MAE, and held-out case evaluation.
 - Training reads `CanonicalEvent` streams, doctrine packet text, pre-branch state features, and candidate action text/schema. Raw provider payloads are not the training contract.
 - `vei whatif benchmark build-multitenant` builds the pooled learned world-model experiment from multiple company-history or public-news snapshots, with per-tenant temporal holdouts and leave-one-tenant-out roots.
-- `vei whatif benchmark strategic-state-points` is the counterfactual product surface. It asks an LLM or human for as-of strategic decisions and candidate actions from pre-as-of evidence only, then scores those actions through the learned future-vector path. Proposal generation defaults to Codex with `gpt-5.4`; direct-provider API calls are explicit opt-in with `VEI_STRATEGIC_PROPOSAL_BACKEND=api`.
+- `vei whatif benchmark strategic-state-points` is the counterfactual product surface. It asks an LLM or human for as-of strategic decisions and candidate actions from pre-as-of evidence only, then scores those actions through the learned future-vector path. Proposal generation defaults to Codex with `gpt-5.5`; direct-provider API calls are explicit opt-in with `VEI_STRATEGIC_PROPOSAL_BACKEND=api`.
 - The learned model predicts future heads and, for JEPA checkpoints, exposes a
   predicted latent future identifier for each branch. The default
   `balanced_operator_score`, frontier/display ranks, or objective views are

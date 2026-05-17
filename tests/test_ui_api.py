@@ -2119,7 +2119,7 @@ def test_ui_api_whatif_status_defaults_to_codex_when_cli_is_available(
     assert payload["capabilities"]["llm"] is True
     assert payload["debug"]["available_providers"] == ["codex"]
     assert payload["defaults"]["provider"] == "codex"
-    assert payload["defaults"]["model"] == "gpt-5.4"
+    assert payload["defaults"]["model"] == "gpt-5.5"
 
 
 def test_ui_api_whatif_run_route_falls_back_to_available_provider(

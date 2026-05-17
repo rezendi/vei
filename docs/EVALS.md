@@ -73,7 +73,7 @@ The judge does **not** see rollout futures, model predictions, or any post-branc
 
 The judge performs **pairwise comparisons** over the candidate set (for 4 candidates, 6 pairs). For each pair it returns a preferred candidate, confidence, evidence references, and rationale. VEI aggregates the pairwise wins into a total ordering.
 
-The default judge model is `gpt-5.4`, which routes through the
+The default judge model is `gpt-5.5`, which routes through the
 local Codex CLI. Direct provider models remain available when explicitly
 requested.
 

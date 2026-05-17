@@ -120,7 +120,7 @@ CEO report unless canonical, source freshness, workflow/skill, model, and
 strategic saturation checks pass.
 
 Same seed means same world. Determinism is part of the product. User-facing LLM
-generation defaults to the local Codex CLI using `gpt-5.4`; direct
+generation defaults to the local Codex CLI using `gpt-5.5`; direct
 provider APIs are explicit overrides.
 
 ## Canonical Inputs
@@ -210,7 +210,7 @@ vei whatif benchmark strategic-state-points \
   --decisions-per-tenant 3 \
   --candidates-per-decision 8 \
   --proposal-mode llm \
-  --proposal-model gpt-5.4
+  --proposal-model gpt-5.5
 ```
 
 See [WHATIF.md](WHATIF.md) § Strategic state-point counterfactual runs for the full reference.

@@ -3683,9 +3683,7 @@ def _skillmap_llm_attempts(
         fallback_candidates: list[tuple[str, str]] = []
         if primary_provider.strip().lower() == "codex":
             fallback_candidates = [
-                ("codex", "gpt-5.4"),
-                ("codex", "gpt-5.4-mini"),
-                ("codex", "gpt-5.2"),
+                ("codex", "gpt-5.5"),
             ]
     else:
         fallback_candidates = configured_fallbacks

@@ -394,7 +394,7 @@ def train_branch_point_benchmark_model(
 def judge_branch_point_benchmark(
     root: str | Path,
     *,
-    model: str = "gpt-5.4",
+    model: str = "gpt-5.5",
     judge_id: str = "benchmark_llm_judge",
 ) -> WhatIfBenchmarkJudgeResult:
     build = load_branch_point_benchmark_build_result(root)

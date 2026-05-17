@@ -8,7 +8,7 @@ llm:
   provider: openai
   model: "gpt-5-mini"
   interactive_provider: codex
-  interactive_model: "gpt-5.4"
+  interactive_model: "gpt-5.5"
   interactive_timeout_s: 240
   temperature: 0
   top_p: 1

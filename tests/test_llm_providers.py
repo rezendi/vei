@@ -140,8 +140,8 @@ def test_codex_schema_normalizer_requires_all_object_properties() -> None:
     assert normalized["required"] == ["summary", "optional_note"]
 
 
-def test_interactive_llm_defaults_use_codex_gpt_54() -> None:
-    assert resolve_interactive_llm_defaults() == ("codex", "gpt-5.4")
+def test_interactive_llm_defaults_use_codex_gpt_55() -> None:
+    assert resolve_interactive_llm_defaults() == ("codex", "gpt-5.5")
 
 
 def test_codex_exec_skips_ignore_rules_when_cli_does_not_support_it(
@@ -161,7 +161,7 @@ def test_codex_exec_skips_ignore_rules_when_cli_does_not_support_it(
     monkeypatch.setattr(codex_cli.subprocess, "run", fake_run)
 
     result = codex_cli.run_codex_exec(
-        model="gpt-5.4",
+        model="gpt-5.5",
         prompt="Return a tool call.",
         output_schema={
             "type": "object",

@@ -27,7 +27,7 @@ DEFAULT_BUILD_ROOT = Path(
 )
 DEFAULT_CHECKPOINT_ROOT = Path("data/enron/reference_backend")
 DEFAULT_OUTPUT_ROOT = Path("_vei_out/enron_flagship_proof_pass")
-DEFAULT_JUDGE_MODEL = "gpt-5.4"
+DEFAULT_JUDGE_MODEL = "gpt-5.5"
 DEFAULT_JUDGE_ID = "flagship_llm_judge"
 DEFAULT_MODEL_ID = "full_context_transformer"
 DEFAULT_PACK_ID = "enron_proof_flagship_v2"

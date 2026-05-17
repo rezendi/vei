@@ -273,7 +273,7 @@ def register_benchmark_commands(benchmark_app: typer.Typer) -> None:
             ),
         ),
         candidate_model: str = typer.Option(
-            "gpt-5.4",
+            "gpt-5.5",
             help=(
                 "Locked model used to generate broad candidate actions when "
                 "candidate-mode=llm"
@@ -607,7 +607,7 @@ def register_benchmark_commands(benchmark_app: typer.Typer) -> None:
     @benchmark_app.command("judge")
     def judge_benchmark_command(
         root: Path = typer.Option(..., help="Benchmark build root"),
-        model: str = typer.Option("gpt-5.4", help="Locked LLM judge model"),
+        model: str = typer.Option("gpt-5.5", help="Locked LLM judge model"),
         judge_id: str = typer.Option(
             "benchmark_llm_judge",
             help="Judge id written into the ranking artifacts",
