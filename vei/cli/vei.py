@@ -75,6 +75,10 @@ class VEILazyGroup(LazyTyperGroup):
             module_path="vei.cli.vei_pyinsights",
             help="Run Py Insights validated daily refreshes.",
         ),
+        "bus-factor": LazyCommandSpec(
+            module_path="vei.cli.vei_bus_factor",
+            help="Identify actors with sole or near-sole ownership of named work.",
+        ),
         # Backward-compatible aliases (hidden in `vei --help`).
         "project": LazyCommandSpec(
             module_path="vei.cli.vei_project",
