@@ -1,8 +1,8 @@
 {
   "version": "1",
-  "generated_at": "2026-05-16T13:14:56Z",
+  "generated_at": "2026-05-17T16:14:39Z",
   "source_id": "current_macro_public_history_world",
-  "as_of_date": "2026-05-16",
+  "as_of_date": "2026-05-17",
   "source_date_range": {
     "start": "1979-01-01",
     "end": "2026-05-15"
@@ -106,8 +106,8 @@
     }
   },
   "current_prediction_run": {
-    "label": "current_macro_current_20260516",
-    "as_of": "2026-05-16",
+    "label": "current_macro_current_20260517",
+    "as_of": "2026-05-17",
     "visible_history_through": "2026-05-15",
     "candidate_ranking": [
       {
@@ -116,13 +116,13 @@
         "candidate_id": "candidate_1",
         "candidate_type": "customer_status_note",
         "label": "Publish inflation-risk bulletin",
-        "strategic_usefulness_score": 0.65232,
-        "balanced_ceo_score": 0.5842,
-        "enterprise_risk": 0.31,
+        "strategic_usefulness_score": 0.65154,
+        "balanced_ceo_score": 0.5834,
+        "enterprise_risk": 0.311,
         "stakeholder_trust": 0.293,
-        "liquidity_stress": 0.327,
-        "external_confidence_pressure": 0.804,
-        "action": "Publish a dated public bulletin that separates inflation, energy, labor-market, and Treasury-yield signals visible by 2026-05-16."
+        "liquidity_stress": 0.334,
+        "external_confidence_pressure": 0.81,
+        "action": "Publish a dated public bulletin that separates inflation, energy, labor-market, and Treasury-yield signals visible by 2026-05-17."
       },
       {
         "rank": 2,
@@ -130,12 +130,12 @@
         "candidate_id": "candidate_3",
         "candidate_type": "narrow_pilot",
         "label": "Open household-stress watch",
-        "strategic_usefulness_score": 0.629815,
-        "balanced_ceo_score": 0.56715,
-        "enterprise_risk": 0.317,
+        "strategic_usefulness_score": 0.629085,
+        "balanced_ceo_score": 0.56645,
+        "enterprise_risk": 0.318,
         "stakeholder_trust": 0.276,
-        "liquidity_stress": 0.295,
-        "external_confidence_pressure": 0.794,
+        "liquidity_stress": 0.302,
+        "external_confidence_pressure": 0.8,
         "action": "Open a narrow household-stress watch over unemployment, payrolls, prices, mortgage rates, and retail-sales signals before recommending a broad policy move."
       },
       {
@@ -144,12 +144,12 @@
         "candidate_id": "candidate_2",
         "candidate_type": "decision_log_evidence",
         "label": "Prepare Fed/Treasury evidence memo",
-        "strategic_usefulness_score": 0.624415,
-        "balanced_ceo_score": 0.57155,
-        "enterprise_risk": 0.322,
+        "strategic_usefulness_score": 0.62356,
+        "balanced_ceo_score": 0.5706,
+        "enterprise_risk": 0.324,
         "stakeholder_trust": 0.291,
-        "liquidity_stress": 0.289,
-        "external_confidence_pressure": 0.776,
+        "liquidity_stress": 0.296,
+        "external_confidence_pressure": 0.782,
         "action": "Prepare a dated evidence memo for Federal Reserve and Treasury watchers that separates price, jobs, GDP, imports, exports, and yield-curve evidence."
       },
       {
@@ -158,12 +158,12 @@
         "candidate_id": "candidate_4",
         "candidate_type": "hold_compliance_review",
         "label": "Hold for next release",
-        "strategic_usefulness_score": 0.498735,
-        "balanced_ceo_score": 0.56135,
-        "enterprise_risk": 0.322,
+        "strategic_usefulness_score": 0.497795,
+        "balanced_ceo_score": 0.56035,
+        "enterprise_risk": 0.324,
         "stakeholder_trust": 0.279,
-        "liquidity_stress": 0.231,
-        "external_confidence_pressure": 0.745,
+        "liquidity_stress": 0.237,
+        "external_confidence_pressure": 0.75,
         "action": "Hold any public recommendation until the next official release confirms whether the inflation and labor-market signals persist."
       }
     ]
@@ -234,8 +234,8 @@
   "champion_challenger": {
     "champion_model_id": "news-public-history-demo/jepa_model.pt@fcc219a6312",
     "public_model_action": "kept_champion",
-    "challenger_status": "not_trained_insufficient_new_signal",
-    "reason": "Only three new same-day public observations were added. The public fixture and ranking surface refreshed, but there was not enough new outcome signal to justify a full JEPA retrain or public model promotion."
+    "challenger_status": "not_trained_no_new_realized_signal",
+    "reason": "The May 17 refresh gathered the newest public-source state, but the corpus still ends on 2026-05-15 and the state-point run found zero post-cutoff future events. The public fixture and ranking surface refreshed; there was no new outcome label for retraining or promotion."
   },
   "data_sources": [
     "bea_current_releases",
@@ -244,5 +244,17 @@
     "federal_reserve_fomc",
     "fred",
     "treasury_yield_curve"
-  ]
+  ],
+  "latest_refresh_observation": {
+    "label": "current_macro_refresh_20260517",
+    "as_of": "2026-05-17",
+    "visible_history_through": "2026-05-15",
+    "future_horizon_event_count": 0,
+    "observed_event_count": 0,
+    "assessment": {
+      "rank_change_after_observation": "not_applicable_no_new_official_weekend_release",
+      "interpretation": "The refreshed public-source corpus still ends on 2026-05-15, so the May 16 prediction does not yet have a new realized macro label to score. The current May 17 ranking remains stable: Publish inflation-risk bulletin ranks first and Hold for next release remains fourth.",
+      "caveat": "No challenger was trained or promoted because there was no new realized outcome signal beyond the May 15 evaluation point."
+    }
+  }
 }

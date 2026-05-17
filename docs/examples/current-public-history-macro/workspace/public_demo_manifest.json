@@ -1,13 +1,13 @@
 {
   "source_id": "current_macro_public_history_world",
   "title": "Public History: Current + Analog U.S. Macro World",
-  "summary": "Choose a point from a mixed 5,285-record U.S. macro public record, 1979-01-01 through 2026-05-15, spanning current, similar, and contrasting macro windows; then test a branch event or policy response from that evidence state.",
-  "record_count": 5285,
+  "summary": "Choose a point from a mixed 5,279-record U.S. macro public record, 1979-01-01 through 2026-05-15, spanning current, similar, and contrasting macro windows; then test a branch event or policy response from that evidence state.",
+  "record_count": 5279,
   "date_range": {
     "start": "1979-01-01",
     "end": "2026-05-15"
   },
-  "as_of_date": "2026-05-16",
+  "as_of_date": "2026-05-17",
   "comparison_windows": [
     {
       "window_id": "volcker_inflation_1979_1982",
@@ -55,7 +55,7 @@
       "window_id": "current_2024_now",
       "label": "Current higher-rate macro regime",
       "start_date": "2024-01-01",
-      "end_date": "2026-05-16",
+      "end_date": "2026-05-17",
       "role": "current anchor: inflation, labor, Treasury yields, Fed communication, and policy uncertainty"
     }
   ],
@@ -71,5 +71,5 @@
   "saved_result_path": "current_macro_state_point_result.json",
   "jepa_checkpoint_path": "../../news-public-history-demo/workspace/jepa_model.pt",
   "default_topic": "all_public_record",
-  "default_as_of": "2026-05-16"
+  "default_as_of": "2026-05-17"
 }
