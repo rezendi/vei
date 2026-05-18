@@ -98,6 +98,7 @@ vei workflow mine \
   --world-model-report _vei_out/world_model_strategic_state_points/<run>/strategic_state_point_results.csv
 vei workflow label --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --label good_example --note "source-backed example"
 vei workflow promote --root _vei_out/<tenant>/workflows --candidate-id <candidate-id> --output _vei_out/<tenant>/workflows/task_spec.json
+vei bus-factor <tenant> --source-dir _vei_out/<tenant>/context_snapshot.json
 vei pyinsights daily-refresh --mode incremental-validated --previous latest-valid --as-of today
 vei ui serve --root docs/examples/enron-master-agreement-public-context/workspace --host 127.0.0.1 --port 3055
 ```

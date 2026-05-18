@@ -16,7 +16,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import typer
+import click
 
 from vei.bus_factor import (
     BusFactorReport,
@@ -29,13 +29,6 @@ from vei.bus_factor.api import (
     DEFAULT_WINDOW_DAYS,
 )
 
-app = typer.Typer(
-    add_completion=False,
-    invoke_without_command=True,
-    no_args_is_help=False,
-    help="Identify actors with sole or near-sole ownership of named work.",
-)
-
 
 def _default_output_path(tenant: str, report: BusFactorReport) -> Path:
     base = Path("_vei_out") / tenant / "bus_factor"
@@ -43,58 +36,74 @@ def _default_output_path(tenant: str, report: BusFactorReport) -> Path:
     return base / f"bus_factor_report_{stamp}.md"
 
 
-@app.callback(invoke_without_command=True)
-def main(
-    tenant: str = typer.Argument(
-        ...,
-        help="Tenant id (resolved to _vei_out/<tenant>/[combined-live-*/]context_snapshot.json).",
+@click.command(help="Identify actors with sole or near-sole ownership of named work.")
+@click.argument("tenant")
+@click.option(
+    "--source-dir",
+    type=click.Path(path_type=Path),
+    help="Override snapshot resolution; path to context_snapshot.json or its directory.",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help=(
+        "Markdown output path. Defaults to "
+        "_vei_out/<tenant>/bus_factor/bus_factor_report_<date>.md"
     ),
-    source_dir: Path | None = typer.Option(
-        None,
-        "--source-dir",
-        help="Override snapshot resolution; path to context_snapshot.json or its directory.",
-    ),
-    output: Path | None = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Markdown output path. Defaults to _vei_out/<tenant>/bus_factor/bus_factor_report_<date>.md",
-    ),
-    json_output: Path | None = typer.Option(
-        None,
-        "--json",
-        help="Also write the structured JSON report to this path.",
-    ),
-    redact: bool = typer.Option(
-        False,
-        "--redact",
-        help="Anonymize actor identities and elide source paths in the markdown.",
-    ),
-    window_days: int = typer.Option(
-        DEFAULT_WINDOW_DAYS,
-        "--window-days",
-        help="Analysis window in days (counted back from the most recent event).",
-    ),
-    activity_share_threshold: float = typer.Option(
-        DEFAULT_ACTIVITY_SHARE_THRESHOLD,
-        "--activity-share",
-        help="Activity-share threshold for 'primary driver on workflow' (0..1).",
-    ),
-    skill_map: Path | None = typer.Option(
-        None,
-        "--skill-map",
-        help="Override skill map auto-discovery.",
-    ),
-    workflow_candidates: Path | None = typer.Option(
-        None,
-        "--workflow-candidates",
-        help="Override workflow_candidates.json auto-discovery.",
-    ),
-    workflow_labels: Path | None = typer.Option(
-        None,
-        "--workflow-labels",
-        help="Override workflow_labels.json auto-discovery.",
-    ),
+)
+@click.option(
+    "--json",
+    "json_output",
+    type=click.Path(path_type=Path),
+    help="Also write the structured JSON report to this path.",
+)
+@click.option(
+    "--redact",
+    is_flag=True,
+    help="Anonymize actor identities and elide source paths in the markdown.",
+)
+@click.option(
+    "--window-days",
+    default=DEFAULT_WINDOW_DAYS,
+    show_default=True,
+    type=int,
+    help="Analysis window in days (counted back from the most recent event).",
+)
+@click.option(
+    "--activity-share",
+    "activity_share_threshold",
+    default=DEFAULT_ACTIVITY_SHARE_THRESHOLD,
+    show_default=True,
+    type=float,
+    help="Activity-share threshold for 'primary driver on workflow' (0..1).",
+)
+@click.option(
+    "--skill-map",
+    type=click.Path(path_type=Path),
+    help="Override skill map auto-discovery.",
+)
+@click.option(
+    "--workflow-candidates",
+    type=click.Path(path_type=Path),
+    help="Override workflow_candidates.json auto-discovery.",
+)
+@click.option(
+    "--workflow-labels",
+    type=click.Path(path_type=Path),
+    help="Override workflow_labels.json auto-discovery.",
+)
+def app(
+    tenant: str,
+    source_dir: Path | None,
+    output: Path | None,
+    json_output: Path | None,
+    redact: bool,
+    window_days: int,
+    activity_share_threshold: float,
+    skill_map: Path | None,
+    workflow_candidates: Path | None,
+    workflow_labels: Path | None,
 ) -> None:
     """Generate a bus-factor report for the named tenant."""
 
@@ -105,30 +114,33 @@ def main(
         else:
             snapshot = path
         if not snapshot.is_file():
-            raise typer.BadParameter(f"context_snapshot.json not found at {path}")
+            raise click.BadParameter(f"context_snapshot.json not found at {path}")
     else:
         try:
             snapshot = resolve_tenant_snapshot(tenant)
         except FileNotFoundError as exc:
-            raise typer.BadParameter(str(exc)) from exc
+            raise click.BadParameter(str(exc)) from exc
 
-    report = compute_bus_factor_report(
-        context_path=snapshot,
-        tenant_id=tenant,
-        window_days=window_days,
-        activity_share_threshold=activity_share_threshold,
-        skill_map_path=skill_map,
-        workflow_candidates_path=workflow_candidates,
-        workflow_labels_path=workflow_labels,
-    )
+    try:
+        report = compute_bus_factor_report(
+            context_path=snapshot,
+            tenant_id=tenant,
+            window_days=window_days,
+            activity_share_threshold=activity_share_threshold,
+            skill_map_path=skill_map,
+            workflow_candidates_path=workflow_candidates,
+            workflow_labels_path=workflow_labels,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise click.BadParameter(str(exc)) from exc
 
     markdown = render_report_markdown(report, redact=redact)
-    typer.echo(markdown)
+    click.echo(markdown)
 
     target = output or _default_output_path(tenant, report)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markdown, encoding="utf-8")
-    typer.echo(f"wrote markdown: {target}", err=True)
+    click.echo(f"wrote markdown: {target}", err=True)
 
     if json_output is not None:
         json_output.parent.mkdir(parents=True, exist_ok=True)
@@ -136,7 +148,7 @@ def main(
             json.dumps(report.model_dump(mode="json"), indent=2) + "\n",
             encoding="utf-8",
         )
-        typer.echo(f"wrote json: {json_output}", err=True)
+        click.echo(f"wrote json: {json_output}", err=True)
 
 
 if __name__ == "__main__":

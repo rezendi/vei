@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-BUS_FACTOR_REPORT_VERSION = "bus_factor_report_v1"
+BUS_FACTOR_REPORT_VERSION: Literal["bus_factor_report_v1"] = "bus_factor_report_v1"
 
 SoleOwnedKind = Literal["skill", "workflow_promoted", "workflow_good_example"]
 

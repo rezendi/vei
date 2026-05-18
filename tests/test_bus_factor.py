@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from vei.bus_factor import compute_bus_factor_report, render_report_markdown
 from vei.bus_factor.api import resolve_tenant_snapshot
+from vei.cli.vei import app as vei_app
 from vei.events.api import ActorRef, EventDomain, ObjectRef, build_event
 
 pytestmark = pytest.mark.unit
@@ -301,6 +303,68 @@ def test_report_omits_missing_artifact_sections(tmp_path: Path) -> None:
     assert any("workflow" in note for note in report.notes)
 
 
+def test_report_notes_missing_workflow_labels(tmp_path: Path) -> None:
+    snapshot = _write_snapshot(tmp_path)
+    _write_events(tmp_path)
+    _write_skill_map(tmp_path)
+    _candidates_path, labels_path = _write_workflow_artifacts(tmp_path)
+    labels_path.unlink()
+
+    report = compute_bus_factor_report(
+        context_path=snapshot,
+        tenant_id="py-insights",
+    )
+
+    assert any("No workflow labels found" in note for note in report.notes)
+    alice = next(
+        profile
+        for profile in report.actor_profiles
+        if profile.actor_id == _ALICE.actor_id
+    )
+    assert alice.sole_owned_skills
+    assert alice.sole_owned_workflows == []
+
+
+def test_report_notes_when_workflows_have_no_good_example_labels(
+    tmp_path: Path,
+) -> None:
+    snapshot = _write_snapshot(tmp_path)
+    _write_events(tmp_path)
+    _write_skill_map(tmp_path)
+    _candidates_path, labels_path = _write_workflow_artifacts(tmp_path)
+    payload = json.loads(labels_path.read_text(encoding="utf-8"))
+    payload["labels"][0]["label"] = "bad_example"
+    labels_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = compute_bus_factor_report(
+        context_path=snapshot,
+        tenant_id="py-insights",
+    )
+
+    assert any(
+        "No workflow candidates are labeled good_example" in note
+        for note in report.notes
+    )
+    alice = next(
+        profile
+        for profile in report.actor_profiles
+        if profile.actor_id == _ALICE.actor_id
+    )
+    assert alice.sole_owned_workflows == []
+
+
+def test_report_rejects_invalid_window_and_activity_threshold(
+    tmp_path: Path,
+) -> None:
+    snapshot = _write_snapshot(tmp_path)
+
+    with pytest.raises(ValueError, match="window_days"):
+        compute_bus_factor_report(context_path=snapshot, window_days=0)
+
+    with pytest.raises(ValueError, match="activity_share_threshold"):
+        compute_bus_factor_report(context_path=snapshot, activity_share_threshold=1.5)
+
+
 def test_markdown_redaction_elides_identities(tmp_path: Path) -> None:
     snapshot = _write_snapshot(tmp_path)
     _write_events(tmp_path)
@@ -316,6 +380,35 @@ def test_markdown_redaction_elides_identities(tmp_path: Path) -> None:
     assert "Alice Chen" not in redacted
     assert "alice@py-insights.com" not in redacted
     assert "Actor 1" in redacted
+
+
+def test_bus_factor_cli_accepts_options_after_tenant(tmp_path: Path) -> None:
+    snapshot = _write_snapshot(tmp_path)
+    _write_events(tmp_path)
+    _write_skill_map(tmp_path)
+    _write_workflow_artifacts(tmp_path)
+    markdown_path = tmp_path / "report.md"
+    json_path = tmp_path / "report.json"
+
+    result = CliRunner().invoke(
+        vei_app,
+        [
+            "bus-factor",
+            "py-insights",
+            "--source-dir",
+            str(snapshot),
+            "--output",
+            str(markdown_path),
+            "--json",
+            str(json_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "# Bus-factor report" in result.stdout
+    assert markdown_path.exists()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["tenant_id"] == "py-insights"
 
 
 def test_resolve_tenant_snapshot_finds_direct_and_combined(tmp_path: Path) -> None:

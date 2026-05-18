@@ -88,8 +88,9 @@ def render_report_markdown(report: BusFactorReport, *, redact: bool = False) -> 
     if not report.actor_profiles:
         out.append(
             "_No actors met the v1 sole-ownership criteria in this window. "
-            "Either the corpus is too small, the skill map is empty, or the "
-            "tenant genuinely has shared coverage on every surface._"
+            "Either required artifacts are missing or unlabeled, the corpus is "
+            "too small, the skill map is empty, or the tenant genuinely has "
+            "shared coverage on every surface._"
         )
         out.append("")
         return "\n".join(out).rstrip() + "\n"

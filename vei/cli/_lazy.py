@@ -32,8 +32,8 @@ class LazyTyperGroup(typer.core.TyperGroup):
         if spec is None:
             return None
         module = importlib.import_module(spec.module_path)
-        typer_app = getattr(module, spec.app_attr)
-        command = get_group(typer_app)
+        target = getattr(module, spec.app_attr)
+        command = target if isinstance(target, click.Command) else get_group(target)
         command.name = cmd_name
         if spec.help and not getattr(command, "help", None):
             command.help = spec.help

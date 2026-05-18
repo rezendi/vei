@@ -234,6 +234,11 @@ def compute_bus_factor_report(
     appends a note.
     """
 
+    if window_days <= 0:
+        raise ValueError("window_days must be greater than 0")
+    if not 0 < activity_share_threshold <= 1:
+        raise ValueError("activity_share_threshold must be greater than 0 and <= 1")
+
     snapshot = Path(context_path).expanduser().resolve()
     if not snapshot.is_file():
         raise FileNotFoundError(f"context snapshot not found: {snapshot}")
@@ -297,6 +302,17 @@ def compute_bus_factor_report(
     for label in labels:
         if label.label == "good_example":
             label_by_candidate.setdefault(label.candidate_id, "good_example")
+    if candidates and not labels:
+        notes.append(
+            "No workflow labels found; sole-owned-workflow analysis skipped. "
+            "Label candidates with good_example before relying on workflow "
+            "primary-driver claims."
+        )
+    elif candidates and not label_by_candidate:
+        notes.append(
+            "No workflow candidates are labeled good_example; "
+            "sole-owned-workflow analysis skipped."
+        )
 
     sole_skills_by_actor: dict[str, list[SoleOwnedSkill]] = defaultdict(list)
     if skill_map is not None:

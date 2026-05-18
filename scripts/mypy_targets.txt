@@ -23,6 +23,7 @@ vei/twin
 vei/governor
 vei/ui/api.py
 vei/context
+vei/bus_factor
 vei/whatif/api.py
 vei/whatif/filenames.py
 vei/whatif/artifact_validation.py
